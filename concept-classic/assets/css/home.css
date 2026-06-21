@@ -1,0 +1,134 @@
+﻿.hero {
+  position: relative;
+  min-height: 100svh;
+  display: grid;
+  align-items: end;
+  padding: 7rem var(--site-pad) 2.6rem;
+  overflow: hidden;
+}
+
+.hero::after {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(15, 16, 16, 0.84), rgba(15, 16, 16, 0.26) 58%, rgba(15, 16, 16, 0.62)),
+    linear-gradient(0deg, rgba(15, 16, 16, 0.92), transparent 48%);
+  content: "";
+}
+
+.hero__media {
+  position: absolute;
+  inset: 0;
+}
+
+.hero__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.78) contrast(1.04);
+}
+
+.hero__content {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 44rem);
+}
+
+.hero h1 {
+  margin-bottom: 0.85rem;
+}
+
+.hero__intro {
+  max-width: 31rem;
+  margin-bottom: 1.25rem;
+  font-family: var(--font-serif);
+  font-size: clamp(0.95rem, 2vw, 1.08rem);
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.6rem;
+}
+
+.section--intro {
+  background: linear-gradient(180deg, var(--color-bg), var(--color-bg-soft));
+}
+
+.selected-grid {
+  display: grid;
+  max-width: var(--max-width);
+  margin: clamp(1.6rem, 5vw, 3.4rem) auto 0;
+  gap: 0.65rem;
+}
+
+.selected-shot {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.selected-shot img {
+  width: 100%;
+  height: 100%;
+  min-height: 24rem;
+  object-fit: cover;
+  filter: saturate(0.82);
+  transition: transform 900ms var(--ease-out), filter 900ms var(--ease-out);
+}
+
+.selected-shot:hover img {
+  transform: scale(1.035);
+  filter: saturate(0.95);
+}
+
+.selected-shot figcaption {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  padding: 0.45rem 0.6rem;
+  background: rgba(15, 16, 16, 0.72);
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.split-section {
+  display: grid;
+  gap: 2rem;
+  max-width: calc(var(--max-width) + (var(--site-pad) * 2));
+  margin: 0 auto;
+  border-top: 1px solid var(--color-border);
+}
+
+.split-section__copy h2 {
+  max-width: 11ch;
+}
+
+.split-section__text {
+  max-width: 32rem;
+}
+
+@media (min-width: 760px) {
+  .hero {
+    padding-bottom: 4rem;
+  }
+
+  .selected-grid {
+    grid-template-columns: 0.9fr 1.35fr 0.9fr;
+    align-items: end;
+  }
+
+  .selected-shot--wide {
+    align-self: start;
+    margin-top: 3.5rem;
+  }
+
+  .split-section {
+    grid-template-columns: 1fr 0.8fr;
+    align-items: end;
+  }
+}
+

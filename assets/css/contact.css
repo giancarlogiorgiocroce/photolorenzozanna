@@ -1,0 +1,107 @@
+﻿.contact-hero {
+  display: grid;
+  gap: clamp(2rem, 7vw, 5rem);
+  align-items: end;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: clamp(7rem, 18vw, 10rem) var(--site-pad) clamp(3rem, 8vw, 5.5rem);
+}
+
+.contact-hero__copy h1 {
+  max-width: 11ch;
+  margin-bottom: 1rem;
+}
+
+.contact-hero__copy p:not(.eyebrow) {
+  max-width: 34rem;
+  font-family: var(--font-serif);
+  font-size: clamp(0.96rem, 2vw, 1.08rem);
+}
+
+.contact-hero__image {
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.contact-hero__image img {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  filter: saturate(0.76) contrast(1.05);
+}
+
+.contact-band {
+  display: grid;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 var(--site-pad) clamp(3rem, 8vw, 5.5rem);
+  gap: 0.8rem;
+}
+
+.contact-link {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1.25rem 0;
+  border-top: 1px solid var(--color-border);
+  transition: border-color 220ms ease, transform 220ms ease;
+}
+
+.contact-link:hover {
+  border-color: var(--color-accent);
+  transform: translateX(0.35rem);
+}
+
+.contact-link span {
+  color: var(--color-text-subtle);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.contact-link strong {
+  color: var(--color-text);
+  font-family: var(--font-logo);
+  font-size: clamp(1.35rem, 5.8vw, 2.8rem);
+  font-weight: 500;
+  line-height: 0.98;
+}
+
+.availability {
+  display: grid;
+  gap: 2rem;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: clamp(3.2rem, 8vw, 6rem) var(--site-pad);
+  border-top: 1px solid var(--color-border);
+}
+
+.availability__text h2 {
+  max-width: 11ch;
+}
+
+.availability__list {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  color: var(--color-text-muted);
+  list-style: none;
+}
+
+.availability__list li {
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+@media (min-width: 860px) {
+  .contact-hero,
+  .availability {
+    grid-template-columns: 1fr 0.86fr;
+  }
+
+  .contact-hero__image {
+    order: -1;
+  }
+}
+
