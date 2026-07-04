@@ -34,13 +34,18 @@
     </header>
 
     <main id="main">
-      <section class="page-hero" aria-labelledby="page-title">
-        <p class="eyebrow reveal">Portfolio</p>
-        <h1 id="page-title" class="reveal">Serie selezionate</h1>
-        <p class="page-hero__intro reveal">
-          Una galleria editoriale, non un archivio completo. Ogni serie tiene insieme
-          atmosfera, soggetto e memoria.
-        </p>
+      <h1 class="sr-only">Portfolio fotografico di Lorenzo Zanna</h1>
+
+      <section class="portfolio-opening" aria-label="Immagini principali del portfolio" data-lightbox-gallery>
+        <button class="opening-shot opening-shot--lead reveal" type="button" data-full="https://picsum.photos/seed/lz-opening-01/1700/2100" data-caption="Selected / portrait study">
+          <img src="https://picsum.photos/seed/lz-opening-01/1100/1360" alt="Ritratto verticale in atmosfera scura" width="1100" height="1360" fetchpriority="high" decoding="async" />
+        </button>
+        <button class="opening-shot reveal" type="button" data-full="https://picsum.photos/seed/lz-opening-02/1600/1200" data-caption="Selected / night fragment">
+          <img src="https://picsum.photos/seed/lz-opening-02/900/675" alt="Scena notturna con riflessi urbani" width="900" height="675" fetchpriority="high" decoding="async" />
+        </button>
+        <button class="opening-shot reveal" type="button" data-full="https://picsum.photos/seed/lz-opening-03/1600/1200" data-caption="Selected / private room">
+          <img src="https://picsum.photos/seed/lz-opening-03/900/675" alt="Interno privato con luce morbida" width="900" height="675" loading="lazy" decoding="async" />
+        </button>
       </section>
 
       <section class="portfolio-section" aria-labelledby="portraits-title">

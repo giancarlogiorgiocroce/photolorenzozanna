@@ -40,68 +40,89 @@
     </header>
 
     <main id="main">
-      <section class="image-first" aria-labelledby="home-title">
-        <h1 id="home-title" class="sr-only">Lorenzo Zanna Photography</h1>
-        <div class="image-first__grid" aria-label="Selezione fotografica introduttiva">
-          <figure class="frame frame--lead reveal">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero__media" aria-hidden="true">
+          <img
+            src="https://picsum.photos/seed/lorenzo-hero/1600/2100"
+            alt=""
+            width="1600"
+            height="2100"
+            fetchpriority="high"
+            decoding="async"
+          />
+        </div>
+        <div class="hero__content reveal">
+          <p class="eyebrow">Firenze / portraits / private events</p>
+          <h1 id="hero-title">Lorenzo Zanna</h1>
+          <p class="hero__intro">
+            Fotografie scure, calme, personali. Una selezione essenziale tra volti,
+            dettagli urbani e momenti privati.
+          </p>
+          <div class="hero__actions">
+            <a class="text-link text-link--accent" href="portfolio.html">Guarda il portfolio</a>
+            <a class="text-link" href="contact.html">Contatti</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--intro" aria-labelledby="selected-title">
+        <div class="section__header reveal">
+          <p class="section-kicker">Selected work</p>
+          <h2 id="selected-title">Una prima traccia visiva</h2>
+          <p>
+            Poche immagini, scelte per atmosfera. Il resto arriva dopo: questa pagina deve
+            funzionare anche se chi la apre non clicca nulla.
+          </p>
+        </div>
+        <div class="selected-grid">
+          <figure class="selected-shot reveal">
             <img
-              src="https://picsum.photos/seed/lz-home-lead/1400/1900"
-              alt="Ritratto editoriale in atmosfera scura"
-              width="1400"
-              height="1900"
-              fetchpriority="high"
+              src="https://picsum.photos/seed/lz-selected-01/720/960"
+              alt="Ritratto editoriale in luce morbida"
+              width="720"
+              height="960"
+              loading="lazy"
               decoding="async"
             />
-            <figcaption>Portrait / Firenze</figcaption>
+            <figcaption>Portrait study, 2026</figcaption>
           </figure>
-          <figure class="frame frame--small reveal">
+          <figure class="selected-shot selected-shot--wide reveal">
             <img
-              src="https://picsum.photos/seed/lz-home-quiet/900/1200"
-              alt="Dettaglio urbano in luce bassa"
-              width="900"
-              height="1200"
-              fetchpriority="high"
-              decoding="async"
-            />
-            <figcaption>Urban quiet</figcaption>
-          </figure>
-          <figure class="frame frame--wide reveal">
-            <img
-              src="https://picsum.photos/seed/lz-home-night/1400/900"
-              alt="Strada notturna con riflessi e ombre"
-              width="1400"
-              height="900"
+              src="https://picsum.photos/seed/lz-selected-02/1200/780"
+              alt="Strada notturna con luce riflessa"
+              width="1200"
+              height="780"
               loading="lazy"
               decoding="async"
             />
             <figcaption>Night fragments</figcaption>
           </figure>
-        </div>
-        <div class="landing-note reveal" aria-label="Informazioni essenziali">
-          <p>Ritratti, dettagli urbani, eventi privati.</p>
-          <a class="text-link text-link--accent" href="portfolio.html">Portfolio</a>
+          <figure class="selected-shot reveal">
+            <img
+              src="https://picsum.photos/seed/lz-selected-03/720/960"
+              alt="Dettaglio urbano con ombre profonde"
+              width="720"
+              height="960"
+              loading="lazy"
+              decoding="async"
+            />
+            <figcaption>Urban quiet</figcaption>
+          </figure>
         </div>
       </section>
 
-      <section class="photo-index" aria-label="Accessi principali">
-        <a class="index-card reveal" href="portfolio.html">
-          <img src="https://picsum.photos/seed/lz-index-work/900/1150" alt="Anteprima portfolio fotografico" width="900" height="1150" loading="lazy" decoding="async" />
-          <span>Portfolio</span>
-        </a>
-        <a class="index-card reveal" href="about.html">
-          <img src="https://picsum.photos/seed/lz-index-about/900/1150" alt="Ritratto ambientato e personale" width="900" height="1150" loading="lazy" decoding="async" />
-          <span>About</span>
-        </a>
-        <a class="index-card reveal" href="contact.html">
-          <img src="https://picsum.photos/seed/lz-index-contact/900/1150" alt="Dettaglio fotografico caldo e scuro" width="900" height="1150" loading="lazy" decoding="async" />
-          <span>Contact</span>
-        </a>
-      </section>
-
-      <section class="horizontal-strip" aria-label="Altre immagini selezionate">
-        <img class="reveal" src="https://picsum.photos/seed/lz-strip-01/900/640" alt="Scena urbana con silhouette" width="900" height="640" loading="lazy" decoding="async" />
-        <img class="reveal" src="https://picsum.photos/seed/lz-strip-02/900/640" alt="Ritratto in controluce" width="900" height="640" loading="lazy" decoding="async" />
-        <img class="reveal" src="https://picsum.photos/seed/lz-strip-03/900/640" alt="Dettaglio analogico con ombre" width="900" height="640" loading="lazy" decoding="async" />
+      <section class="section split-section" aria-labelledby="landing-title">
+        <div class="split-section__copy reveal">
+          <p class="section-kicker">Landing first</p>
+          <h2 id="landing-title">Una pagina che resta addosso.</h2>
+        </div>
+        <div class="split-section__text reveal">
+          <p>
+            La home e' una stretta di mano digitale: nome, immagini, tono, contatto.
+            Il portfolio e' la seconda profondita, non il primo impatto.
+          </p>
+          <a class="text-link text-link--accent" href="about.html">Leggi l'approccio</a>
+        </div>
       </section>
     </main>
 
@@ -109,10 +130,6 @@
       <p>© 2026 Lorenzo Zanna</p>
       <a href="mailto:hello@lorenzozanna.example">hello@lorenzozanna.example</a>
     </footer>
-    <a class="concept-switch" href="concept-classic/index.html" aria-label="Apri la versione classic del mockup">
-      <span>Idea B</span>
-      <strong>Classic</strong>
-    </a>
   </body>
 </html>
 

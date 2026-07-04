@@ -1,0 +1,114 @@
+﻿<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Lorenzo Zanna, portfolio fotografico personale tra ritratti, dettagli urbani e atmosfere analogiche."
+    />
+    <meta property="og:title" content="Lorenzo Zanna Photography" />
+    <meta
+      property="og:description"
+      content="Una selezione fotografica essenziale, scura e intima, pensata come landing personale."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://picsum.photos/seed/lorenzo-og/1200/630" />
+    <title>Lorenzo Zanna Photography</title>
+    <link rel="preconnect" href="https://picsum.photos" />
+    <link rel="preconnect" href="https://fastly.picsum.photos" />
+    <link rel="stylesheet" href="assets/css/base.css" />
+    <link rel="stylesheet" href="assets/css/home.css" />
+    <script src="assets/js/main.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Vai al contenuto</a>
+    <header class="site-header" data-site-header>
+      <a class="brand" href="index.html" aria-label="Lorenzo Zanna home">
+        <span class="brand__name">Lorenzo Zanna</span>
+        <span class="brand__meta">photography</span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
+        <span class="nav-toggle__line"></span>
+        <span class="sr-only">Apri menu</span>
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="Navigazione principale">
+        <a href="portfolio.html">Portfolio</a>
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="image-first" aria-labelledby="home-title">
+        <h1 id="home-title" class="sr-only">Lorenzo Zanna Photography</h1>
+        <div class="image-first__grid" aria-label="Selezione fotografica introduttiva">
+          <figure class="frame frame--lead reveal">
+            <img
+              src="https://picsum.photos/seed/lz-home-lead/1400/1900"
+              alt="Ritratto editoriale in atmosfera scura"
+              width="1400"
+              height="1900"
+              fetchpriority="high"
+              decoding="async"
+            />
+            <figcaption>Portrait / Firenze</figcaption>
+          </figure>
+          <figure class="frame frame--small reveal">
+            <img
+              src="https://picsum.photos/seed/lz-home-quiet/900/1200"
+              alt="Dettaglio urbano in luce bassa"
+              width="900"
+              height="1200"
+              fetchpriority="high"
+              decoding="async"
+            />
+            <figcaption>Urban quiet</figcaption>
+          </figure>
+          <figure class="frame frame--wide reveal">
+            <img
+              src="https://picsum.photos/seed/lz-home-night/1400/900"
+              alt="Strada notturna con riflessi e ombre"
+              width="1400"
+              height="900"
+              loading="lazy"
+              decoding="async"
+            />
+            <figcaption>Night fragments</figcaption>
+          </figure>
+        </div>
+        <div class="landing-note reveal" aria-label="Informazioni essenziali">
+          <p>Ritratti, dettagli urbani, eventi privati.</p>
+          <a class="text-link text-link--accent" href="portfolio.html">Portfolio</a>
+        </div>
+      </section>
+
+      <section class="photo-index" aria-label="Accessi principali">
+        <a class="index-card reveal" href="portfolio.html">
+          <img src="https://picsum.photos/seed/lz-index-work/900/1150" alt="Anteprima portfolio fotografico" width="900" height="1150" loading="lazy" decoding="async" />
+          <span>Portfolio</span>
+        </a>
+        <a class="index-card reveal" href="about.html">
+          <img src="https://picsum.photos/seed/lz-index-about/900/1150" alt="Ritratto ambientato e personale" width="900" height="1150" loading="lazy" decoding="async" />
+          <span>About</span>
+        </a>
+        <a class="index-card reveal" href="contact.html">
+          <img src="https://picsum.photos/seed/lz-index-contact/900/1150" alt="Dettaglio fotografico caldo e scuro" width="900" height="1150" loading="lazy" decoding="async" />
+          <span>Contact</span>
+        </a>
+      </section>
+
+      <section class="horizontal-strip" aria-label="Altre immagini selezionate">
+        <img class="reveal" src="https://picsum.photos/seed/lz-strip-01/900/640" alt="Scena urbana con silhouette" width="900" height="640" loading="lazy" decoding="async" />
+        <img class="reveal" src="https://picsum.photos/seed/lz-strip-02/900/640" alt="Ritratto in controluce" width="900" height="640" loading="lazy" decoding="async" />
+        <img class="reveal" src="https://picsum.photos/seed/lz-strip-03/900/640" alt="Dettaglio analogico con ombre" width="900" height="640" loading="lazy" decoding="async" />
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>© 2026 Lorenzo Zanna</p>
+      <a href="mailto:hello@lorenzozanna.example">hello@lorenzozanna.example</a>
+    </footer>
+  </body>
+</html>
+
