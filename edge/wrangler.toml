@@ -1,0 +1,16 @@
+name = "lorenzozanna-edge"
+main = "src/index.mjs"
+compatibility_date = "2026-07-04"
+workers_dev = false
+
+[vars]
+ROOT_DOMAIN = "lorenzozanna.com"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lorenzozanna_content"
+database_id = "909a730d-0eb9-458a-ae34-c97a597cdcc4"
+
+[[routes]]
+pattern = "api.lorenzozanna.com"
+custom_domain = true

@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "name": "lorenzozanna-edge",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "dev": "npx wrangler dev",
+    "deploy": "npx wrangler deploy",
+    "d1:create": "npx wrangler d1 create lorenzozanna_content",
+    "d1:migrate:local": "npx wrangler d1 migrations apply lorenzozanna_content --local",
+    "d1:migrate:remote": "npx wrangler d1 migrations apply lorenzozanna_content --remote"
+  }
+}

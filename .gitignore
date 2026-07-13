@@ -2,3 +2,8 @@
 
 
 .site-backups/
+
+NEXT_CHAT_RECAP.md
+.wrangler/
+.dev.vars
+.deploy/
