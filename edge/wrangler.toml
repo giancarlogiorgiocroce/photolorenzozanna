@@ -14,3 +14,35 @@ database_id = "909a730d-0eb9-458a-ae34-c97a597cdcc4"
 [[routes]]
 pattern = "api.lorenzozanna.com"
 custom_domain = true
+
+[[routes]]
+pattern = "ph.lorenzozanna.com/"
+zone_name = "lorenzozanna.com"
+
+[[routes]]
+pattern = "ph.lorenzozanna.com/index.html"
+zone_name = "lorenzozanna.com"
+
+[[routes]]
+pattern = "ph.lorenzozanna.com/portfolio"
+zone_name = "lorenzozanna.com"
+
+[[routes]]
+pattern = "ph.lorenzozanna.com/portfolio.html"
+zone_name = "lorenzozanna.com"
+
+[[routes]]
+pattern = "ph.lorenzozanna.com/about"
+zone_name = "lorenzozanna.com"
+
+[[routes]]
+pattern = "ph.lorenzozanna.com/about.html"
+zone_name = "lorenzozanna.com"
+
+[[routes]]
+pattern = "ph.lorenzozanna.com/contact"
+zone_name = "lorenzozanna.com"
+
+[[routes]]
+pattern = "ph.lorenzozanna.com/contact.html"
+zone_name = "lorenzozanna.com"

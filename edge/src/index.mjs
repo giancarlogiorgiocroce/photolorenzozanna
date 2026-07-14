@@ -12,7 +12,22 @@ const HTML_HEADERS = {
 
 const SLUG_PATTERN = /^[a-z0-9-]{2,64}$/;
 const KEY_PATTERN = /^[a-z0-9_-]{1,80}$/;
-const PUBLIC_HOST_PREFIXES = new Set(["api", "www", "cms", "admin"]);
+const PUBLIC_HOST_PREFIXES = new Set(["api", "www", "cms", "admin", "mcp"]);
+const DYNAMIC_PAGE_ROUTES = [
+  "/",
+  "/index.html",
+  "/portfolio",
+  "/portfolio.html",
+  "/about",
+  "/about.html",
+  "/contact",
+  "/contact.html",
+];
+const DYNAMIC_PAGE_SLUGS = ["home", "chi-sono", "portfolio", "contatti"];
+const PAGE_ROUTE_ALIASES = new Map([
+  ["about", "chi-sono"],
+  ["contact", "contatti"],
+]);
 
 export default {
   async fetch(request, env) {
@@ -43,12 +58,8 @@ async function routeRequest(request, env, url) {
 
   const segments = url.pathname.split("/").filter(Boolean);
 
-  if (segments.length === 0) {
-    return json({
-      name: "lorenzozanna-edge",
-      status: "ok",
-      routes: ["/api/health", "/api/public/site", "/api/private/schema"],
-    });
+  if (segments.length === 0 && isServiceHost(request, env)) {
+    return getServiceManifest();
   }
 
   if (segments[0] !== "api") {
@@ -77,8 +88,8 @@ async function routeRequest(request, env, url) {
 }
 
 async function handlePageRoute(request, env, url, segments) {
-  if (request.method !== "GET") {
-    return json({ error: "method_not_allowed", message: "Use GET for public pages." }, 405);
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return json({ error: "method_not_allowed", message: "Use GET or HEAD for public pages." }, 405);
   }
 
   const site = resolveSlugFromRequest(request, env, url);
@@ -92,8 +103,20 @@ async function handlePageRoute(request, env, url, segments) {
   }
 
   try {
-    return html(await renderPageHtml(env, { site, page }));
+    return html(await renderPageHtml(env, { site, page }), 200, {
+      head: request.method === "HEAD",
+    });
   } catch (error) {
+    if (isMissingDynamicSchemaError(error)) {
+      return json(
+        {
+          error: "dynamic_schema_not_ready",
+          message: "Dynamic page tables are not migrated yet.",
+        },
+        503,
+      );
+    }
+
     if (error.message?.includes("not found")) {
       return json({ error: "not_found", message: "Page not found." }, 404);
     }
@@ -496,6 +519,16 @@ function resolveSlugFromRequest(request, env, url) {
   return isValidSlug(firstLabel) ? firstLabel : null;
 }
 
+function isServiceHost(request, env) {
+  const host = (request.headers.get("host") ?? "").split(":")[0].toLowerCase();
+  const rootDomain = getRootDomain(env);
+  if (host === "localhost" || host === "127.0.0.1") return true;
+  if (!host.endsWith(`.${rootDomain}`)) return false;
+
+  const labels = host.slice(0, -rootDomain.length - 1).split(".");
+  return PUBLIC_HOST_PREFIXES.has(labels[0]);
+}
+
 async function requirePrivateAuth(request, env) {
   const expectedToken = env.AI_API_TOKEN;
   if (!expectedToken) {
@@ -556,6 +589,11 @@ function invalidSlugResponse() {
   return json({ error: "invalid_slug", message: "Slug must be lowercase, URL-safe and 2-64 characters." }, 400);
 }
 
+function isMissingDynamicSchemaError(error) {
+  const message = String(error?.message ?? "");
+  return message.includes("no such table: pages") || message.includes("no such table: page_sections");
+}
+
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -591,8 +629,8 @@ function json(payload, status = 200) {
   });
 }
 
-function html(markup, status = 200) {
-  return new Response(markup, {
+function html(markup, status = 200, options = {}) {
+  return new Response(options.head ? null : markup, {
     status,
     headers: HTML_HEADERS,
   });
@@ -605,8 +643,28 @@ function resolvePageSlug(segments) {
   const segment = segments[0];
   if (!segment) return "home";
   if (segment === "index.html") return "home";
-  if (segment.endsWith(".html")) return segment.slice(0, -".html".length);
-  return segment;
+  const slug = segment.endsWith(".html") ? segment.slice(0, -".html".length) : segment;
+  return PAGE_ROUTE_ALIASES.get(slug) ?? slug;
+}
+
+function getServiceManifest() {
+  return json({
+    name: "lorenzozanna-edge",
+    status: "ok",
+    routes: [
+      "/api/health",
+      "/api/public/site",
+      "/api/private/schema",
+      "/mcp",
+      ...DYNAMIC_PAGE_ROUTES,
+    ],
+    capabilities: {
+      publicApi: true,
+      privateApi: true,
+      remoteMcp: true,
+      dynamicPages: DYNAMIC_PAGE_SLUGS,
+    },
+  });
 }
 
 function getCorsHeaders(request, env) {
@@ -616,7 +674,7 @@ function getCorsHeaders(request, env) {
 
   return {
     "access-control-allow-origin": allowedOrigin,
-    "access-control-allow-methods": "GET,POST,PUT,PATCH,OPTIONS",
+    "access-control-allow-methods": "GET,HEAD,POST,PUT,PATCH,OPTIONS",
     "access-control-allow-headers": "authorization,content-type,x-ai-actor",
     "access-control-max-age": "86400",
     vary: "Origin",

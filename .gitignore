@@ -7,3 +7,8 @@ NEXT_CHAT_RECAP.md
 .wrangler/
 .dev.vars
 .deploy/
+
+# Local source material, not deploy/runtime assets
+assets/portfolio/
+assets/*.ogg
+transcript-*.txt

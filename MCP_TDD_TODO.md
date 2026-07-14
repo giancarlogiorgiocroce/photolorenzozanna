@@ -35,6 +35,7 @@ Legenda:
 - [x] Sync contenuti via MCP gia eseguito almeno una volta.
 - [x] Change log remoto contiene azioni con actor `mcp-lorenzozanna`.
 - [x] Documento strategico creato: `MCP_REMOTE_ROADMAP.md`.
+- [x] Contratti sezioni reali mappati: `MCP_SECTION_CONTRACTS.md`.
 
 ## 1. Primo obiettivo TDD
 
@@ -96,17 +97,17 @@ Obiettivo: passare da contenuti sparsi a pagine con sezioni strutturate.
 - [x] Disegnare schema D1 per `sections`.
 - [x] Disegnare schema D1 per `section_revisions`.
 - [ ] Disegnare schema D1 per `media_assets`.
-- [ ] Disegnare schema D1 per `auth_tokens` o modello auth scelto.
+- [x] Disegnare schema D1 per `auth_tokens` o modello auth scelto.
 - [x] Scrivere migration SQL iniziale.
 - [ ] Testare creazione pagina con sezioni ordinate.
 - [ ] Testare sezione con campi `id`, `type`, `enabled`, `order`, `data`.
 - [x] Testare `disable_section` sul modello dati.
-- [ ] Testare `enable_section` sul modello dati.
+- [x] Testare `enable_section` sul modello dati.
 - [ ] Testare `reorder_sections`.
 - [ ] Testare aggiunta sezione da preset.
 - [ ] Testare aggiunta sezione FAQ a pagina senza FAQ.
 - [x] Testare disattivazione FAQ senza cancellazione dati.
-- [ ] Testare rollback a revisione precedente.
+- [x] Testare rollback a revisione precedente.
 
 ## 4. Prima vertical slice locale
 
@@ -117,8 +118,11 @@ Prima farla funzionare senza remote MCP, usando funzioni interne/test.
 - [x] Scrivere test rosso: `disable_section` deve portare `enabled=false`.
 - [x] Implementare funzione dominio `disableSection`.
 - [x] Scrivere revisione/change log durante `disableSection`.
-- [ ] Aggiungere test rollback.
-- [ ] Implementare funzione dominio `rollbackChange`.
+- [x] Scrivere test rosso: `enable_section` deve portare `enabled=true`.
+- [x] Implementare funzione dominio `enableSection`.
+- [x] Scrivere revisione/change log durante `enableSection`.
+- [x] Aggiungere test rollback.
+- [x] Implementare funzione dominio `rollbackChange`.
 - [ ] Validare errori:
   - [x] pagina inesistente;
   - [x] sezione inesistente;
@@ -156,11 +160,12 @@ Portare il server da locale `stdio` a remoto HTTP.
 - [ ] Decidere se supportare SSE subito o solo risposta JSON.
 - [x] Testare richiesta senza auth.
 - [x] Testare richiesta con auth valida.
-- [ ] Esporre tool `get_page`.
+- [x] Esporre tool `get_page`.
 - [x] Esporre tool `disable_section`.
-- [ ] Esporre tool `enable_section`.
-- [ ] Esporre tool `list_changes`.
+- [x] Esporre tool `enable_section`.
+- [x] Esporre tool `list_changes`.
 - [x] Testare `disable_section` via chiamata MCP HTTP compatibile.
+- [x] Testare `enable_section` via chiamata MCP HTTP compatibile.
 - [x] Testare output `structuredContent`.
 - [ ] Testare errori MCP standardizzati.
 
@@ -168,62 +173,83 @@ Portare il server da locale `stdio` a remoto HTTP.
 
 Non incollare segreti in chat. Il connector deve gestire credenziali.
 
-- [ ] Decidere auth iniziale:
-  - [ ] token personale scoped;
+- [x] Decidere auth iniziale:
+  - [x] token personale scoped;
   - [ ] OAuth completo;
   - [ ] magic link + token.
-- [ ] Creare tabella token/utenti se si parte da token personale.
-- [ ] Definire ruolo `owner`.
-- [ ] Definire ruolo `editor`.
-- [ ] Definire ruolo `publisher`.
-- [ ] Testare token mancante.
-- [ ] Testare token invalido.
-- [ ] Testare token revocato.
-- [ ] Testare permesso lettura.
-- [ ] Testare permesso scrittura.
+- [x] Creare tabella token/utenti se si parte da token personale.
+- [x] Definire ruolo `owner`.
+- [x] Definire ruolo `editor`.
+- [x] Definire ruolo `publisher`.
+- [x] Testare token mancante.
+- [x] Testare token invalido.
+- [x] Testare token revocato.
+- [x] Testare permesso lettura.
+- [x] Testare permesso scrittura.
 - [ ] Testare permesso pubblicazione.
-- [ ] Loggare `actor` reale, non solo `mcp-lorenzozanna`.
-- [ ] Preparare istruzioni di onboarding Lorenzo.
+- [x] Loggare `actor` reale, non solo `mcp-lorenzozanna`.
+- [x] Preparare istruzioni di onboarding Lorenzo.
 
 ## 8. Tool MCP contenuti
 
 Dopo la prima slice, aggiungere tool uno per volta.
 
+- [x] Creare registry contratti sezioni da `MCP_SECTION_CONTRACTS.md`.
 - [ ] `get_site_snapshot`.
 - [ ] `list_pages`.
-- [ ] `get_page`.
+- [x] `get_page`.
+  - [x] includere `styleContract`;
+  - [x] includere `editableFields`;
+  - [x] distinguere `plain_text`, `text_list`, `rich_text`, `link`, `image`.
 - [ ] `list_sections`.
 - [ ] `get_section`.
+- [x] `list_changes`.
+  - [x] leggere `change_log`;
+  - [x] filtrare per `page` e `sectionId`;
+  - [x] consentire accesso con `content:read`;
+  - [x] restituire `before`/`after` parsati e target normalizzato per AI.
 - [ ] `update_page_meta`.
-- [ ] `update_text`.
-- [ ] `update_rich_text`.
+- [x] `update_text`.
+  - [x] validare path contro `editableFields`;
+  - [x] validare lunghezze;
+  - [x] bloccare HTML arbitrario;
+  - [x] scrivere `section_revisions` e `change_log`.
+- [x] `update_rich_text`.
 - [ ] `add_link`.
 - [ ] `remove_link`.
-- [ ] `update_cta`.
+- [x] `update_cta`.
 - [ ] `add_section_from_preset`.
-- [ ] `disable_section`.
-- [ ] `enable_section`.
+- [x] `disable_section`.
+- [x] `enable_section`.
 - [ ] `reorder_sections`.
 - [ ] `update_section`.
 - [ ] `duplicate_section`.
-- [ ] `rollback_change`.
+- [x] `rollback_change`.
+  - [x] rollback per `changeId`;
+  - [x] rollback ultimo cambio filtrato per pagina/sezione;
+  - [x] rollback per `revisionId`;
+  - [x] guardia stale sullo snapshot `after`;
+  - [x] revision/change log del rollback.
 
 ## 9. Rich text controllato
 
 Permettere bold, italic e link senza permettere HTML arbitrario.
 
-- [ ] Decidere formato rich text:
+- [x] Decidere formato rich text:
   - [ ] markdown controllato;
-  - [ ] array di span;
+  - [x] array di span con `marks[]`;
   - [ ] HTML sanitizzato server-side.
-- [ ] Testare bold.
-- [ ] Testare italic.
-- [ ] Testare link.
-- [ ] Testare rimozione link.
-- [ ] Bloccare script.
-- [ ] Bloccare HTML non consentito.
-- [ ] Bloccare URL pericolosi.
-- [ ] Renderizzare rich text in HTML sicuro.
+- [x] Implementare `rich_text_v1` da `MCP_SECTION_CONTRACTS.md`.
+- [x] Testare bold.
+- [x] Testare italic.
+- [x] Testare link.
+- [x] Testare rimozione link.
+- [x] Bloccare script.
+- [x] Bloccare HTML non consentito.
+- [x] Bloccare URL pericolosi.
+- [x] Renderizzare rich text in HTML sicuro.
+
+Nota 2026-07-14: in v1 `add_link` e `remove_link` non sono tool separati; si ottengono sostituendo il valore del campo con `update_rich_text`, rispettando il contratto `rich_text_v1`.
 
 ## 10. Preset sezioni
 
@@ -281,19 +307,21 @@ Da fare dopo testi/sezioni, perche aggiunge storage e sicurezza.
 - [ ] Implementare `validate_change`.
 - [ ] Implementare `apply_change`.
 - [ ] Implementare `publish_change` se si usa draft.
-- [ ] Implementare `rollback_change`.
-- [ ] Testare rollback ultimo cambio.
-- [ ] Testare rollback a revision specifica.
+- [x] Implementare `rollback_change`.
+- [x] Testare rollback ultimo cambio.
+- [x] Testare rollback a revision specifica.
 - [ ] Testare lista revisioni.
 - [ ] Testare messaggio umano di riepilogo modifica.
 
-## 14. Compatibilita Claude e ChatGPT
+## 14. Compatibilita client AI
 
+- [ ] Mantenere architettura provider-neutral: MCP standard prima, adattatori client dopo.
 - [ ] Verificare requisiti correnti Claude custom connector.
 - [ ] Verificare requisiti correnti ChatGPT app/plugin/MCP.
 - [ ] Testare remote MCP con MCP Inspector.
 - [ ] Testare con Claude custom connector.
 - [ ] Testare con ChatGPT developer mode/app, se disponibile.
+- [ ] Testare con almeno un client MCP generico che supporta bearer token.
 - [ ] Documentare setup per Lorenzo.
 - [ ] Documentare limiti piano Free/Pro dove necessario.
 - [ ] Evitare dipendenza da una singola piattaforma.

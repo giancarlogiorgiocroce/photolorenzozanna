@@ -141,6 +141,60 @@
   transform: translate(-50%, -50%) rotate(-45deg);
 }
 
+.lightbox__nav {
+  position: fixed;
+  top: 50%;
+  z-index: 41;
+  display: grid;
+  place-items: center;
+  width: clamp(2.75rem, 7vw, 3.4rem);
+  height: clamp(2.75rem, 7vw, 3.4rem);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 50%;
+  background: rgba(15, 16, 16, 0.72);
+  color: var(--color-text);
+  transform: translateY(-50%);
+  transition:
+    border-color 200ms ease,
+    background 200ms ease,
+    color 200ms ease;
+}
+
+.lightbox__nav:hover,
+.lightbox__nav:focus-visible {
+  border-color: rgba(201, 77, 28, 0.68);
+  background: rgba(15, 16, 16, 0.92);
+  color: var(--color-accent);
+}
+
+.lightbox__nav[hidden] {
+  display: none;
+}
+
+.lightbox__nav--prev {
+  left: clamp(0.8rem, 3vw, 1.8rem);
+}
+
+.lightbox__nav--next {
+  right: clamp(0.8rem, 3vw, 1.8rem);
+}
+
+.lightbox__nav::before {
+  width: 0.72rem;
+  height: 0.72rem;
+  border-top: 1px solid currentColor;
+  border-left: 1px solid currentColor;
+  content: "";
+}
+
+.lightbox__nav--prev::before {
+  transform: translateX(0.12rem) rotate(-45deg);
+}
+
+.lightbox__nav--next::before {
+  transform: translateX(-0.12rem) rotate(135deg);
+}
+
 @media (min-width: 760px) {
   .masonry-gallery {
     grid-template-columns: repeat(3, 1fr);

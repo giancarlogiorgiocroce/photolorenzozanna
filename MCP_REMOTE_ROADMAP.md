@@ -12,15 +12,44 @@ Il risultato finale deve avere queste proprieta:
 - essere scollegato da GitHub per la gestione ordinaria dei contenuti;
 - avere un MCP remoto raggiungibile da ovunque;
 - non avere latenza da deploy tra modifica fatta via MCP e contenuto visibile online;
-- permettere a Lorenzo di collegare il proprio account Claude/ChatGPT al MCP remoto;
+- permettere a Lorenzo di collegare un client AI compatibile al MCP remoto, per esempio Claude, ChatGPT, Codex, Cursor o un agente custom;
 - permettere modifiche guidate tramite tool e template forniti dal MCP;
 - gestire testi, immagini, link, formattazione leggera, sezioni preimpostate e visibilita delle sezioni.
+
+## Principio architetturale preferito
+
+L'architettura di riferimento non deve essere ChatGPT-centrica o Claude-centrica.
+
+Il prodotto tecnico da costruire e un MCP remoto sicuro, provider-neutral e standard-oriented:
+
+```text
+MCP remoto Lorenzo
+  /mcp
+  tool standard
+  auth standard
+  ruoli/scopes standard
+        |
+        + ChatGPT
+        + Claude
+        + Codex
+        + Cursor
+        + client MCP generico
+        + agente custom
+```
+
+ChatGPT, Claude e gli altri host sono consumatori del server, non il centro dell'architettura. Quando un client richiede dettagli specifici, per esempio OAuth metadata per ChatGPT Apps, quei dettagli vanno implementati come layer di compatibilita sopra un nucleo MCP generico.
+
+Scelta pratica:
+
+- prima: MCP HTTP generico con bearer token scoped e revocabile;
+- poi: OAuth/metadata standard MCP quando serve compatibilita nativa con client che lo richiedono;
+- mai: logica contenutistica o permessi hardcoded per un singolo provider AI.
 
 Il flusso editoriale desiderato e:
 
 ```text
-Lorenzo scrive in Claude/ChatGPT
-  -> Claude/ChatGPT usa il remote MCP
+Lorenzo scrive in un client AI compatibile
+  -> il client usa il remote MCP
   -> MCP autentica Lorenzo
   -> MCP aggiorna D1/R2
   -> il sito legge D1/R2 in tempo reale
@@ -133,7 +162,7 @@ Riferimenti utili:
 - OpenAI MCP docs: https://developers.openai.com/api/docs/mcp
 - Claude remote MCP custom connectors: https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp
 
-## Nota importante su ChatGPT e Claude gratuiti
+## Nota importante sui client AI
 
 Non bisogna progettare il sistema immaginando che Lorenzo incolli una chiave privata dentro una chat gratuita.
 
@@ -151,6 +180,8 @@ Claude dichiara supporto ai custom connector via remote MCP anche per utenti Fre
 ChatGPT supporta app/plugin e remote MCP, ma disponibilita e funzioni dipendono da piano, workspace, ruolo, area geografica e superficie supportata. Per ChatGPT va progettata una vera app/connector con auth corretta.
 
 La chiave di Lorenzo non dovrebbe essere passata nel prompt. Deve essere gestita come credenziale del connector.
+
+Questa sezione non cambia il principio architetturale: ChatGPT e Claude sono target di compatibilita, non vincoli di progetto. Se un altro client MCP supporta HTTPS e bearer token o OAuth standard, deve poter usare lo stesso server.
 
 ## Architettura finale consigliata
 
@@ -186,6 +217,10 @@ Il sito dovrebbe leggere i contenuti direttamente da D1/R2 a runtime, oppure usa
 ## Modello dati desiderato
 
 Il modello contenuti deve passare da HTML statico o markdown generico a blocchi strutturati.
+
+I blocchi devono seguire i contratti mappati in `MCP_SECTION_CONTRACTS.md`. Il contratto collega dati, markup e CSS esistenti: per esempio `home.hero`, `about.hero`, `contact.hero` e `portfolio.page_hero` sono tutti hero dal punto di vista logico, ma non hanno lo stesso layout.
+
+Per bold, italic e link non si usera HTML libero. Il formato scelto e `rich_text_v1`: blocchi/paragrafi con children testuali, `marks[]` allowlisted e link validati. Il renderer traduce quel JSON in `<strong>`, `<em>` e `<a>` sicuri.
 
 Esempio pagina:
 
@@ -520,7 +555,7 @@ Consiglio: Worker dinamico, per rispettare il requisito zero deploy latency.
 
 2. Auth finale: OAuth completo o token personale?
 
-Consiglio iniziale: token personale scoped, poi OAuth se serve compatibilita migliore con ChatGPT Apps.
+Consiglio iniziale: token personale scoped, poi OAuth standard MCP se serve compatibilita migliore con ChatGPT Apps, Claude o altri client che richiedono discovery/authorization metadata. L'OAuth va progettato provider-neutral, non come integrazione esclusiva ChatGPT.
 
 3. Immagini: R2 puro o Cloudflare Images?
 

@@ -1,0 +1,443 @@
+# TODO prossime fasi MCP remoto
+
+Data: 2026-07-13
+Commit base gia pushato: `d1eb371 Add TDD foundation for remote MCP`
+
+Questo file serve come traccia per aprire piu chat parallele sui pezzi rimasti dopo la prima foundation TDD.
+
+Legenda:
+
+- `[x]` fatto
+- `[ ]` da fare
+
+## Stato gia chiuso
+
+- [x] Roadmap generale creata in `MCP_REMOTE_ROADMAP.md`.
+- [x] TODO TDD creato in `MCP_TDD_TODO.md`.
+- [x] Contratti sezioni MCP mappati in `MCP_SECTION_CONTRACTS.md`.
+- [x] Worker API esistente messo sotto test.
+- [x] Migration iniziale `pages`, `page_sections`, `section_revisions`.
+- [x] Renderer dinamico HTML minimo da D1.
+- [x] Route pubblica locale `/portfolio` e `/portfolio.html` collegata al renderer.
+- [x] MCP HTTP minimale con:
+  - [x] `initialize`;
+  - [x] `tools/list`;
+  - [x] `tools/call`.
+- [x] Primo tool MCP: `disable_section`.
+- [x] Vertical slice locale:
+
+```text
+POST /mcp tools/call disable_section
+  -> D1 aggiornato
+  -> /portfolio renderizzato senza FAQ
+```
+
+- [x] Test verdi: `npm test`, 18 test passanti.
+- [x] Commit e push su `main`: `d1eb371`.
+
+## 1. Deploy remoto del nuovo Worker/MCP
+
+Obiettivo: rendere il nuovo codice Worker/MCP raggiungibile online.
+
+- [x] Verificare differenza tra Worker attualmente deployato e codice locale.
+  - Verifica 2026-07-14: il remoto `https://api.lorenzozanna.com` serve ancora la superficie API storica (`/api/health` e `/api/public/sites/ph/content` OK), ma non espone il nuovo MCP/rendering locale.
+  - Esito remoto: `GET /mcp` -> 404 `Route not found`; `GET /portfolio?site=ph` -> 404 `Route not found`.
+  - Esito locale: `npm test` in `edge/` -> 24 test verdi; la root locale ora dichiara in modo testato `/mcp`, `/portfolio`, `/portfolio.html` e capability `remoteMcp`/`dynamicPages`.
+- [x] Verificare `wrangler.toml` e route attuali.
+  - Verifica 2026-07-14: `wrangler.toml` punta al Worker `lorenzozanna-edge`, entrypoint `src/index.mjs`, `workers_dev = false`, binding D1 `DB` -> `lorenzozanna_content`, `ROOT_DOMAIN = "lorenzozanna.com"`.
+  - Route locale configurata: unico `[[routes]]` con `pattern = "api.lorenzozanna.com"` e `custom_domain = true`; nessuna route locale per `mcp.lorenzozanna.com`.
+  - Stato produzione Wrangler: deployment attivo `56086f46-ca5f-4595-b51a-e7376c77923c`, creato il 2026-07-04T10:12:47Z.
+  - Cloudflare API: nessuna Workers Route classica nella zona; un Worker Custom Domain attivo `api.lorenzozanna.com` -> service `lorenzozanna-edge`, environment `production`, enabled `true`.
+  - Test aggiunto: `edge/test/wrangler-config.test.mjs` blocca la configurazione attuale.
+- [x] Decidere se usare unico Worker per:
+  - [x] API;
+  - [x] MCP;
+  - [x] rendering sito.
+  - Decisione 2026-07-14: fase 1 su Worker unico `lorenzozanna-edge`; route separate nello stesso runtime (`/api/*`, `/mcp`, pagine pubbliche dinamiche). La scelta e gia coperta dai test Worker locali.
+- [x] Decidere endpoint MCP pubblico:
+  - [x] `https://api.lorenzozanna.com/mcp`;
+  - [ ] oppure `https://mcp.lorenzozanna.com/mcp`.
+  - Decisione 2026-07-14: usare inizialmente `https://api.lorenzozanna.com/mcp`, perche il custom domain e gia attivo e non richiede DNS/route nuove. `mcp.lorenzozanna.com` resta possibile in fase successiva se serve separazione semantica.
+- [x] Se si vuole `mcp.lorenzozanna.com`, creare route/DNS necessaria.
+  - Decisione 2026-07-14: non necessario per fase 1; nessuna nuova route/DNS creata.
+- [x] Eseguire deploy Worker in staging o direttamente su produzione.
+  - Deploy produzione 2026-07-14: versione attiva `800d2191-d4cd-4bd1-bef2-4994b36af4a0` su custom domain `api.lorenzozanna.com`.
+  - Preflight: `npm test` -> 24 test verdi; `npx wrangler deploy --dry-run` OK con binding `DB` e `ROOT_DOMAIN`.
+- [x] Verificare online:
+  - [x] `/api/health`;
+  - [x] `/mcp initialize`;
+  - [x] `/mcp tools/list`;
+  - [x] `/mcp tools/call disable_section` su dati test o staging.
+  - Verifica 2026-07-14: `/api/health` -> 200; root remota dichiara `/mcp`; `initialize` autenticato -> 200; `tools/list` autenticato -> `disable_section`.
+  - Verifica sicura `tools/call disable_section` su produzione: non modifica dati perche D1 remoto non ha ancora `pages`; risposta JSON-RPC pulita `dynamic_schema_not_ready`.
+  - Verifica `/portfolio?site=ph`: 503 esplicito `dynamic_schema_not_ready`, in attesa migration D1 reale.
+  - Verifica dopo migration D1: pagina temporanea `codex-smoke` creata, `disable_section` remoto eseguito con successo su `faq`, revisione creata, cleanup completato.
+- [x] Non rompere l'attuale API pubblica usata da `mcp/call-tool.mjs`.
+  - Verifica 2026-07-14: `node mcp/call-tool.mjs get_public_content` OK; `GET /api/public/sites/ph/content` -> 200.
+
+Prompt per chat:
+
+```text
+Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentrati solo sul deploy remoto del Worker/MCP Cloudflare. Non implementare nuovi tool. Verifica wrangler, route, rischi produzione e piano di deploy sicuro.
+```
+
+## 2. Migrazione D1 reale
+
+Obiettivo: portare il database remoto dal modello vecchio `content_entries` al modello nuovo `pages/page_sections`.
+
+- [x] Verificare schema D1 remoto attuale.
+  - Verifica 2026-07-14: prima della migration erano presenti `sites`, `content_entries`, `change_log`, `d1_migrations`; mancavano `pages`, `page_sections`, `section_revisions`.
+  - Dati reali: sito `ph`, 21 `content_entries`, migration applicate prima della fase: `0001_init.sql`, `0002_seed_ph.sql`.
+- [x] Applicare migration `0003_pages_sections.sql` in locale.
+- [x] Testare migration in locale.
+  - Test locale temporaneo con `--persist-to %TEMP%`: `0001` + `0003` + fixture `pages/portfolio` + `0004` hanno creato `portfolio` con sezioni `hero`, `text_2`, `faq`.
+  - Test suite: `npm test` -> 26 test verdi.
+- [x] Applicare migration `0003_pages_sections.sql` su remoto.
+  - Applicate su remoto il 2026-07-14: `0003_pages_sections.sql` e `0004_seed_pages_from_content_entries.sql`.
+- [x] Creare script o comando di seed/migrazione dai contenuti esistenti:
+  - [x] `pages/home`;
+  - [x] `pages/chi-sono`;
+  - [x] `pages/portfolio`;
+  - [x] `pages/contatti`;
+  - [x] sezioni `hero`;
+  - [x] sezioni `text`;
+  - [x] sezioni `faq`;
+  - [x] sezioni `gallery` dove serve.
+  - Implementazione: migration idempotente `edge/migrations/0004_seed_pages_from_content_entries.sql`, basata su `content_entries.collection = 'pages'` e array `blocks`.
+  - Risultato remoto: pagine `home` 5 sezioni, `chi-sono` 5, `portfolio` 4, `contatti` 4; tipi sezione: 4 `hero`, 6 `text`, 4 `faq`, 4 `cta`. Nessun blocco `gallery` presente nei dati correnti.
+- [x] Conservare `content_entries` durante la transizione.
+  - Verifica 2026-07-14: `content_entries` resta a 21 righe; la `0004` usa solo `INSERT OR IGNORE` su nuove tabelle e non fa `UPDATE`/`DELETE` del modello vecchio.
+- [x] Aggiungere verifica post-migrazione:
+  - [x] pagina portfolio esiste;
+  - [x] sezione FAQ portfolio enabled;
+  - [x] renderer trova dati reali;
+  - [x] nessuna perdita contenuto.
+  - Verifica 2026-07-14: `portfolio/faq` enabled `1`; `GET https://api.lorenzozanna.com/portfolio?site=ph` -> HTML dinamico 200, con FAQ, senza intro spezzata da virgola.
+- [x] Scrivere rollback plan della migration.
+  - Rollback sicuro fase 2: non fare rollback di `content_entries`; per disattivare la migration dinamica basta servire ancora il sito statico Pages e ignorare le nuove tabelle.
+  - Rollback DB se necessario: eliminare solo dati/tabelle nuove in ordine `section_revisions`, `page_sections`, `pages` e rimuovere le righe `0003`/`0004` da `d1_migrations`; nessun dato contenutistico vecchio viene toccato.
+
+Prompt per chat:
+
+```text
+Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentrati solo sulla migrazione D1 reale verso pages/page_sections/section_revisions. Voglio piano sicuro, script di migrazione dai content_entries attuali e rollback.
+```
+
+## 3. Rendere ph.lorenzozanna.com dinamico
+
+Obiettivo: il dominio pubblico deve leggere D1/R2 a runtime, non servire HTML statico vecchio.
+
+- [x] Decidere se sostituire Cloudflare Pages con Worker route.
+  - Decisione 2026-07-14: Worker route path-specifiche solo per HTML pubblico; Cloudflare Pages resta attivo per asset statici.
+- [x] Verificare configurazione attuale `ph.lorenzozanna.com`.
+  - Verifica 2026-07-14: progetto Pages `lorenzozanna-ph` con dominio `ph.lorenzozanna.com`; DNS Cloudflare risolve correttamente; route Worker pubblicate sullo stesso host per i path HTML.
+- [x] Mappare route pubbliche richieste:
+  - [x] `/`;
+  - [x] `/index.html`;
+  - [x] `/portfolio`;
+  - [x] `/portfolio.html`;
+  - [x] `/about`;
+  - [x] `/about.html`;
+  - [x] `/contact`;
+  - [x] `/contact.html`.
+  - Smoke 2026-07-14: tutte le 8 route rispondono `200 text/html; charset=utf-8`.
+- [x] Estendere renderer oltre `portfolio`.
+  - Implementazione 2026-07-14: root `ph` -> `home`; alias pubblici `about` -> `chi-sono` e `contact` -> `contatti`; shell comune con header/footer e asset CSS/JS.
+- [x] Renderizzare asset CSS/JS/immagini esistenti senza rompere layout.
+  - Implementazione 2026-07-14: HTML dinamico linka `assets/css/base.css`, CSS pagina, `assets/js/main.js`; portfolio include `assets/js/gallery.js`, lightbox e sezione `gallery` da D1.
+  - Migration additiva `0005_seed_portfolio_gallery_from_content_entries.sql`: copia `content_entries portfolio/series` in `page_sections.gallery` senza modificare dati legacy.
+  - Smoke 2026-07-14: D1 `section_ph_portfolio_gallery` enabled, order `25`, 4 gruppi; `/portfolio` contiene `masonry-gallery` e immagini; `/assets/images/portfolio/ritratti/ritratto-riflesso.jpg` -> `200 image/jpeg`.
+  - Fix regressione 2026-07-14: il renderer pubblico non deve usare solo `type` generico (`hero`, `text`, `faq`), ma `styleContract` reali. Aggiunti renderer/test per `home.hero`, `home.selected_work`, `home.split_section`, `about.hero`, `about.manifesto`, `about.values_grid`, `contact.hero`, `contact.availability`, `portfolio.page_hero`; fallback statici per immagini/link/layout gia presenti nel sito.
+  - Deploy fix 2026-07-14: Worker versione `7592ba23-35df-4e69-8548-d6adb4a17afa`; verifica live HTML/browser su `/`, `/about`, `/contact`, `/portfolio` con asset immagini caricati e classi CSS specialistiche presenti.
+  - Fix parita statico/dinamico 2026-07-14: `portfolio/text_2` non usa piu il fallback `<section class="section">`, ma `portfolio.series_text` con markup `editorial-section` e CSS dedicato; il renderer dinamico ora ripristina meta description/OG dagli statici locali.
+  - Deploy parita 2026-07-14: Worker versione `591ebbb6-aaef-4986-9b5f-570e097b6424`; Pages deploy `https://a037123a.lorenzozanna-ph.pages.dev` per `assets/css/base.css`; smoke live su `/portfolio`, `/` e `/assets/css/base.css` passato.
+- [x] Decidere dove servire asset statici:
+  - [x] Pages per asset;
+  - [ ] Worker static assets;
+  - [ ] R2;
+  - [x] mantenere Pages solo per asset e Worker per HTML.
+  - Decisione 2026-07-14: asset statici ancora da Pages con cache pubblica; HTML dinamico dal Worker.
+- [x] Configurare cache HTML:
+  - [x] `no-store` in prima fase;
+  - [ ] oppure cache breve con invalidazione.
+  - Smoke 2026-07-14: `GET` e `HEAD https://ph.lorenzozanna.com/portfolio` -> `200`, `Cache-Control: no-store`.
+- [x] Verificare che modifica D1 sia visibile al refresh.
+  - Verifica 2026-07-14: marker temporaneo su CTA portfolio apparso su `https://ph.lorenzozanna.com/portfolio`, poi ripristinato e scomparso; dati CTA tornati al valore originale.
+- [x] Verificare che il vecchio HTML statico non venga piu servito.
+  - Verifica 2026-07-14: path HTML coperti da Worker route, header `no-store`, markup dinamico con `data-section-id`; Pages continua a servire solo asset.
+  - Deploy Worker finale fase 3: versione `d485a63d-ba90-4a1f-94ac-10806d2eaebf`.
+  - Anti-regressione: `/api/health` OK e `node mcp/call-tool.mjs get_public_content` OK dopo deploy.
+
+Prompt per chat:
+
+```text
+Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentrati solo su come rendere ph.lorenzozanna.com dinamico da D1, mantenendo template/CSS sicuri e zero redeploy per i contenuti.
+```
+
+## 4. Auth definitiva per Lorenzo
+
+Obiettivo: Lorenzo deve collegarsi da un client AI compatibile senza incollare segreti nel prompt. ChatGPT e Claude sono target importanti, ma l'architettura preferita e MCP provider-neutral.
+
+- [x] Decidere auth iniziale:
+  - [x] token personale scoped;
+  - [ ] OAuth completo;
+  - [ ] magic link + token.
+  - Decisione 2026-07-14: partire con bearer token personale scoped e hashato in D1. OAuth resta necessario per ChatGPT App nativa/pubblicabile e per altri client che richiedono discovery/authorization metadata.
+- [x] Definire ruoli:
+  - [x] owner;
+  - [x] editor;
+  - [x] publisher;
+  - [x] viewer.
+  - Implementazione 2026-07-14: mapping ruolo -> scope in `edge/src/auth.mjs`.
+- [x] Creare tabella/token store se necessario.
+  - Implementazione 2026-07-14: migration `edge/migrations/0006_auth_tokens.sql`, con `token_hash` unico e nessun token plaintext.
+- [x] Implementare token revocabile.
+  - Test 2026-07-14: token `status = 'revoked'` respinto con 401.
+- [x] Associare token a site slug `ph`.
+  - Implementazione 2026-07-14: `auth_tokens.site_id` -> `sites.id`; il controllo permessi verifica anche il sito della richiesta.
+- [x] Loggare actor reale.
+  - Test 2026-07-14: `disable_section` via token utente scrive `lorenzo` in `section_revisions` e `change_log`.
+- [x] Separare token tecnico `AI_API_TOKEN` da token utente Lorenzo.
+  - Implementazione 2026-07-14: `AI_API_TOKEN` resta percorso tecnico `technical-token`; i token utente passano da `auth_tokens`.
+- [x] Definire istruzioni onboarding per:
+  - [x] Claude custom connector;
+  - [x] ChatGPT app/connector;
+  - [x] client MCP generico.
+  - Documento: `MCP_AUTH_ONBOARDING.md`.
+- [x] Documentare cosa Lorenzo non deve fare:
+  - [x] non incollare segreti in chat;
+  - [x] non condividere token master;
+  - [x] revocare token se compromesso.
+  - Documento: `MCP_AUTH_ONBOARDING.md`.
+
+Nota 2026-07-14: fase 4 chiusa per token personale scoped. La direzione architetturale preferita e provider-neutral: il MCP di Lorenzo deve restare utilizzabile da qualunque client AI compatibile. Per ChatGPT nativo va pianificata una fase OAuth dedicata con protected resource metadata e authorization server metadata, ma come layer standard di compatibilita, non come architettura ChatGPT-specifica.
+Verifica 2026-07-14:
+- Test locali: `npm test` in `edge/` -> 39 test verdi.
+- Migration remota applicata: `0006_auth_tokens.sql`.
+- Deploy Worker: versione `9fdf6813-be9f-422d-86ca-f222058a522b`.
+- Smoke tecnico: `AI_API_TOKEN` continua a chiamare `/mcp tools/list`.
+- Smoke token utente D1: token temporaneo `editor` accettato da `/mcp tools/list`, `last_used_at` aggiornato, riga temporanea cancellata; token smoke rimasti: `0`.
+
+Prompt per chat:
+
+```text
+Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentrati solo su auth e onboarding Lorenzo per remote MCP. Voglio una soluzione sicura ma semplice, con token scoped o OAuth, revoca, ruoli e istruzioni per Claude/ChatGPT.
+```
+
+## 5. Tool MCP contenuti
+
+Obiettivo: ampliare i tool oltre `disable_section`.
+
+Nota 2026-07-14: i tool contenutistici devono usare i contratti in `MCP_SECTION_CONTRACTS.md`. Il tipo logico (`hero`, `text`, `faq`, `cta`, `gallery`) non basta: ogni sezione deve esporre anche `styleContract`, campi editabili, primitive dati e vincoli di rendering.
+
+- [x] `get_page`
+  - [x] leggere pagina;
+  - [x] sezioni;
+  - [x] stato enabled/disabled;
+  - [x] output pensato per AI.
+  - [x] includere `styleContract` per ogni sezione;
+  - [x] includere `editableFields` con `kind`, `path`, limiti e tool consigliato.
+  - Implementazione 2026-07-14: `edge/src/pages.mjs`, `edge/src/page-contracts.mjs`, tool MCP `get_page`; permesso richiesto `content:read`.
+  - Test 2026-07-14: viewer token puo chiamare `get_page`; `tools/list` espone `get_page`, `disable_section` e `enable_section`.
+  - Deploy 2026-07-14: Worker versione `486a465e-6eaf-4275-8fee-c1031b4c2b87`.
+  - Smoke remoto 2026-07-14: `/mcp tools/list` -> `get_page`, `disable_section`, `enable_section`; `/mcp tools/call get_page` su `ph/portfolio` -> 5 sezioni, `hero` con `portfolio.page_hero`, `gallery` con `portfolio.gallery`.
+- [x] `enable_section`
+  - [x] riattivare sezione;
+  - [x] creare revisione;
+  - [x] loggare change.
+  - Implementazione 2026-07-14: `edge/src/sections.mjs` espone `enableSection`; `edge/src/mcp-http.mjs` espone il tool MCP `enable_section` con permesso `content:write`.
+  - Test 2026-07-14: dominio e MCP HTTP coperti; la suite `npm test` in `edge` passa con 46 test.
+  - Deploy 2026-07-14: Worker versione `41a2d412-19e5-4773-ae67-e264ed4d3793`.
+  - Smoke remoto 2026-07-14: pagina temporanea `codex-enable-smoke` creata con FAQ disabilitata; `tools/call enable_section` -> `enabled: true`; D1 verificato con `enabled = 1`, `section_revisions.action = enable_section`, `change_log.action = enable_section`; cleanup completato.
+- [x] `update_text`
+  - [x] aggiornare campi testuali semplici;
+  - [x] validare lunghezze;
+  - [x] impedire HTML arbitrario.
+  - Implementazione 2026-07-14: `edge/src/sections.mjs` espone `updateText`; `edge/src/page-contracts.mjs` risolve path concreti contro contratti wildcard tipo `items[].question`; `edge/src/mcp-http.mjs` espone il tool MCP `update_text` con permesso `content:write`.
+  - Contratto: accetta campi `plain_text`/`text_list` e fallback plain su campi `rich_text` solo quando il contratto espone `plainTextTool: "update_text"`; non abilita ancora bold/italic/link.
+  - Test 2026-07-14: dominio, resolver contratti e MCP HTTP coperti; la suite `npm test` in `edge` passa con 52 test.
+  - Deploy 2026-07-14: Worker versione `9f35c365-7a72-4a47-b47b-72816065af98`.
+  - Smoke remoto 2026-07-14: pagina temporanea `codex-update-smoke` creata; `tools/list` -> `get_page`, `disable_section`, `enable_section`, `update_text`; `tools/call update_text` su `hero.title` -> `Smoke Updated`; D1 verificato con JSON aggiornato, `section_revisions.action = update_text`, `change_log.action = update_text`; cleanup completato.
+- [x] `update_rich_text`
+  - [x] bold;
+  - [x] italic;
+  - [x] link;
+  - [x] sanitizzazione.
+  - [x] usare `rich_text_v1` con `marks[]`, non HTML libero.
+  - Implementazione 2026-07-14: `edge/src/sections.mjs` espone `updateRichText`; `edge/src/rendering.mjs` renderizza `rich_text_v1` in `<strong>`, `<em>` e `<a>` escapando il testo; `edge/src/mcp-http.mjs` espone il tool MCP con permesso `content:write`.
+  - Contratto: solo blocchi `paragraph`, span con `marks: ["bold"|"italic"]`, link validati con la stessa allowlist CTA; niente HTML/classi/attributi custom. La rimozione link avviene sostituendo il valore rich text con span senza `link`.
+  - Test 2026-07-14: dominio, renderer e MCP HTTP coperti; la suite `npm test` in `edge` passa con 65 test.
+  - Deploy 2026-07-14: Worker versione `42244168-ddaf-441a-8ba1-146c06e7ae84`.
+  - Smoke remoto 2026-07-14: fixture temporaneo `codex-cta-rich-smoke`; `tools/list` espone `update_rich_text`; `tools/call update_rich_text` scrive `rich_text_v1`, D1 conferma mark/link, renderer live via `https://api.lorenzozanna.com/codex-cta-rich-smoke?site=ph` produce `<strong>`, `<em>` e link; cleanup completato.
+- [x] `update_cta`
+  - [x] label;
+  - [x] href;
+  - [x] validazione URL.
+  - Implementazione 2026-07-14: `edge/src/sections.mjs` espone `updateCta`; path validati contro `editableFields` di tipo `link`; `edge/src/mcp-http.mjs` espone il tool MCP con permesso `content:write`.
+  - Contratto: label plain text senza HTML; href interno `/...`, relativo allowlisted (`index.html`, `portfolio.html`, `about.html`, `contact.html`), `https://`, `mailto:`, `tel:`; vietati HTML, `..`, `javascript:`, `data:`.
+  - Test 2026-07-14: dominio e MCP HTTP coperti; `update_cta` aggiorna D1 e HTML dinamico home nei test locali.
+  - Smoke remoto 2026-07-14: `tools/call update_cta` su fixture temporaneo scrive label/href e crea revision/change log; prova controllata su `home/hero.primaryCta` visibile su `https://ph.lorenzozanna.com/`, poi JSON sezione ripristinato e revision/log smoke rimossi.
+- [x] `list_changes`
+  - [x] leggere log;
+  - [x] filtrare per pagina/sezione.
+  - Implementazione 2026-07-14: `edge/src/changes.mjs` espone `listChanges`; `edge/src/mcp-http.mjs` espone il tool MCP con permesso `content:read`.
+  - Contratto: `site` obbligatorio; `page`, `sectionId`, `limit` opzionali; `sectionId` richiede `page`; `limit` massimo 50.
+  - Output: `changes[]` con `id`, `actor`, `action`, `target`, `page`, `sectionId`, `path`, `before`, `after`, `createdAt`.
+  - Test 2026-07-14: dominio e MCP HTTP coperti; viewer token puo chiamare `list_changes`; suite `npm test` in `edge` -> 70 test verdi.
+  - Deploy 2026-07-14: Worker versione `77dd3b42-f24c-4b66-aaf0-e0ac0b9929e9`.
+  - Smoke remoto 2026-07-14: `tools/list` espone `list_changes`; `tools/call list_changes` filtrato su `ph/portfolio/faq` risponde correttamente; chiamata non filtrata `limit=5` legge 5 cambi reali da `change_log`.
+- [x] `rollback_change`
+  - [x] rollback ultimo cambio;
+  - [x] rollback a revisione specifica.
+  - Implementazione 2026-07-14: `edge/src/rollback.mjs` espone `rollbackChange`; `edge/src/mcp-http.mjs` espone il tool MCP con permesso `content:write`.
+  - Contratto: accetta `site` piu uno tra `changeId`, `revisionId`, oppure `page`/`sectionId` per annullare l'ultimo cambio filtrato.
+  - Sicurezza: applica lo snapshot `before` solo se lo stato corrente della sezione coincide con lo snapshot `after` del cambio/revisione; se nel frattempo ci sono modifiche successive, il rollback si ferma.
+  - Output: `rolledBackChangeId`, `rolledBackRevisionId`, `rolledBackAction`, `revisionId`, `previewUrl`, `published`.
+  - Test 2026-07-14: dominio e MCP HTTP coperti; rollback testo, rollback visibility, rollback ultimo cambio, rollback a `revisionId`, protezione stale; suite `npm test` in `edge` -> 76 test verdi.
+  - Deploy 2026-07-14: Worker versione `7d7e2bee-de60-4222-a373-5f84b4f80ed7`.
+  - Smoke remoto 2026-07-14: fixture temporanea `codex-rollback-smoke`; `update_text` cambia titolo in `Smoke Changed`; `rollback_change` su ultimo cambio ripristina `Smoke Original`; fixture e log smoke rimossi.
+
+Prompt per chat:
+
+```text
+Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentrati solo sui prossimi tool MCP contenutistici dopo disable_section: get_page, enable_section, update_text, rich text controllato, update_cta, list_changes e rollback.
+```
+
+## 6. FAQ e sezioni preimpostate
+
+Obiettivo: Lorenzo puo aggiungere o togliere sezioni solo da preset sicuri.
+
+- [ ] Definire preset `faq`.
+- [ ] Definire preset `text`.
+- [ ] Definire preset `cta`.
+- [ ] Definire preset `gallery`.
+- [ ] Definire preset `image_text`.
+- [ ] Tool `list_section_presets`.
+- [ ] Tool `add_section_from_preset`.
+- [ ] Tool `add_faq_section`.
+- [ ] Tool `add_faq_item`.
+- [ ] Tool `update_faq_item`.
+- [ ] Tool `remove_faq_item`.
+- [ ] Tool `reorder_faq_items`.
+- [ ] Testare pagina senza FAQ -> aggiunta FAQ.
+- [ ] Testare pagina con FAQ -> niente duplicato non voluto.
+- [ ] Testare disattivazione FAQ senza cancellazione.
+
+Prompt per chat:
+
+```text
+Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentrati solo su preset sezioni e workflow FAQ sicuro via MCP. Le AI non devono generare HTML libero.
+```
+
+## 7. Immagini e R2/media pipeline
+
+Obiettivo: gestire upload e sostituzione immagini senza modificare HTML.
+
+- [ ] Decidere storage:
+  - [ ] R2 puro;
+  - [ ] Cloudflare Images;
+  - [ ] R2 + servizio trasformazioni.
+- [ ] Disegnare tabella `media_assets`.
+- [ ] Creare bucket R2 se necessario.
+- [ ] Tool `create_image_upload`.
+- [ ] Tool `confirm_image_upload`.
+- [ ] Tool `replace_image`.
+- [ ] Tool `attach_image_to_section`.
+- [ ] Tool `update_image_alt`.
+- [ ] Tool `set_image_focal_point`.
+- [ ] Tool `remove_image_from_section`.
+- [ ] Validare:
+  - [ ] formato file;
+  - [ ] dimensione massima;
+  - [ ] alt text obbligatorio;
+  - [ ] ownership site;
+  - [ ] virus/security se applicabile.
+- [ ] Renderizzare immagini da media metadata.
+- [ ] Rollback immagine.
+
+Prompt per chat:
+
+```text
+Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentrati solo sulla gestione immagini via MCP: R2, upload sicuro, alt text, focal point, replace_image e rollback.
+```
+
+## 8. Rollback, preview e publish
+
+Obiettivo: rendere modifiche sicure e reversibili.
+
+- [ ] Decidere modalita:
+  - [ ] fast mode: live subito + rollback;
+  - [ ] safe mode: draft -> preview -> publish.
+- [ ] Implementare `preview_change`.
+- [ ] Implementare `validate_change`.
+- [ ] Implementare `publish_change` se serve.
+- [x] Implementare `rollback_change`.
+- [ ] UI/API preview URL.
+- [ ] Testare rollback:
+  - [x] sezione enabled/disabled;
+  - [x] testo;
+  - [ ] FAQ;
+  - [ ] immagine.
+- [ ] Change summary leggibile per AI.
+- [ ] Log completo con actor.
+
+Prompt per chat:
+
+```text
+Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentrati solo su preview, publish e rollback. Voglio decidere fast mode vs safe mode e implementare rollback affidabile.
+```
+
+## 9. Test con client AI reali
+
+Obiettivo: verificare client reali, non solo test locali.
+
+- [ ] Testare endpoint MCP con MCP Inspector o client equivalente.
+- [ ] Testare schema `initialize`.
+- [ ] Testare `tools/list`.
+- [ ] Testare `tools/call disable_section`.
+- [ ] Testare Claude custom connector.
+- [ ] Testare ChatGPT app/connector se disponibile.
+- [ ] Testare almeno un client MCP generico con bearer token.
+- [ ] Mantenere la compatibilita provider-neutral: nessun tool o permesso deve dipendere dal nome del provider AI.
+- [ ] Documentare limiti piano Free/Pro.
+- [ ] Scrivere guida per Lorenzo:
+  - [ ] URL MCP;
+  - [ ] come autenticarsi;
+  - [ ] prompt sicuri;
+  - [ ] cosa puo modificare;
+  - [ ] come annullare un cambio.
+
+Prompt per chat:
+
+```text
+Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentrati solo sui test con client MCP reali: MCP Inspector, Claude e ChatGPT. Voglio capire compatibilita, limiti e istruzioni operative per Lorenzo.
+```
+
+## 10. Consolidamento e pulizia repository
+
+Obiettivo: non perdere lavoro e non committare materiale sbagliato.
+
+- [x] Decidere destino modifiche HTML/CSS locali non ancora committate.
+  - Decisione 2026-07-14: tenere nel commit tecnico/visuale; rappresentano la parita dinamico/statico, il lightbox e gli asset versionati.
+- [x] Decidere destino immagini ottimizzate `assets/images`.
+  - Decisione 2026-07-14: tenere nel repo; sono asset runtime del sito, 20 file per circa 5 MB.
+- [x] Decidere destino sorgenti pesanti `assets/portfolio`.
+  - Decisione 2026-07-14: non committare; sono sorgenti fotografici/raw locali, 109 file per circa 177 MB; aggiunti a `.gitignore`.
+- [x] Decidere destino audio WhatsApp.
+  - Decisione 2026-07-14: non committare; materiale grezzo/personale locale; `assets/*.ogg` aggiunto a `.gitignore`.
+- [x] Decidere destino `content.md` e transcript.
+  - Decisione 2026-07-14: tenere `content.md` come sorgente editoriale/SEO; non committare `transcript-*.txt`, aggiunti a `.gitignore`.
+- [x] Verificare `.gitignore`.
+  - Aggiornato 2026-07-14 con `assets/portfolio/`, `assets/*.ogg`, `transcript-*.txt`; `.dev.vars`, `.wrangler/` e `.deploy/` erano gia esclusi.
+- [ ] Separare commit contenuti da commit infrastruttura.
+  - Proposta: commit 1 infrastruttura MCP/D1/auth/tools/test; commit 2 renderer/static parity/assets immagini; commit 3 docs/roadmap/onboarding.
+- [x] Evitare segreti in repo.
+  - Verifica 2026-07-14: scan con `rg` esclusi `.git`, `edge/.dev.vars`, raw media ignorati; nessun match per token/bearer/API key nei file candidati.
+- [x] Documentare stato deploy vs stato repo.
+  - Stato 2026-07-14: Worker remoto gia deployato con `rollback_change` versione `7d7e2bee-de60-4222-a373-5f84b4f80ed7`; D1 remoto verificato senza residui `codex-*`.
+
+Prompt per chat:
+
+```text
+Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentrati solo sulla pulizia repository e gestione dei file non committati: HTML/CSS, immagini, audio, content.md e transcript. Voglio una strategia di commit sicura.
+```
