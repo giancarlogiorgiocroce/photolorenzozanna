@@ -104,8 +104,8 @@ Obiettivo: passare da contenuti sparsi a pagine con sezioni strutturate.
 - [x] Testare `disable_section` sul modello dati.
 - [x] Testare `enable_section` sul modello dati.
 - [ ] Testare `reorder_sections`.
-- [ ] Testare aggiunta sezione da preset.
-- [ ] Testare aggiunta sezione FAQ a pagina senza FAQ.
+- [x] Testare aggiunta sezione da preset.
+- [x] Testare aggiunta sezione FAQ a pagina senza FAQ.
 - [x] Testare disattivazione FAQ senza cancellazione dati.
 - [x] Testare rollback a revisione precedente.
 
@@ -255,28 +255,30 @@ Nota 2026-07-14: in v1 `add_link` e `remove_link` non sono tool separati; si ott
 
 Le sezioni aggiunte da Lorenzo devono essere preimpostate da noi.
 
-- [ ] Definire preset `faq`.
-- [ ] Definire preset `text`.
+- [x] Definire preset `faq`.
+- [x] Definire preset `text`.
 - [ ] Definire preset `hero`.
-- [ ] Definire preset `cta`.
-- [ ] Definire preset `gallery`.
-- [ ] Definire preset `image_text`.
-- [ ] Tool `list_section_presets`.
-- [ ] Tool `add_section_from_preset`.
-- [ ] Testare aggiunta FAQ a pagina senza FAQ.
-- [ ] Testare che non si possano creare tipi sezione arbitrari.
+- [x] Definire preset `cta`.
+- [x] Definire preset `gallery`.
+- [x] Definire preset `image_text`.
+- [x] Tool `list_section_presets`.
+- [x] Tool `add_section_from_preset`.
+  - Stato 2026-07-14: supporta `faq` in v1; preset non ancora addable come `gallery` e `image_text` vengono rifiutati.
+- [x] Testare aggiunta FAQ a pagina senza FAQ.
+- [x] Testare che non si possano creare tipi sezione arbitrari.
 
 ## 11. FAQ workflow
 
-- [ ] Tool `add_faq_section`.
-- [ ] Tool `add_faq_item`.
-- [ ] Tool `update_faq_item`.
-- [ ] Tool `remove_faq_item`.
-- [ ] Tool `reorder_faq_items`.
-- [ ] Testare FAQ vuota.
-- [ ] Testare FAQ con item validi.
-- [ ] Testare FAQ disattivata ma conservata.
-- [ ] Testare rendering FAQ.
+- [x] Tool `add_faq_section`.
+- [x] Tool `add_faq_item`.
+- [x] Tool `update_faq_item`.
+- [x] Tool `remove_faq_item`.
+- [x] Tool `reorder_faq_items`.
+- [x] Testare FAQ vuota.
+- [x] Testare FAQ con item validi.
+- [x] Testare FAQ disattivata ma conservata.
+- [x] Testare rendering FAQ.
+  - Test 2026-07-14: suite `npm test` in `edge` -> 85 test verdi.
 
 ## 12. Media e immagini
 

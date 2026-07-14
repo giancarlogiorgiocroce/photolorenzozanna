@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  addFaqItem,
+  addFaqSection,
+  addSectionFromPreset,
+  removeFaqItem,
+  reorderFaqItems,
+  updateFaqItem,
+} from "../src/faq-sections.mjs";
 import { disableSection, enableSection, updateCta, updateRichText, updateText } from "../src/sections.mjs";
 
 test("disableSection hides a section, keeps its data, and records a revision plus change log", async () => {
@@ -79,6 +87,217 @@ test("disableSection rejects missing sections", async () => {
         },
       ),
     /Section not found/,
+  );
+});
+
+test("addFaqSection creates a safe FAQ preset before the CTA and records history", async () => {
+  const db = createSectionDb({ includeFaq: false });
+
+  const result = await addFaqSection(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      title: "Domande frequenti",
+      items: [
+        {
+          question: "Posso richiedere una stampa?",
+          answer: "Si, indicando fotografia e formato.",
+        },
+      ],
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(result.site, "ph");
+  assert.equal(result.page, "portfolio");
+  assert.equal(result.sectionId, "faq");
+  assert.equal(result.created, true);
+  assert.equal(result.enabled, true);
+  assert.equal(result.itemCount, 1);
+
+  const faqSections = db.pageSections.filter((item) => item.section_key === "faq");
+  assert.equal(faqSections.length, 1);
+  assert.equal(faqSections[0].type, "faq");
+  assert.equal(faqSections[0].section_order, 90);
+  assert.deepEqual(JSON.parse(faqSections[0].data), {
+    type: "faq",
+    title: "Domande frequenti",
+    items: [
+      {
+        question: "Posso richiedere una stampa?",
+        answer: "Si, indicando fotografia e formato.",
+      },
+    ],
+  });
+
+  assert.equal(db.sectionRevisions.length, 1);
+  assert.equal(db.sectionRevisions[0].action, "add_faq_section");
+  assert.equal(db.sectionRevisions[0].before_json, null);
+  assert.equal(JSON.parse(db.sectionRevisions[0].after_json).sectionId, "faq");
+
+  assert.equal(db.changeLog.length, 1);
+  assert.equal(db.changeLog[0].action, "add_faq_section");
+  assert.equal(db.changeLog[0].target, "pages/portfolio/sections/faq");
+});
+
+test("addFaqSection re-enables an existing disabled FAQ without duplicating it", async () => {
+  const db = createSectionDb({ enabled: false });
+
+  const result = await addFaqSection(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      title: "Nuovo titolo ignorato",
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(result.created, false);
+  assert.equal(result.enabled, true);
+  assert.equal(result.itemCount, 1);
+  assert.equal(db.pageSections.filter((item) => item.section_key === "faq").length, 1);
+  assert.equal(db.pageSections.find((item) => item.section_key === "faq").enabled, 1);
+  assert.equal(JSON.parse(db.pageSections.find((item) => item.section_key === "faq").data).title, "FAQ");
+  assert.equal(db.changeLog[0].action, "add_faq_section");
+});
+
+test("addFaqSection can create an empty FAQ section for later item editing", async () => {
+  const db = createSectionDb({ includeFaq: false });
+
+  const result = await addFaqSection(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      actor: "tdd-suite",
+    },
+  );
+
+  const faq = db.pageSections.find((item) => item.section_key === "faq");
+
+  assert.equal(result.itemCount, 0);
+  assert.deepEqual(JSON.parse(faq.data).items, []);
+});
+
+test("addSectionFromPreset rejects arbitrary and not-yet-addable section presets", async () => {
+  await assert.rejects(
+    () =>
+      addSectionFromPreset(
+        { DB: createSectionDb() },
+        {
+          site: "ph",
+          page: "portfolio",
+          presetId: "script",
+          actor: "tdd-suite",
+        },
+      ),
+    /Unknown section preset/,
+  );
+
+  await assert.rejects(
+    () =>
+      addSectionFromPreset(
+        { DB: createSectionDb() },
+        {
+          site: "ph",
+          page: "portfolio",
+          presetId: "gallery",
+          actor: "tdd-suite",
+        },
+      ),
+    /not addable yet/,
+  );
+});
+
+test("FAQ item tools add, update, reorder and remove controlled items", async () => {
+  const db = createSectionDb();
+
+  const added = await addFaqItem(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      sectionId: "faq",
+      question: "Quanto dura una sessione?",
+      answer: "Dipende dal lavoro, di solito almeno un'ora.",
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(added.itemIndex, 1);
+  assert.equal(added.item.question, "Quanto dura una sessione?");
+
+  const updated = await updateFaqItem(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      sectionId: "faq",
+      index: 1,
+      question: "Quanto dura il servizio?",
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(updated.itemIndex, 1);
+  assert.equal(updated.item.question, "Quanto dura il servizio?");
+  assert.equal(updated.item.answer, "Dipende dal lavoro, di solito almeno un'ora.");
+
+  const reordered = await reorderFaqItems(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      sectionId: "faq",
+      order: [1, 0],
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.deepEqual(reordered.order, [1, 0]);
+  assert.equal(JSON.parse(db.pageSections.find((item) => item.section_key === "faq").data).items[0].question, "Quanto dura il servizio?");
+
+  const removed = await removeFaqItem(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      sectionId: "faq",
+      index: 0,
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(removed.removed.question, "Quanto dura il servizio?");
+  assert.deepEqual(
+    JSON.parse(db.pageSections.find((item) => item.section_key === "faq").data).items.map((item) => item.question),
+    ["How?"],
+  );
+  assert.deepEqual(
+    db.changeLog.map((entry) => entry.action),
+    ["add_faq_item", "update_faq_item", "reorder_faq_items", "remove_faq_item"],
+  );
+});
+
+test("FAQ item tools reject HTML in questions and answers", async () => {
+  const db = createSectionDb();
+
+  await assert.rejects(
+    () =>
+      addFaqItem(
+        { DB: db },
+        {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "faq",
+          question: "Posso usare <strong>HTML</strong>?",
+          answer: "No.",
+          actor: "tdd-suite",
+        },
+      ),
+    /HTML is not allowed/,
   );
 });
 
@@ -431,6 +650,7 @@ test("updateRichText rejects unsupported marks and unsafe links", async () => {
 
 function createSectionDb(options = {}) {
   const enabled = options.enabled !== false;
+  const includeFaq = options.includeFaq !== false;
 
   return new FakeSectionD1Database({
     sites: [
@@ -449,7 +669,7 @@ function createSectionDb(options = {}) {
       },
     ],
     pageSections: [
-      {
+      ...(includeFaq ? [{
         id: "section_portfolio_faq",
         page_id: "page_portfolio",
         section_key: "faq",
@@ -465,7 +685,7 @@ function createSectionDb(options = {}) {
             },
           ],
         }),
-      },
+      }] : []),
       {
         id: "section_portfolio_cta",
         page_id: "page_portfolio",
@@ -529,10 +749,34 @@ class FakeSectionD1Database {
       };
     }
 
+    if (query.includes("FROM page_sections") && query.includes("page_id = ?")) {
+      return {
+        results: this.pageSections
+          .filter((section) => section.page_id === params[0])
+          .sort((left, right) => left.section_order - right.section_order),
+      };
+    }
+
     throw new Error(`Unhandled fake D1 all/first query: ${query}`);
   }
 
   _run(query, params) {
+    if (query.includes("INSERT INTO page_sections")) {
+      const [id, pageId, sectionKey, type, order, data] = params;
+      this.pageSections.push({
+        id,
+        page_id: pageId,
+        section_key: sectionKey,
+        type,
+        section_order: order,
+        enabled: 1,
+        data,
+        created_at: "2026-07-13 00:00:01",
+        updated_at: "2026-07-13 00:00:01",
+      });
+      return { success: true };
+    }
+
     if (query.includes("UPDATE page_sections")) {
       if (query.includes("data = ?")) {
         const [data, sectionId] = params;

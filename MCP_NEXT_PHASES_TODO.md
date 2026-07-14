@@ -307,21 +307,26 @@ Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentr
 
 Obiettivo: Lorenzo puo aggiungere o togliere sezioni solo da preset sicuri.
 
-- [ ] Definire preset `faq`.
-- [ ] Definire preset `text`.
-- [ ] Definire preset `cta`.
-- [ ] Definire preset `gallery`.
-- [ ] Definire preset `image_text`.
-- [ ] Tool `list_section_presets`.
-- [ ] Tool `add_section_from_preset`.
-- [ ] Tool `add_faq_section`.
-- [ ] Tool `add_faq_item`.
-- [ ] Tool `update_faq_item`.
-- [ ] Tool `remove_faq_item`.
-- [ ] Tool `reorder_faq_items`.
-- [ ] Testare pagina senza FAQ -> aggiunta FAQ.
-- [ ] Testare pagina con FAQ -> niente duplicato non voluto.
-- [ ] Testare disattivazione FAQ senza cancellazione.
+- [x] Definire preset `faq`.
+- [x] Definire preset `text`.
+- [x] Definire preset `cta`.
+- [x] Definire preset `gallery`.
+- [x] Definire preset `image_text`.
+- [x] Tool `list_section_presets`.
+- [x] Tool `add_section_from_preset`.
+- [x] Tool `add_faq_section`.
+- [x] Tool `add_faq_item`.
+- [x] Tool `update_faq_item`.
+- [x] Tool `remove_faq_item`.
+- [x] Tool `reorder_faq_items`.
+- [x] Testare pagina senza FAQ -> aggiunta FAQ.
+- [x] Testare pagina con FAQ -> niente duplicato non voluto.
+- [x] Testare disattivazione FAQ senza cancellazione.
+  - Implementazione 2026-07-14: `edge/src/section-presets.mjs` espone preset sicuri `faq`, `text`, `cta`, `gallery`, `image_text`; `gallery` e `image_text` restano non addable finche non ci sono media pipeline/renderer dedicato.
+  - Implementazione 2026-07-14: `add_section_from_preset` supporta `faq` in v1 e rifiuta preset sconosciuti o non ancora addable; i tool FAQ dedicati manipolano solo JSON strutturato e rifiutano HTML.
+  - Test 2026-07-14: suite `npm test` in `edge` passa con 85 test; coperti `list_section_presets`, pagina senza FAQ -> `add_faq_section`, FAQ esistente disabilitata -> riabilitazione senza duplicato, FAQ vuota, item add/update/remove/reorder, rifiuto HTML e rifiuto preset arbitrari.
+  - Deploy 2026-07-14: Worker versione `5ca0affc-0d5e-4491-8742-74e0d6ab59d3`.
+  - Smoke remoto 2026-07-14: fixture `codex-faq-preset-smoke`; `tools/list` espone `list_section_presets` e `add_faq_section`; `list_section_presets` -> `faq,text,cta,gallery,image_text`; `add_faq_section` -> `created: true`, `sectionId: faq`, `itemCount: 1`, `revisionId` presente; render live della fixture contiene `data-section-id="faq"` e la domanda; cleanup D1 completato con `smoke_pages = 0`, `smoke_sections = 0`, `smoke_changes = 0`.
 
 Prompt per chat:
 

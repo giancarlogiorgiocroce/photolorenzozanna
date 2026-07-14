@@ -1,7 +1,16 @@
 import { disableSection, enableSection, updateCta, updateRichText, updateText } from "./sections.mjs";
+import {
+  addFaqItem,
+  addFaqSection,
+  addSectionFromPreset,
+  removeFaqItem,
+  reorderFaqItems,
+  updateFaqItem,
+} from "./faq-sections.mjs";
 import { getPage } from "./pages.mjs";
 import { listChanges } from "./changes.mjs";
 import { rollbackChange } from "./rollback.mjs";
+import { listSectionPresets } from "./section-presets.mjs";
 import { authenticateMcpRequest, hasMcpPermission } from "./auth.mjs";
 
 const JSON_HEADERS = {
@@ -22,6 +31,18 @@ const TOOLS = [
         page: { type: "string", description: "Page slug, for example portfolio." },
       },
       required: ["site", "page"],
+    },
+  },
+  {
+    name: "list_section_presets",
+    title: "List Section Presets",
+    description: "List safe structured section presets. Presets never allow arbitrary HTML.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+      },
+      required: ["site"],
     },
   },
   {
@@ -65,6 +86,105 @@ const TOOLS = [
         sectionId: { type: "string", description: "Section identifier, for example faq." },
       },
       required: ["site", "page", "sectionId"],
+    },
+  },
+  {
+    name: "add_section_from_preset",
+    title: "Add Section From Preset",
+    description: "Add a section from an allowlisted preset. In v1 this supports FAQ only.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, for example portfolio." },
+        presetId: { type: "string", description: "Preset id, for example faq." },
+        sectionId: { type: "string", description: "Optional section identifier. FAQ must use faq." },
+        title: { type: "string", description: "Optional safe plain-text title." },
+        intro: { type: "string", description: "Optional safe plain-text intro." },
+        items: { type: "array", description: "Optional preset items. FAQ items require question and answer." },
+      },
+      required: ["site", "page", "presetId"],
+    },
+  },
+  {
+    name: "add_faq_section",
+    title: "Add FAQ Section",
+    description: "Create or re-enable the FAQ section from the safe FAQ preset without duplicating it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, for example portfolio." },
+        sectionId: { type: "string", description: "Optional section identifier. Defaults to faq." },
+        title: { type: "string", description: "Safe plain-text FAQ title." },
+        intro: { type: "string", description: "Optional safe plain-text intro." },
+        items: { type: "array", description: "Optional FAQ items with safe question and answer fields." },
+      },
+      required: ["site", "page"],
+    },
+  },
+  {
+    name: "add_faq_item",
+    title: "Add FAQ Item",
+    description: "Add one safe FAQ item to an existing FAQ section.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, for example portfolio." },
+        sectionId: { type: "string", description: "Optional section identifier. Defaults to faq." },
+        question: { type: "string", description: "Safe plain-text question." },
+        answer: { description: "Safe plain-text answer or rich_text_v1 object." },
+        index: { type: "integer", description: "Optional insert index." },
+      },
+      required: ["site", "page", "question", "answer"],
+    },
+  },
+  {
+    name: "update_faq_item",
+    title: "Update FAQ Item",
+    description: "Update a safe FAQ question and/or answer by item index.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, for example portfolio." },
+        sectionId: { type: "string", description: "Optional section identifier. Defaults to faq." },
+        index: { type: "integer", description: "FAQ item index." },
+        question: { type: "string", description: "Optional safe plain-text question." },
+        answer: { description: "Optional safe plain-text answer or rich_text_v1 object." },
+      },
+      required: ["site", "page", "index"],
+    },
+  },
+  {
+    name: "remove_faq_item",
+    title: "Remove FAQ Item",
+    description: "Remove one FAQ item by index.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, for example portfolio." },
+        sectionId: { type: "string", description: "Optional section identifier. Defaults to faq." },
+        index: { type: "integer", description: "FAQ item index." },
+      },
+      required: ["site", "page", "index"],
+    },
+  },
+  {
+    name: "reorder_faq_items",
+    title: "Reorder FAQ Items",
+    description: "Reorder FAQ items using a complete permutation of item indexes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, for example portfolio." },
+        sectionId: { type: "string", description: "Optional section identifier. Defaults to faq." },
+        order: { type: "array", description: "Complete item-index order, for example [1,0,2]." },
+      },
+      required: ["site", "page", "order"],
     },
   },
   {
@@ -211,6 +331,20 @@ async function handleMcpMethod(method, params, env, auth) {
       return toolResult(result);
     }
 
+    if (name === "list_section_presets") {
+      if (!hasMcpPermission(auth, "content:read", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:read.", {
+          permission: "content:read",
+          site: args.site,
+        });
+      }
+
+      return toolResult({
+        site: args.site,
+        ...listSectionPresets(),
+      });
+    }
+
     if (name === "list_changes") {
       if (!hasMcpPermission(auth, "content:read", args.site)) {
         throw mcpError(-32003, "Permission denied for content:read.", {
@@ -224,6 +358,124 @@ async function handleMcpMethod(method, params, env, auth) {
         page: args.page,
         sectionId: args.sectionId,
         limit: args.limit,
+      });
+      return toolResult(result);
+    }
+
+    if (name === "add_section_from_preset") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await addSectionFromPreset(env, {
+        site: args.site,
+        page: args.page,
+        presetId: args.presetId,
+        sectionId: args.sectionId,
+        title: args.title,
+        intro: args.intro,
+        items: args.items,
+        actor: auth.actor,
+      });
+      return toolResult(result);
+    }
+
+    if (name === "add_faq_section") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await addFaqSection(env, {
+        site: args.site,
+        page: args.page,
+        sectionId: args.sectionId,
+        title: args.title,
+        intro: args.intro,
+        items: args.items,
+        actor: auth.actor,
+      });
+      return toolResult(result);
+    }
+
+    if (name === "add_faq_item") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await addFaqItem(env, {
+        site: args.site,
+        page: args.page,
+        sectionId: args.sectionId,
+        question: args.question,
+        answer: args.answer,
+        index: args.index,
+        position: args.position,
+        actor: auth.actor,
+      });
+      return toolResult(result);
+    }
+
+    if (name === "update_faq_item") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await updateFaqItem(env, {
+        site: args.site,
+        page: args.page,
+        sectionId: args.sectionId,
+        index: args.index,
+        question: args.question,
+        answer: args.answer,
+        actor: auth.actor,
+      });
+      return toolResult(result);
+    }
+
+    if (name === "remove_faq_item") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await removeFaqItem(env, {
+        site: args.site,
+        page: args.page,
+        sectionId: args.sectionId,
+        index: args.index,
+        actor: auth.actor,
+      });
+      return toolResult(result);
+    }
+
+    if (name === "reorder_faq_items") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await reorderFaqItems(env, {
+        site: args.site,
+        page: args.page,
+        sectionId: args.sectionId,
+        order: args.order,
+        actor: auth.actor,
       });
       return toolResult(result);
     }

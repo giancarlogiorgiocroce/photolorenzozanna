@@ -304,14 +304,58 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.equal(payload.jsonrpc, "2.0");
   assert.deepEqual(toolNames, [
     "get_page",
+    "list_section_presets",
     "list_changes",
     "disable_section",
     "enable_section",
+    "add_section_from_preset",
+    "add_faq_section",
+    "add_faq_item",
+    "update_faq_item",
+    "remove_faq_item",
+    "reorder_faq_items",
     "update_text",
     "update_cta",
     "update_rich_text",
     "rollback_change",
   ]);
+});
+
+test("POST /mcp tools/call list_section_presets allows viewer scoped user tokens", async () => {
+  const db = createSeededDb({
+    authTokens: [
+      await scopedAuthToken({
+        token: USER_TOKEN,
+        actor: "lorenzo",
+        role: "viewer",
+        scopes: ["content:read"],
+      }),
+    ],
+  });
+  const response = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "list_section_presets",
+        arguments: {
+          site: "ph",
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+  const presets = payload.result.structuredContent.presets;
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(presets.map((preset) => preset.id), ["faq", "text", "cta", "gallery", "image_text"]);
+  assert.equal(presets.find((preset) => preset.id === "faq").styleContract, "common.faq");
+  assert.equal(db.authTokens[0].last_used_at, "2026-07-13 00:00:01");
 });
 
 test("POST /mcp tools/call get_page returns sections with style contracts and editable fields", async () => {
@@ -703,6 +747,49 @@ test("POST /mcp tools/call rollback_change reverts a previous text change", asyn
   assert.equal(db.changeLog[1].action, "rollback_change");
 });
 
+test("POST /mcp tools/call add_faq_section creates and renders a FAQ from preset", async () => {
+  const db = createSeededDb({ includeFaq: false });
+  const response = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    privateAuth: true,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "add_faq_section",
+        arguments: {
+          site: "ph",
+          page: "portfolio",
+          title: "Domande frequenti",
+          items: [
+            {
+              question: "Posso richiedere una stampa?",
+              answer: "Si, indicando fotografia e formato.",
+            },
+          ],
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+  const htmlResponse = await fetchWorker("/portfolio?site=ph", {
+    db,
+    host: "api.lorenzozanna.com",
+  });
+  const html = await htmlResponse.text();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.result.structuredContent.created, true);
+  assert.equal(payload.result.structuredContent.sectionId, "faq");
+  assert.equal(db.pageSections.filter((section) => section.section_key === "faq").length, 1);
+  assert.match(html, /data-section-id="faq"/);
+  assert.match(html, /Posso richiedere una stampa\?/);
+  assert.equal(db.changeLog.at(-1).action, "add_faq_section");
+});
+
 test("POST /mcp tools/call update_cta updates D1 and the dynamic home HTML", async () => {
   const db = createSeededDb();
   const mcpResponse = await fetchWorker("/mcp", {
@@ -957,6 +1044,7 @@ async function fetchWorker(pathname, options = {}) {
 
 function createSeededDb(options = {}) {
   const faqEnabled = options.faqEnabled !== false;
+  const includeFaq = options.includeFaq !== false;
 
   return new FakeD1Database({
     sites: [
@@ -1018,7 +1106,7 @@ function createSeededDb(options = {}) {
         title: "Portfolio fotografico",
         intro: "Ritratti, strada, natura, forme e ombre.",
       }),
-      pageSection("page_portfolio", "section_portfolio_faq", "faq", "faq", 90, faqEnabled, {
+      ...(includeFaq ? [pageSection("page_portfolio", "section_portfolio_faq", "faq", "faq", 90, faqEnabled, {
         title: "Domande frequenti",
         items: [
           {
@@ -1026,7 +1114,7 @@ function createSeededDb(options = {}) {
             answer: "Per serie.",
           },
         ],
-      }),
+      })] : []),
       pageSection("page_contatti", "section_contatti_hero", "hero", "hero", 10, true, {
         title: "Contatti",
         intro: "Scrivi per un ritratto.",
@@ -1256,6 +1344,22 @@ class FakeD1Database {
   }
 
   _run(query, params) {
+    if (query.includes("INSERT INTO page_sections")) {
+      const [id, pageId, sectionKey, type, order, data] = params;
+      this.pageSections.push({
+        id,
+        page_id: pageId,
+        section_key: sectionKey,
+        type,
+        section_order: order,
+        enabled: 1,
+        data,
+        created_at: "2026-07-13 00:00:01",
+        updated_at: "2026-07-13 00:00:01",
+      });
+      return { success: true };
+    }
+
     if (query.includes("INSERT INTO content_entries")) {
       const [id, siteId, collection, key, data, status] = params;
       const existing = this.contentEntries.find(
