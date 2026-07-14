@@ -169,6 +169,45 @@ test("GET /portfolio reports a clear error before the dynamic D1 schema is migra
   assert.equal(payload.error, "dynamic_schema_not_ready");
 });
 
+test("GET /.well-known/oauth-protected-resource publishes MCP resource metadata", async () => {
+  const response = await fetchWorker("/.well-known/oauth-protected-resource", {
+    host: "api.lorenzozanna.com",
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "application/json; charset=utf-8");
+  assert.equal(payload.resource, "https://api.lorenzozanna.com/mcp");
+  assert.deepEqual(payload.authorization_servers, ["https://api.lorenzozanna.com"]);
+  assert.deepEqual(payload.scopes_supported, ["content:read", "content:write", "content:publish"]);
+  assert.equal(payload.bearer_methods_supported.includes("header"), true);
+});
+
+test("GET /.well-known/oauth-authorization-server publishes OAuth discovery metadata", async () => {
+  const response = await fetchWorker("/.well-known/oauth-authorization-server", {
+    host: "api.lorenzozanna.com",
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.issuer, "https://api.lorenzozanna.com");
+  assert.equal(payload.authorization_endpoint, "https://api.lorenzozanna.com/oauth/authorize");
+  assert.equal(payload.token_endpoint, "https://api.lorenzozanna.com/oauth/token");
+  assert.deepEqual(payload.response_types_supported, ["code"]);
+  assert.deepEqual(payload.code_challenge_methods_supported, ["S256"]);
+  assert.deepEqual(payload.scopes_supported, ["content:read", "content:write", "content:publish"]);
+});
+
+test("GET /oauth/authorize is explicit while OAuth flow is not configured", async () => {
+  const response = await fetchWorker("/oauth/authorize", {
+    host: "api.lorenzozanna.com",
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 501);
+  assert.equal(payload.error, "oauth_flow_not_configured");
+});
+
 test("POST /mcp is reachable through the current API worker route", async () => {
   const response = await fetchWorker("/mcp", {
     method: "POST",
@@ -182,6 +221,10 @@ test("POST /mcp is reachable through the current API worker route", async () => 
 
   assert.equal(response.status, 401);
   assert.equal(payload.error, "unauthorized");
+  assert.match(
+    response.headers.get("www-authenticate"),
+    /^Bearer resource_metadata="https:\/\/api\.lorenzozanna\.com\/\.well-known\/oauth-protected-resource"/,
+  );
 });
 
 test("POST /mcp rejects unauthenticated JSON-RPC requests", async () => {
@@ -198,6 +241,10 @@ test("POST /mcp rejects unauthenticated JSON-RPC requests", async () => {
 
   assert.equal(response.status, 401);
   assert.equal(payload.error, "unauthorized");
+  assert.match(
+    response.headers.get("www-authenticate"),
+    /^Bearer resource_metadata="https:\/\/mcp\.lorenzozanna\.com\/\.well-known\/oauth-protected-resource"/,
+  );
 });
 
 test("POST /mcp accepts active scoped user tokens", async () => {
@@ -257,6 +304,7 @@ test("POST /mcp rejects revoked scoped user tokens", async () => {
   assert.equal(response.status, 401);
   assert.equal(payload.error, "unauthorized");
   assert.equal(payload.message, "MCP token is revoked.");
+  assert.match(response.headers.get("www-authenticate"), /error="invalid_token"/);
 });
 
 test("POST /mcp initialize returns MCP server metadata", async () => {
@@ -299,6 +347,8 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   });
   const payload = await response.json();
   const toolNames = payload.result.tools.map((tool) => tool.name);
+  const getPage = payload.result.tools.find((tool) => tool.name === "get_page");
+  const updateText = payload.result.tools.find((tool) => tool.name === "update_text");
 
   assert.equal(response.status, 200);
   assert.equal(payload.jsonrpc, "2.0");
@@ -319,6 +369,8 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
     "update_rich_text",
     "rollback_change",
   ]);
+  assert.deepEqual(getPage.securitySchemes, [{ type: "oauth2", scopes: ["content:read"] }]);
+  assert.deepEqual(updateText.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
 });
 
 test("POST /mcp tools/call list_section_presets allows viewer scoped user tokens", async () => {

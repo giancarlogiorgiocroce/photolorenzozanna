@@ -189,6 +189,14 @@ Non incollare segreti in chat. Il connector deve gestire credenziali.
 - [ ] Testare permesso pubblicazione.
 - [x] Loggare `actor` reale, non solo `mcp-lorenzozanna`.
 - [x] Preparare istruzioni di onboarding Lorenzo.
+- [x] Testare protected resource metadata OAuth/MCP.
+- [x] Testare authorization server metadata.
+- [x] Testare `WWW-Authenticate` con `resource_metadata` sui 401 MCP.
+- [x] Testare `securitySchemes` sui tool MCP.
+- [ ] Implementare authorization-code flow OAuth completo.
+- [ ] Testare PKCE S256.
+- [ ] Testare audience/resource binding dei token OAuth.
+- [ ] Testare revoca/expiry token OAuth.
 
 ## 8. Tool MCP contenuti
 

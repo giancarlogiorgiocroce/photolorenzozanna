@@ -1,5 +1,10 @@
 import { renderPageHtml } from "./rendering.mjs";
 import { handleMcpHttpRequest } from "./mcp-http.mjs";
+import {
+  getAuthorizationServerMetadata,
+  getProtectedResourceMetadata,
+  oauthFlowNotConfigured,
+} from "./oauth-metadata.mjs";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -52,11 +57,29 @@ export default {
 };
 
 async function routeRequest(request, env, url) {
+  const segments = url.pathname.split("/").filter(Boolean);
+
+  if (request.method === "GET" && url.pathname === "/.well-known/oauth-protected-resource") {
+    return json(getProtectedResourceMetadata(request));
+  }
+
+  if (
+    request.method === "GET"
+    && (
+      url.pathname === "/.well-known/oauth-authorization-server"
+      || url.pathname === "/.well-known/openid-configuration"
+    )
+  ) {
+    return json(getAuthorizationServerMetadata(request));
+  }
+
+  if (segments[0] === "oauth") {
+    return json(oauthFlowNotConfigured(), 501);
+  }
+
   if (!env.DB) {
     return json({ error: "missing_db", message: "D1 binding DB is not configured." }, 500);
   }
-
-  const segments = url.pathname.split("/").filter(Boolean);
 
   if (segments.length === 0 && isServiceHost(request, env)) {
     return getServiceManifest();

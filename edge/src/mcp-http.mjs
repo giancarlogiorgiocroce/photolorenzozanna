@@ -12,6 +12,7 @@ import { listChanges } from "./changes.mjs";
 import { rollbackChange } from "./rollback.mjs";
 import { listSectionPresets } from "./section-presets.mjs";
 import { authenticateMcpRequest, hasMcpPermission } from "./auth.mjs";
+import { READ_SECURITY_SCHEMES, WRITE_SECURITY_SCHEMES } from "./oauth-metadata.mjs";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -24,6 +25,7 @@ const TOOLS = [
     name: "get_page",
     title: "Get Page",
     description: "Read a structured page with section style contracts and editable field metadata.",
+    securitySchemes: READ_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -37,6 +39,7 @@ const TOOLS = [
     name: "list_section_presets",
     title: "List Section Presets",
     description: "List safe structured section presets. Presets never allow arbitrary HTML.",
+    securitySchemes: READ_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -49,6 +52,7 @@ const TOOLS = [
     name: "list_changes",
     title: "List Changes",
     description: "Read recent site changes, optionally filtered by page and section.",
+    securitySchemes: READ_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -64,6 +68,7 @@ const TOOLS = [
     name: "disable_section",
     title: "Disable Section",
     description: "Hide a structured page section without deleting its content.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -78,6 +83,7 @@ const TOOLS = [
     name: "enable_section",
     title: "Enable Section",
     description: "Show a structured page section that was hidden, without changing its content.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -92,6 +98,7 @@ const TOOLS = [
     name: "add_section_from_preset",
     title: "Add Section From Preset",
     description: "Add a section from an allowlisted preset. In v1 this supports FAQ only.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -110,6 +117,7 @@ const TOOLS = [
     name: "add_faq_section",
     title: "Add FAQ Section",
     description: "Create or re-enable the FAQ section from the safe FAQ preset without duplicating it.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -127,6 +135,7 @@ const TOOLS = [
     name: "add_faq_item",
     title: "Add FAQ Item",
     description: "Add one safe FAQ item to an existing FAQ section.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -144,6 +153,7 @@ const TOOLS = [
     name: "update_faq_item",
     title: "Update FAQ Item",
     description: "Update a safe FAQ question and/or answer by item index.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -161,6 +171,7 @@ const TOOLS = [
     name: "remove_faq_item",
     title: "Remove FAQ Item",
     description: "Remove one FAQ item by index.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -176,6 +187,7 @@ const TOOLS = [
     name: "reorder_faq_items",
     title: "Reorder FAQ Items",
     description: "Reorder FAQ items using a complete permutation of item indexes.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -191,6 +203,7 @@ const TOOLS = [
     name: "update_text",
     title: "Update Text",
     description: "Update a contracted plain-text field without accepting arbitrary HTML.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -207,6 +220,7 @@ const TOOLS = [
     name: "update_cta",
     title: "Update CTA",
     description: "Update a contracted CTA/link label and href with URL validation.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -224,6 +238,7 @@ const TOOLS = [
     name: "update_rich_text",
     title: "Update Rich Text",
     description: "Update a contracted rich text field using rich_text_v1 spans, marks, and safe links.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -243,6 +258,7 @@ const TOOLS = [
     name: "rollback_change",
     title: "Rollback Change",
     description: "Safely rollback a structured section change using its recorded before snapshot.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
@@ -263,7 +279,13 @@ export async function handleMcpHttpRequest(request, env) {
   }
 
   const auth = await authenticateMcpRequest(request, env);
-  if (!auth.ok) return json({ error: auth.error, message: auth.message }, auth.status);
+  if (!auth.ok) {
+    return json(
+      { error: auth.error, message: auth.message },
+      auth.status,
+      auth.wwwAuthenticate ? { "www-authenticate": auth.wwwAuthenticate } : {},
+    );
+  }
 
   let message;
   try {
@@ -652,9 +674,12 @@ function isMissingDynamicSchemaError(error) {
   return message.includes("no such table: pages") || message.includes("no such table: page_sections");
 }
 
-function json(payload, status = 200) {
+function json(payload, status = 200, headers = {}) {
   return new Response(JSON.stringify(payload, null, 2), {
     status,
-    headers: JSON_HEADERS,
+    headers: {
+      ...JSON_HEADERS,
+      ...headers,
+    },
   });
 }

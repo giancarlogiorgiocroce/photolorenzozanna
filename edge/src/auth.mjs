@@ -1,3 +1,5 @@
+import { mcpWwwAuthenticateHeader } from "./oauth-metadata.mjs";
+
 const ROLE_SCOPES = {
   owner: ["content:read", "content:write", "content:publish", "admin:tokens"],
   editor: ["content:read", "content:write"],
@@ -10,14 +12,18 @@ export async function authenticateMcpRequest(request, env) {
   const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
 
   if (!bearerToken) {
-    return authFailure("Missing MCP bearer token.");
+    return authFailure("Missing MCP bearer token.", request, {
+      error: "invalid_token",
+    });
   }
 
   const technicalAuth = authenticateTechnicalToken(request, env, bearerToken);
   if (technicalAuth) return technicalAuth;
 
   if (!env?.DB) {
-    return authFailure("D1 binding DB is not configured.");
+    return authFailure("D1 binding DB is not configured.", request, {
+      error: "invalid_token",
+    });
   }
 
   const tokenHash = await sha256Hex(bearerToken);
@@ -40,15 +46,21 @@ export async function authenticateMcpRequest(request, env) {
     .first();
 
   if (!token) {
-    return authFailure("Invalid MCP token.");
+    return authFailure("Invalid MCP token.", request, {
+      error: "invalid_token",
+    });
   }
 
   if (token.status === "revoked") {
-    return authFailure("MCP token is revoked.");
+    return authFailure("MCP token is revoked.", request, {
+      error: "invalid_token",
+    });
   }
 
   if (token.expires_at && token.expires_at <= currentSqlTimestamp()) {
-    return authFailure("MCP token is expired.");
+    return authFailure("MCP token is expired.", request, {
+      error: "invalid_token",
+    });
   }
 
   await env.DB.prepare(
@@ -95,12 +107,18 @@ function authenticateTechnicalToken(request, env, bearerToken) {
   };
 }
 
-function authFailure(message) {
+function authFailure(message, request, challenge = {}) {
   return {
     ok: false,
     status: 401,
     error: "unauthorized",
     message,
+    wwwAuthenticate: request
+      ? mcpWwwAuthenticateHeader(request, {
+        ...challenge,
+        errorDescription: message,
+      })
+      : undefined,
   };
 }
 

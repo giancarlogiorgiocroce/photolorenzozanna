@@ -32,6 +32,17 @@ Header richiesto dai client che supportano bearer token:
 Authorization: Bearer <LORENZO_PERSONAL_TOKEN>
 ```
 
+Endpoint discovery OAuth/MCP:
+
+```text
+https://api.lorenzozanna.com/.well-known/oauth-protected-resource
+https://api.lorenzozanna.com/.well-known/oauth-authorization-server
+```
+
+Stato 2026-07-14: la discovery OAuth e pubblicata per compatibilita MCP/ChatGPT futura. I 401 dell'endpoint MCP includono `WWW-Authenticate` con `resource_metadata`, e i tool MCP dichiarano `securitySchemes` OAuth2 con scope `content:read` o `content:write`.
+
+Il flusso OAuth completo non e ancora attivo: gli endpoint `/oauth/*` rispondono `oauth_flow_not_configured`. Per collegamenti operativi oggi, usare ancora il token personale scoped.
+
 ## Ruoli
 
 ```text
@@ -125,6 +136,8 @@ Per client OpenAI/API che permettono di passare un bearer token al server MCP, u
 Per una ChatGPT App/connector nativo, la fase token personale non basta come soluzione definitiva pubblicabile: la documentazione OpenAI Apps SDK richiede un flusso OAuth per l'autenticazione utente, con protected resource metadata, authorization server metadata e redirect OAuth.
 
 Questo non significa rendere l'architettura ChatGPT-specifica. Significa aggiungere OAuth standard come layer di compatibilita per i client che lo richiedono.
+
+Stato attuale: metadata e challenge sono pronti; login/consenso OAuth, PKCE, token endpoint e revoca/expiry OAuth sono il prossimo slice.
 
 ## Client MCP generico
 

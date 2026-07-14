@@ -209,6 +209,23 @@ Obiettivo: Lorenzo deve collegarsi da un client AI compatibile senza incollare s
   - [x] non condividere token master;
   - [x] revocare token se compromesso.
   - Documento: `MCP_AUTH_ONBOARDING.md`.
+- [x] Pubblicare discovery OAuth/MCP provider-neutral.
+  - [x] `GET /.well-known/oauth-protected-resource`;
+  - [x] `GET /.well-known/oauth-authorization-server`;
+  - [x] `WWW-Authenticate` sui 401 MCP con `resource_metadata`;
+  - [x] `securitySchemes` OAuth2 sui tool MCP.
+  - Implementazione 2026-07-14: `edge/src/oauth-metadata.mjs`, route well-known in `edge/src/index.mjs`, challenge in `edge/src/auth.mjs`, security schemes in `edge/src/mcp-http.mjs`.
+  - Test 2026-07-14: `npm test` in `edge/` -> 88 test verdi.
+  - Deploy 2026-07-14: Worker versione `68f9b8de-ceb6-4ac9-9183-c87530762580`.
+  - Smoke remoto 2026-07-14: `/.well-known/oauth-protected-resource` -> 200 con resource `https://api.lorenzozanna.com/mcp`; `/.well-known/oauth-authorization-server` -> 200 con issuer `https://api.lorenzozanna.com`, authorization/token endpoint; `/mcp` senza token -> 401 con `WWW-Authenticate: Bearer resource_metadata=...`; `tools/list` autenticato espone `securitySchemes` read/write; `/oauth/authorize` -> 501 `oauth_flow_not_configured`.
+- [ ] Implementare OAuth authorization-code flow completo.
+  - [ ] decidere login Lorenzo: magic link, passkey, passwordless email, o provider esterno;
+  - [ ] tabella OAuth client;
+  - [ ] authorization endpoint con PKCE S256;
+  - [ ] token endpoint;
+  - [ ] access token audience/resource binding;
+  - [ ] refresh/expiry/revoca;
+  - [ ] dynamic client registration o client pre-registrato.
 
 Nota 2026-07-14: fase 4 chiusa per token personale scoped. La direzione architetturale preferita e provider-neutral: il MCP di Lorenzo deve restare utilizzabile da qualunque client AI compatibile. Per ChatGPT nativo va pianificata una fase OAuth dedicata con protected resource metadata e authorization server metadata, ma come layer standard di compatibilita, non come architettura ChatGPT-specifica.
 Verifica 2026-07-14:
@@ -217,6 +234,8 @@ Verifica 2026-07-14:
 - Deploy Worker: versione `9fdf6813-be9f-422d-86ca-f222058a522b`.
 - Smoke tecnico: `AI_API_TOKEN` continua a chiamare `/mcp tools/list`.
 - Smoke token utente D1: token temporaneo `editor` accettato da `/mcp tools/list`, `last_used_at` aggiornato, riga temporanea cancellata; token smoke rimasti: `0`.
+
+Nota 2026-07-14, OAuth discovery: abbiamo aggiunto metadata e challenge necessari per la discovery OAuth, ma non ancora il login/consenso OAuth completo. Gli endpoint `/oauth/*` rispondono esplicitamente `oauth_flow_not_configured` finche non implementiamo authorization-code flow.
 
 Prompt per chat:
 
