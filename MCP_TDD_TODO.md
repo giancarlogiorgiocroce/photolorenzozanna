@@ -315,16 +315,19 @@ Da fare dopo testi/sezioni, perche aggiunge storage e sicurezza.
 
 ## 14. Compatibilita client AI
 
-- [ ] Mantenere architettura provider-neutral: MCP standard prima, adattatori client dopo.
+- [x] Mantenere architettura provider-neutral: MCP standard prima, adattatori client dopo.
+  - Verifica 2026-07-14: smoke remoto con client Node generico JSON-RPC e bearer token; ricerca in `edge/src`, `edge/test` e `edge/migrations` senza riferimenti provider-specifici.
 - [ ] Verificare requisiti correnti Claude custom connector.
 - [ ] Verificare requisiti correnti ChatGPT app/plugin/MCP.
 - [ ] Testare remote MCP con MCP Inspector.
 - [ ] Testare con Claude custom connector.
 - [ ] Testare con ChatGPT developer mode/app, se disponibile.
-- [ ] Testare con almeno un client MCP generico che supporta bearer token.
+- [x] Testare con almeno un client MCP generico che supporta bearer token.
+  - Smoke 2026-07-14: `initialize`, `tools/list`, `get_page`, `list_changes`, `disable_section` su fixture temporanea; cleanup D1 completato.
 - [ ] Documentare setup per Lorenzo.
 - [ ] Documentare limiti piano Free/Pro dove necessario.
-- [ ] Evitare dipendenza da una singola piattaforma.
+- [x] Evitare dipendenza da una singola piattaforma.
+  - Verifica 2026-07-14: tool e permessi MCP non dipendono da ChatGPT, Claude o altri client specifici.
 
 ## 15. Osservabilita e sicurezza
 

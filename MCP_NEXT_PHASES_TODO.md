@@ -391,14 +391,19 @@ Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentr
 
 Obiettivo: verificare client reali, non solo test locali.
 
-- [ ] Testare endpoint MCP con MCP Inspector o client equivalente.
-- [ ] Testare schema `initialize`.
-- [ ] Testare `tools/list`.
-- [ ] Testare `tools/call disable_section`.
+- [x] Testare endpoint MCP con MCP Inspector o client equivalente.
+- [x] Testare schema `initialize`.
+- [x] Testare `tools/list`.
+- [x] Testare `tools/call disable_section`.
 - [ ] Testare Claude custom connector.
 - [ ] Testare ChatGPT app/connector se disponibile.
-- [ ] Testare almeno un client MCP generico con bearer token.
-- [ ] Mantenere la compatibilita provider-neutral: nessun tool o permesso deve dipendere dal nome del provider AI.
+- [x] Testare almeno un client MCP generico con bearer token.
+- [x] Mantenere la compatibilita provider-neutral: nessun tool o permesso deve dipendere dal nome del provider AI.
+  - Verifica 2026-07-14: client Node generico JSON-RPC su endpoint remoto `/mcp` con bearer token tecnico, header `Accept: application/json, text/event-stream` e `mcp-protocol-version: 2025-06-18`.
+  - Risultato 2026-07-14: `initialize` -> `protocolVersion: 2025-06-18`, server `lorenzozanna-content` `0.2.0`; `tools/list` -> 8 tool (`get_page`, `list_changes`, `disable_section`, `enable_section`, `update_text`, `update_cta`, `update_rich_text`, `rollback_change`); `get_page` su `ph/portfolio` -> 5 sezioni; `list_changes` -> 3 cambi; `disable_section` su fixture temporanea `codex-generic-client-smoke/faq` -> `enabled: false` e `revisionId` presente.
+  - Verifica D1 2026-07-14: section fixture `enabled = 0`; `change_log` con action `disable_section`, actor `generic-node-smoke`, target `pages/codex-generic-client-smoke/sections/faq`; cleanup completato con `smoke_pages = 0`, `smoke_sections = 0`, `smoke_changes = 0`.
+  - Verifica provider-neutral 2026-07-14: `rg` su `edge/src`, `edge/test` e `edge/migrations` non trova riferimenti a ChatGPT, Claude, OpenAI, Anthropic o provider specifici; i nomi dei provider restano solo nella documentazione di compatibilita/onboarding.
+  - Nota: MCP Inspector CLI non eseguito in questo passaggio per evitare dipendenze/interazioni non necessarie; resta aperto come verifica manuale/interattiva insieme a Claude e ChatGPT.
 - [ ] Documentare limiti piano Free/Pro.
 - [ ] Scrivere guida per Lorenzo:
   - [ ] URL MCP;
