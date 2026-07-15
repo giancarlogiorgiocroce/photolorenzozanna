@@ -3,6 +3,7 @@ const header = document.querySelector("[data-site-header]");
 const navToggle = document.querySelector(".nav-toggle");
 const siteNav = document.querySelector(".site-nav");
 const privacyNote = document.querySelector("[data-privacy-note]");
+const privacyNoteOpenButtons = document.querySelectorAll("[data-privacy-note-open]");
 const privacyNoteClose = document.querySelector("[data-privacy-note-close]");
 
 const setHeaderState = () => {
@@ -28,8 +29,20 @@ if (navToggle && siteNav) {
   });
 }
 
-if (privacyNote && privacyNoteClose) {
-  privacyNoteClose.addEventListener("click", () => {
+if (privacyNote) {
+  privacyNoteOpenButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      privacyNote.hidden = false;
+      privacyNoteClose?.focus();
+    });
+  });
+
+  privacyNoteClose?.addEventListener("click", () => {
+    privacyNote.hidden = true;
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || privacyNote.hidden) return;
     privacyNote.hidden = true;
   });
 }

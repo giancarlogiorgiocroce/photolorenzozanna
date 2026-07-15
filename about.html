@@ -8,9 +8,9 @@
       content="Lorenzo Zanna fotografa ritratti, natura, strada, forme e ombre con uno sguardo sobrio, attento alla luce e alla presenza."
     />
     <title>Chi sono | Lorenzo Zanna Photography</title>
-    <link rel="stylesheet" href="assets/css/base.css?v=20260715-cookie-note" />
-    <link rel="stylesheet" href="assets/css/about.css?v=20260715-cookie-note" />
-    <script src="assets/js/main.js?v=20260715-cookie-note" defer></script>
+    <link rel="stylesheet" href="assets/css/base.css?v=20260715-cookie-footer" />
+    <link rel="stylesheet" href="assets/css/about.css?v=20260715-cookie-footer" />
+    <script src="assets/js/main.js?v=20260715-cookie-footer" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Vai al contenuto</a>
@@ -120,7 +120,7 @@
       </section>
     </main>
 
-    <aside class="privacy-note" data-privacy-note aria-label="Informazione sui cookie">
+    <aside class="privacy-note" data-privacy-note aria-label="Informazione sui cookie" hidden>
       <div>
         <strong>Nessun cookie</strong>
         <p>Questo sito non usa cookie, analytics o strumenti di tracciamento.</p>
@@ -131,7 +131,10 @@
     </aside>
 
     <footer class="site-footer">
-      <p>© 2026 Lorenzo Zanna</p>
+      <div class="site-footer__meta">
+        <p>© 2026 Lorenzo Zanna</p>
+        <button class="site-footer__privacy" type="button" data-privacy-note-open>Cookie privacy</button>
+      </div>
       <a href="/portfolio">Portfolio</a>
     </footer>
   </body>

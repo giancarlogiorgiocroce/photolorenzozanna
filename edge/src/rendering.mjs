@@ -1,7 +1,7 @@
 import { resolveSectionContract } from "./page-contracts.mjs";
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
-const ASSET_VERSION = "20260715-cookie-note";
+const ASSET_VERSION = "20260715-cookie-footer";
 const CANONICAL_ORIGIN = "https://ph.lorenzozanna.com";
 
 const GALLERY_LAYOUTS = {
@@ -187,7 +187,7 @@ ${indent(renderFooter(context), 4)}
 }
 
 function renderPrivacyNote() {
-  return `<aside class="privacy-note" data-privacy-note aria-label="Informazione sui cookie">
+  return `<aside class="privacy-note" data-privacy-note aria-label="Informazione sui cookie" hidden>
   <div>
     <strong>Nessun cookie</strong>
     <p>Questo sito non usa cookie, analytics o strumenti di tracciamento.</p>
@@ -683,7 +683,10 @@ function renderFooter(context) {
   const defaults = PAGE_DEFAULTS[context.slug]?.footer ?? PAGE_DEFAULTS.portfolio.footer;
 
   return `<footer class="site-footer">
-  <p>&copy; 2026 Lorenzo Zanna</p>
+  <div class="site-footer__meta">
+    <p>&copy; 2026 Lorenzo Zanna</p>
+    <button class="site-footer__privacy" type="button" data-privacy-note-open>Cookie privacy</button>
+  </div>
   <a href="${escapeAttribute(defaults.href)}">${escapeHtml(defaults.label)}</a>
 </footer>`;
 }

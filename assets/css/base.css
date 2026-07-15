@@ -538,8 +538,31 @@ p {
   margin: 0;
 }
 
-.site-footer a {
+.site-footer__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+}
+
+.site-footer a,
+.site-footer__privacy {
   color: var(--color-text-muted);
+}
+
+.site-footer__privacy {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.site-footer__privacy:hover,
+.site-footer__privacy:focus-visible {
+  color: var(--color-text);
 }
 
 .privacy-note {
