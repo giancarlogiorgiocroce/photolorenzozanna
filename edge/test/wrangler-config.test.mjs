@@ -17,6 +17,9 @@ test("wrangler.toml targets the current production API custom domain", async () 
   for (const route of [
     "ph.lorenzozanna.com/",
     "ph.lorenzozanna.com/index.html",
+    "ph.lorenzozanna.com/index.php",
+    "ph.lorenzozanna.com/robots.txt",
+    "ph.lorenzozanna.com/sitemap.xml",
     "ph.lorenzozanna.com/portfolio",
     "ph.lorenzozanna.com/portfolio.html",
     "ph.lorenzozanna.com/about",

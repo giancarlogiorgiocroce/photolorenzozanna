@@ -10,6 +10,16 @@ const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
 };
 
+const TEXT_HEADERS = {
+  "content-type": "text/plain; charset=utf-8",
+  "cache-control": "no-store",
+};
+
+const XML_HEADERS = {
+  "content-type": "application/xml; charset=utf-8",
+  "cache-control": "no-store",
+};
+
 const HTML_HEADERS = {
   "content-type": "text/html; charset=utf-8",
   "cache-control": "no-store",
@@ -33,6 +43,7 @@ const PAGE_ROUTE_ALIASES = new Map([
   ["about", "chi-sono"],
   ["contact", "contatti"],
 ]);
+const CANONICAL_PAGE_PATHS = ["/", "/portfolio", "/about", "/contact"];
 
 export default {
   async fetch(request, env) {
@@ -77,6 +88,10 @@ async function routeRequest(request, env, url) {
     return handleOAuthRequest(request, env, url, segments);
   }
 
+  if (url.pathname === "/robots.txt" || url.pathname === "/sitemap.xml") {
+    return handleSeoRoute(request, env, url);
+  }
+
   if (!env.DB) {
     return json({ error: "missing_db", message: "D1 binding DB is not configured." }, 500);
   }
@@ -110,6 +125,24 @@ async function routeRequest(request, env, url) {
   return json({ error: "not_found", message: "API route not found." }, 404);
 }
 
+function handleSeoRoute(request, env, url) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return json({ error: "method_not_allowed", message: "Use GET or HEAD for SEO routes." }, 405);
+  }
+
+  const site = resolveSlugFromRequest(request, env, url);
+  if (!site) {
+    return json({ error: "unknown_site", message: "Unable to resolve site from host." }, 404);
+  }
+
+  const origin = getCanonicalOrigin(site, env);
+  if (url.pathname === "/robots.txt") {
+    return text(renderRobotsTxt(origin), 200, { head: request.method === "HEAD" });
+  }
+
+  return xml(renderSitemapXml(origin), 200, { head: request.method === "HEAD" });
+}
+
 async function handlePageRoute(request, env, url, segments) {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return json({ error: "method_not_allowed", message: "Use GET or HEAD for public pages." }, 405);
@@ -118,6 +151,11 @@ async function handlePageRoute(request, env, url, segments) {
   const site = resolveSlugFromRequest(request, env, url);
   if (!site) {
     return json({ error: "unknown_site", message: "Unable to resolve site from host." }, 404);
+  }
+
+  const canonicalPath = getCanonicalRedirectPath(segments);
+  if (canonicalPath) {
+    return redirect(url, canonicalPath, 301);
   }
 
   const page = resolvePageSlug(segments);
@@ -145,6 +183,42 @@ async function handlePageRoute(request, env, url, segments) {
     }
     throw error;
   }
+}
+
+function getCanonicalRedirectPath(segments) {
+  if (segments.length !== 1) return null;
+
+  const segment = segments[0];
+  if (segment === "index.html" || segment === "index.php") return "/";
+  if (segment === "portfolio.html") return "/portfolio";
+  if (segment === "about.html") return "/about";
+  if (segment === "contact.html") return "/contact";
+  return null;
+}
+
+function getCanonicalOrigin(site, env) {
+  return `https://${site}.${getRootDomain(env)}`;
+}
+
+function renderRobotsTxt(origin) {
+  return [
+    "User-agent: *",
+    "Allow: /",
+    `Sitemap: ${origin}/sitemap.xml`,
+    "",
+  ].join("\n");
+}
+
+function renderSitemapXml(origin) {
+  const urls = CANONICAL_PAGE_PATHS
+    .map((path) => `  <url><loc>${origin}${path}</loc></url>`)
+    .join("\n");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>
+`;
 }
 
 async function handlePublicRoute(request, env, url, segments) {
@@ -652,10 +726,36 @@ function json(payload, status = 200) {
   });
 }
 
+function text(body, status = 200, options = {}) {
+  return new Response(options.head ? null : body, {
+    status,
+    headers: TEXT_HEADERS,
+  });
+}
+
+function xml(body, status = 200, options = {}) {
+  return new Response(options.head ? null : body, {
+    status,
+    headers: XML_HEADERS,
+  });
+}
+
 function html(markup, status = 200, options = {}) {
   return new Response(options.head ? null : markup, {
     status,
     headers: HTML_HEADERS,
+  });
+}
+
+function redirect(url, pathname, status = 301) {
+  const target = new URL(url.href);
+  target.pathname = pathname;
+  return new Response(null, {
+    status,
+    headers: {
+      location: target.toString(),
+      "cache-control": "no-store",
+    },
   });
 }
 

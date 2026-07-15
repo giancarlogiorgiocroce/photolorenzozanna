@@ -102,32 +102,70 @@ test("GET / on a public site host renders the dynamic home page, not the API man
   assert.doesNotMatch(html, /"lorenzozanna-edge"/);
 });
 
-test("GET /index.html on a public site host renders the dynamic home page", async () => {
+test("GET /index.html and /index.php redirect to the canonical home", async () => {
+  for (const pathname of ["/index.html", "/index.php"]) {
+    const db = createSeededDb();
+    const response = await fetchWorker(pathname, {
+      db,
+      host: "ph.lorenzozanna.com",
+    });
+
+    assert.equal(response.status, 301);
+    assert.equal(response.headers.get("location"), "https://ph.lorenzozanna.com/");
+  }
+});
+
+test("GET legacy .html page aliases redirect to canonical page URLs", async () => {
+  for (const [pathname, location] of [
+    ["/portfolio.html", "https://ph.lorenzozanna.com/portfolio"],
+    ["/about.html", "https://ph.lorenzozanna.com/about"],
+    ["/contact.html", "https://ph.lorenzozanna.com/contact"],
+  ]) {
+    const db = createSeededDb();
+    const response = await fetchWorker(pathname, {
+      db,
+      host: "ph.lorenzozanna.com",
+    });
+
+    assert.equal(response.status, 301);
+    assert.equal(response.headers.get("location"), location);
+  }
+});
+
+test("GET /sitemap.xml lists canonical public page URLs", async () => {
   const db = createSeededDb();
-  const response = await fetchWorker("/index.html", {
+  const response = await fetchWorker("/sitemap.xml", {
     db,
     host: "ph.lorenzozanna.com",
   });
-  const html = await response.text();
+  const xml = await response.text();
 
   assert.equal(response.status, 200);
-  assert.match(html, /<h1[^>]*>Lorenzo Zanna Photography<\/h1>/);
+  assert.match(response.headers.get("content-type"), /application\/xml/);
+  assert.match(xml, /<loc>https:\/\/ph\.lorenzozanna\.com\/<\/loc>/);
+  assert.match(xml, /<loc>https:\/\/ph\.lorenzozanna\.com\/portfolio<\/loc>/);
+  assert.match(xml, /<loc>https:\/\/ph\.lorenzozanna\.com\/about<\/loc>/);
+  assert.match(xml, /<loc>https:\/\/ph\.lorenzozanna\.com\/contact<\/loc>/);
+  assert.doesNotMatch(xml, /index\.html|index\.php/);
 });
 
-test("GET /portfolio.html uses the same dynamic page renderer", async () => {
+test("GET /robots.txt allows indexing and points to the sitemap", async () => {
   const db = createSeededDb();
-  const response = await fetchWorker("/portfolio.html", {
+  const response = await fetchWorker("/robots.txt", {
     db,
     host: "ph.lorenzozanna.com",
   });
-  const html = await response.text();
+  const text = await response.text();
 
   assert.equal(response.status, 200);
-  assert.match(html, /<h1[^>]*>Portfolio fotografico<\/h1>/);
+  assert.match(response.headers.get("content-type"), /text\/plain/);
+  assert.match(text, /User-agent: \*/);
+  assert.match(text, /Allow: \//);
+  assert.match(text, /Sitemap: https:\/\/ph\.lorenzozanna\.com\/sitemap\.xml/);
 });
 
-test("GET /about and /about.html map to the published chi-sono page", async () => {
-  for (const pathname of ["/about", "/about.html"]) {
+test("GET /about maps to the published chi-sono page", async () => {
+  for (const pathname of ["/about"]) {
     const db = createSeededDb();
     const response = await fetchWorker(pathname, {
       db,
@@ -140,8 +178,8 @@ test("GET /about and /about.html map to the published chi-sono page", async () =
   }
 });
 
-test("GET /contact and /contact.html map to the published contatti page", async () => {
-  for (const pathname of ["/contact", "/contact.html"]) {
+test("GET /contact maps to the published contatti page", async () => {
+  for (const pathname of ["/contact"]) {
     const db = createSeededDb();
     const response = await fetchWorker(pathname, {
       db,

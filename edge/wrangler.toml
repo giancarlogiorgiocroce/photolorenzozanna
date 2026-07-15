@@ -24,6 +24,18 @@ pattern = "ph.lorenzozanna.com/index.html"
 zone_name = "lorenzozanna.com"
 
 [[routes]]
+pattern = "ph.lorenzozanna.com/index.php"
+zone_name = "lorenzozanna.com"
+
+[[routes]]
+pattern = "ph.lorenzozanna.com/robots.txt"
+zone_name = "lorenzozanna.com"
+
+[[routes]]
+pattern = "ph.lorenzozanna.com/sitemap.xml"
+zone_name = "lorenzozanna.com"
+
+[[routes]]
 pattern = "ph.lorenzozanna.com/portfolio"
 zone_name = "lorenzozanna.com"
 

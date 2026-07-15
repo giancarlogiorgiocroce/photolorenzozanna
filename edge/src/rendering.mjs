@@ -2,6 +2,7 @@ import { resolveSectionContract } from "./page-contracts.mjs";
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
 const ASSET_VERSION = "20260714-lightbox-nav";
+const CANONICAL_ORIGIN = "https://ph.lorenzozanna.com";
 
 const GALLERY_LAYOUTS = {
   ritratti: ["wide", "tall", "standard", "standard"],
@@ -13,7 +14,7 @@ const GALLERY_LAYOUTS = {
 
 const PAGE_DEFAULTS = {
   home: {
-    footer: { href: "contact.html", label: "Contatti" },
+    footer: { href: "/contact", label: "Contatti" },
     hero: {
       eyebrow: "Fotografo a Firenze",
       image: {
@@ -23,8 +24,8 @@ const PAGE_DEFAULTS = {
         height: 1600,
         decorative: true,
       },
-      primaryCta: { label: "Guarda il portfolio", href: "portfolio.html" },
-      secondaryCta: { label: "Contatti", href: "contact.html" },
+      primaryCta: { label: "Guarda il portfolio", href: "/portfolio" },
+      secondaryCta: { label: "Contatti", href: "/contact" },
     },
     selectedWork: {
       kicker: "Selezione",
@@ -56,7 +57,7 @@ const PAGE_DEFAULTS = {
     splitSection: {
       kicker: "Selezione",
       title: "Poche immagini, ben scelte.",
-      cta: { label: "Scopri l'approccio", href: "about.html" },
+      cta: { label: "Scopri l'approccio", href: "/about" },
     },
     faq: {
       title: "Domande frequenti",
@@ -64,7 +65,7 @@ const PAGE_DEFAULTS = {
     },
   },
   "chi-sono": {
-    footer: { href: "portfolio.html", label: "Portfolio" },
+    footer: { href: "/portfolio", label: "Portfolio" },
     hero: {
       eyebrow: "Chi sono",
       image: {
@@ -83,7 +84,7 @@ const PAGE_DEFAULTS = {
     },
   },
   contatti: {
-    footer: { href: "index.html", label: "Torna alla home" },
+    footer: { href: "/", label: "Torna alla home" },
     hero: {
       eyebrow: "Contatti",
       image: {
@@ -110,7 +111,7 @@ const PAGE_DEFAULTS = {
     },
   },
   portfolio: {
-    footer: { href: "contact.html", label: "Disponibilita e contatti" },
+    footer: { href: "/contact", label: "Disponibilita e contatti" },
     hero: {
       eyebrow: "Portfolio",
     },
@@ -644,7 +645,7 @@ function renderCta(section) {
 
 function renderHeader(context) {
   return `<header class="site-header" data-site-header>
-  <a class="brand" href="index.html" aria-label="Lorenzo Zanna home">
+  <a class="brand" href="/" aria-label="Lorenzo Zanna home">
     <span class="brand__name">Lorenzo Zanna</span>
     <span class="brand__meta">photography</span>
   </a>
@@ -653,9 +654,9 @@ function renderHeader(context) {
     <span class="sr-only">Apri menu</span>
   </button>
   <nav class="site-nav" id="site-nav" aria-label="Navigazione principale">
-    ${renderNavLink("portfolio", "portfolio.html", "Portfolio", context)}
-    ${renderNavLink("chi-sono", "about.html", "Chi sono", context)}
-    ${renderNavLink("contatti", "contact.html", "Contatti", context)}
+    ${renderNavLink("portfolio", "/portfolio", "Portfolio", context)}
+    ${renderNavLink("chi-sono", "/about", "Chi sono", context)}
+    ${renderNavLink("contatti", "/contact", "Contatti", context)}
   </nav>
 </header>`;
 }
@@ -676,20 +677,28 @@ function renderFooter(context) {
 
 function renderHeadMeta(context) {
   const description = context.description ? `    <meta name="description" content="${escapeAttribute(context.description)}" />\n` : "";
+  const canonicalUrl = getCanonicalUrl(context);
+  const canonical = `    <link rel="canonical" href="${escapeAttribute(canonicalUrl)}" />\n`;
   const ogTitle = context.ogTitle ? `    <meta property="og:title" content="${escapeAttribute(context.ogTitle)}" />\n` : "";
   const ogDescription = context.ogDescription
     ? `    <meta property="og:description" content="${escapeAttribute(context.ogDescription)}" />\n`
     : "";
   const ogImage = context.ogImage ? `    <meta property="og:image" content="${escapeAttribute(context.ogImage)}" />\n` : "";
+  const ogUrl = `    <meta property="og:url" content="${escapeAttribute(canonicalUrl)}" />\n`;
 
-  return `${description}${ogTitle}${ogDescription}    <meta property="og:type" content="website" />
-${ogImage}    <title>${escapeHtml(context.title)}</title>`;
+  return `${description}${canonical}${ogTitle}${ogDescription}    <meta property="og:type" content="website" />
+${ogImage}${ogUrl}    <title>${escapeHtml(context.title)}</title>`;
+}
+
+function getCanonicalUrl(context) {
+  return `${CANONICAL_ORIGIN}${context.canonicalPath ?? `/${context.slug}`}`;
 }
 
 function getPageContext(slug, title) {
   const pages = {
     home: {
       slug: "home",
+      canonicalPath: "/",
       title: "Lorenzo Zanna Photography | Ritratti, natura e strada",
       description: "Ritratti, natura, strada, forme e ombre: una selezione di fotografie di Lorenzo Zanna, con lavori su richiesta e stampe disponibili su richiesta.",
       ogTitle: "Lorenzo Zanna Photography | Ritratti, natura e strada",
@@ -699,18 +708,21 @@ function getPageContext(slug, title) {
     },
     "chi-sono": {
       slug: "chi-sono",
+      canonicalPath: "/about",
       title: "Chi sono | Lorenzo Zanna Photography",
       description: "Lorenzo Zanna fotografa ritratti, natura, strada, forme e ombre con uno sguardo sobrio, attento alla luce e alla presenza.",
       css: "about.css",
     },
     portfolio: {
       slug: "portfolio",
+      canonicalPath: "/portfolio",
       title: "Portfolio fotografico | Lorenzo Zanna Photography",
       description: "Ritratti, strada, natura, forme e ombre: una selezione fotografica di Lorenzo Zanna tra volti, paesaggio, luce e superfici.",
       css: "portfolio.css",
     },
     contatti: {
       slug: "contatti",
+      canonicalPath: "/contact",
       title: "Contatti | Lorenzo Zanna Photography",
       description: "Scrivi a Lorenzo Zanna per ritratti, lavori fotografici per attività, collaborazioni o informazioni sulle stampe.",
       css: "contact.css",
@@ -719,6 +731,7 @@ function getPageContext(slug, title) {
 
   return pages[slug] ?? {
     slug,
+    canonicalPath: `/${slug}`,
     title,
     css: "home.css",
   };
