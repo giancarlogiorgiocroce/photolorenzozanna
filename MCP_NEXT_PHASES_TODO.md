@@ -203,7 +203,11 @@ Obiettivo: Lorenzo deve collegarsi da un client AI compatibile senza incollare s
   - Implementazione 2026-07-15: `technical-token` mantiene solo `content:read`; `content:write` richiede token utente scoped. Gli amministratori restano tali via Cloudflare/D1/deploy/API privata, ma i connector AI non usano il token tecnico per modifiche editoriali.
   - Test 2026-07-15: `npm test` in `edge/` -> 89 test verdi; coperto `POST /mcp tools/call rejects technical token for content write tools`.
   - Deploy 2026-07-15: Worker versione `4f6a37af-16f7-439c-9830-aff7cfa9465d`.
-  - Smoke remoto sicuro 2026-07-15: `AI_API_TOKEN` legge `get_page` su `ph/portfolio` -> 5 sezioni; `tools/call disable_section` con token tecnico su pagina inesistente -> JSON-RPC `-32003 Permission denied for content:write` prima di qualunque mutazione. Smoke write con token utente su D1 live non eseguito per evitare fixture/mutazioni produzione senza autorizzazione esplicita; coperto localmente dai test.
+  - Smoke remoto sicuro 2026-07-15: `AI_API_TOKEN` legge `get_page` su `ph/portfolio` -> 5 sezioni; `tools/call disable_section` con token tecnico su pagina inesistente -> JSON-RPC `-32003 Permission denied for content:write` prima di qualunque mutazione. Smoke write mutativo con token utente su D1 live non eseguito per evitare fixture/mutazioni produzione senza autorizzazione esplicita; coperto localmente dai test.
+- [x] Provisionare token personale Lorenzo per primo connector AI.
+  - Provisioning 2026-07-15: token registrato in D1 come `token_lorenzo_editor_20260715`, actor `lorenzo`, ruolo `editor`, scope `content:read` e `content:write`, site `ph`.
+  - Segreto locale: token in chiaro solo in `.secrets/lorenzo-mcp-token.txt`, hash di controllo in `.secrets/lorenzo-mcp-token.sha256.txt`; `.secrets/` ignorata da git.
+  - Smoke remoto non mutativo 2026-07-15: token Lorenzo `get_page` su `ph/portfolio` -> 5 sezioni; `disable_section` su pagina inesistente -> `Page not found`, quindi `content:write` passa senza mutare contenuti reali.
 - [x] Definire istruzioni onboarding per:
   - [x] Claude custom connector;
   - [x] ChatGPT app/connector;
@@ -434,12 +438,13 @@ Obiettivo: verificare client reali, non solo test locali.
   - Verifica provider-neutral 2026-07-14: `rg` su `edge/src`, `edge/test` e `edge/migrations` non trova riferimenti a ChatGPT, Claude, OpenAI, Anthropic o provider specifici; i nomi dei provider restano solo nella documentazione di compatibilita/onboarding.
   - Nota: MCP Inspector CLI non eseguito in questo passaggio per evitare dipendenze/interazioni non necessarie; resta aperto come verifica manuale/interattiva insieme a Claude e ChatGPT.
 - [ ] Documentare limiti piano Free/Pro.
-- [ ] Scrivere guida per Lorenzo:
-  - [ ] URL MCP;
-  - [ ] come autenticarsi;
-  - [ ] prompt sicuri;
-  - [ ] cosa puo modificare;
-  - [ ] come annullare un cambio.
+- [x] Scrivere guida per Lorenzo:
+  - [x] URL MCP;
+  - [x] come autenticarsi;
+  - [x] prompt naturali;
+  - [x] cosa puo modificare;
+  - [x] come annullare un cambio.
+  - Documento: `MCP_LORENZO_CONNECTOR_HANDOFF.md`.
 
 Prompt per chat:
 

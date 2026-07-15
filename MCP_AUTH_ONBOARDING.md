@@ -1,6 +1,6 @@
 # MCP auth e onboarding Lorenzo
 
-Data: 2026-07-14
+Data: 2026-07-15
 
 ## Decisione fase 4
 
@@ -11,6 +11,13 @@ Il token personale viene mostrato una sola volta a Lorenzo e salvato dal client/
 `AI_API_TOKEN` resta un token tecnico per smoke test, API privata e fallback operativo. Non va dato a Lorenzo e non va configurato nei connector utente.
 
 Stato 2026-07-15: sul canale MCP, `AI_API_TOKEN` e limitato a lettura/smoke (`content:read`). Non puo chiamare tool di scrittura contenuti come `disable_section`, `update_text`, `add_faq_section` o `rollback_change`. Le modifiche editoriali via MCP devono passare da un token utente scoped di Lorenzo o da un token utente esplicitamente autorizzato.
+
+Stato operativo 2026-07-15: il token personale di Lorenzo e stato preparato e registrato su D1 come `token_lorenzo_editor_20260715`, actor `lorenzo`, ruolo `editor`, scope `content:read` e `content:write`. Il token in chiaro e solo nel file locale ignorato `.secrets/lorenzo-mcp-token.txt`; in D1 c'e solo l'hash.
+
+Smoke remoto 2026-07-15:
+
+- `get_page` con token Lorenzo su `ph/portfolio` -> 200, 5 sezioni.
+- `disable_section` con token Lorenzo su pagina inesistente -> `Page not found`, quindi il controllo `content:write` e superato senza mutare contenuti reali.
 
 ## Architettura preferita
 
@@ -66,7 +73,7 @@ viewer
   content:read
 ```
 
-Per Lorenzo, il ruolo iniziale consigliato e `owner` se il token resta personale e custodito nel connector. Per prove con AI o collaboratori, usare `editor` o `viewer`.
+Per Lorenzo, il ruolo iniziale consigliato per la prima prova con connector AI e `editor`: puo leggere e modificare contenuti editoriali, ma non ha publish/admin token. Se in futuro serve un flusso draft -> publish, si puo passare a `owner` o aggiungere uno scope dedicato solo quando il connector e ben custodito.
 
 Regola operativa:
 
@@ -105,13 +112,13 @@ INSERT INTO auth_tokens (
   updated_at
 )
 SELECT
-  'token_lorenzo_owner_20260714',
+  'token_lorenzo_editor_YYYYMMDD',
   id,
   '<HASH>',
-  'Lorenzo personal connector',
+  'Lorenzo editor MCP connector',
   'lorenzo',
-  'owner',
-  '["content:read","content:write","content:publish"]',
+  'editor',
+  json_array('content:read','content:write'),
   'active',
   datetime('now'),
   datetime('now')
@@ -127,7 +134,7 @@ SET
   status = 'revoked',
   revoked_at = datetime('now'),
   updated_at = datetime('now')
-WHERE id = 'token_lorenzo_owner_20260714';
+WHERE id = 'token_lorenzo_editor_20260715';
 ```
 
 Se un token e compromesso, revocarlo subito e generarne uno nuovo con un nuovo hash.

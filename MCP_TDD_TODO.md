@@ -187,6 +187,10 @@ Non incollare segreti in chat. Il connector deve gestire credenziali.
 - [x] Testare permesso lettura.
 - [x] Testare permesso scrittura.
 - [x] Testare che `AI_API_TOKEN` non possa scrivere contenuti via MCP.
+- [x] Provisionare token personale Lorenzo su D1 remoto.
+  - Stato 2026-07-15: `token_lorenzo_editor_20260715`, actor `lorenzo`, ruolo `editor`, scope `content:read` e `content:write`.
+- [x] Smoke remoto non mutativo con token Lorenzo.
+  - Verifica 2026-07-15: `get_page` su `ph/portfolio` -> 5 sezioni; `disable_section` su pagina inesistente -> `Page not found`, quindi permesso `content:write` verificato senza mutazioni reali.
 - [ ] Testare permesso pubblicazione.
 - [x] Loggare `actor` reale, non solo `mcp-lorenzozanna`.
 - [x] Preparare istruzioni di onboarding Lorenzo.
@@ -335,7 +339,8 @@ Da fare dopo testi/sezioni, perche aggiunge storage e sicurezza.
 - [ ] Testare con ChatGPT developer mode/app, se disponibile.
 - [x] Testare con almeno un client MCP generico che supporta bearer token.
   - Smoke 2026-07-14: `initialize`, `tools/list`, `get_page`, `list_changes`, `disable_section` su fixture temporanea; cleanup D1 completato.
-- [ ] Documentare setup per Lorenzo.
+- [x] Documentare setup per Lorenzo.
+  - Documento: `MCP_LORENZO_CONNECTOR_HANDOFF.md`.
 - [ ] Documentare limiti piano Free/Pro dove necessario.
 - [x] Evitare dipendenza da una singola piattaforma.
   - Verifica 2026-07-14: tool e permessi MCP non dipendono da ChatGPT, Claude o altri client specifici.

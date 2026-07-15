@@ -1,4 +1,5 @@
 ﻿.codex-audit/
+.secrets/
 
 
 .site-backups/
