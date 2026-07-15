@@ -499,6 +499,8 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.deepEqual(getPage.securitySchemes, [{ type: "oauth2", scopes: ["content:read"] }]);
   assert.deepEqual(updateText.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(updateContactChannel.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
+  assert.deepEqual(updateContactChannel.inputSchema.properties.channel.enum, ["email", "instagram", "telefono"]);
+  assert.equal(updateContactChannel.inputSchema.properties.href.type, "string");
 });
 
 test("POST /mcp tools/call list_section_presets allows viewer scoped user tokens", async () => {

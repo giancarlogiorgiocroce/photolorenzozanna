@@ -155,6 +155,7 @@ Obiettivo: il dominio pubblico deve leggere D1/R2 a runtime, non servire HTML st
   - Deploy `contact-band` 2026-07-15: D1 migration `0008_seed_contact_band.sql` applicata, Worker versione `53f6867c-df53-4e3c-ad6c-58f97cbbf2c0`, Pages deploy `https://4118842f.lorenzozanna-ph.pages.dev`; smoke live `/contact`, CSS Pages, D1 remoto e MCP `get_page` su `contatti/contact-band` passati.
   - UX MCP `contact-band` 2026-07-15: aggiunto `channels[].enabled` e tool `update_contact_channel`, cosi un client AI puo dire/modificare "email", "Instagram", "telefono" e nascondere singole voci senza conoscere `channels[0]`.
   - Deploy UX MCP `contact-band` 2026-07-15: Worker versione `018d2c32-c669-4b94-b4ef-31ee446b05ac`; suite `edge` 100/100; smoke MCP `tools/list` espone `update_contact_channel`. Modifica live applicata via MCP: email `zannafotografia@icloud.com`, Instagram/Telefono `enabled:false`; `/contact` renderizza solo l'email.
+  - Compat ChatGPT `update_contact_channel` 2026-07-15: semplificato lo schema MCP del tool (`href` solo `string` opzionale, `channel` enum `email|instagram|telefono`) per evitare che client rigidi scartino il tool. Worker versione `daf46dc7-4b36-472e-aab9-7674a36af7ea`; smoke live `tools/list` conferma schema nuovo dopo breve propagazione.
 - [x] Decidere dove servire asset statici:
   - [x] Pages per asset;
   - [ ] Worker static assets;
