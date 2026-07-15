@@ -96,9 +96,9 @@ const PAGE_DEFAULTS = {
     },
     contactBand: {
       channels: [
-        { label: "Email", value: "Da definire" },
-        { label: "Instagram", value: "Da definire" },
-        { label: "Telefono", value: "Da definire" },
+        { label: "Email", value: "Da definire", href: null },
+        { label: "Instagram", value: "Da definire", href: null },
+        { label: "Telefono", value: "Da definire", href: null },
       ],
     },
     availability: {
@@ -203,7 +203,8 @@ function renderSection(section, context) {
   if (section.styleContract === "about.hero") return renderAboutHero(section);
   if (section.styleContract === "about.manifesto") return renderAboutManifesto(section);
   if (section.styleContract === "about.values_grid") return renderAboutValuesGrid(section);
-  if (section.styleContract === "contact.hero") return `${renderContactHero(section)}\n${renderContactBand()}`;
+  if (section.styleContract === "contact.hero") return renderContactHero(section);
+  if (section.styleContract === "contact.band") return renderContactBand(section);
   if (section.styleContract === "contact.availability") return renderContactAvailability(section);
   if (section.styleContract === "portfolio.page_hero") return renderPortfolioHero(section);
   if (section.styleContract === "portfolio.series_text") return renderPortfolioSeriesText(section);
@@ -343,18 +344,39 @@ ${indent(renderImage(image, { fetchPriority: "high" }), 4)}
 </section>`;
 }
 
-function renderContactBand() {
-  const channels = PAGE_DEFAULTS.contatti.contactBand.channels;
-  return `<section class="contact-band" aria-label="Canali di contatto">
+function renderContactBand(section) {
+  const channels = normalizeContactChannels(section.data.channels);
+  return `<section class="contact-band" data-section-id="${escapeAttribute(section.sectionId)}" data-section-type="text" aria-label="Canali di contatto">
 ${indent(channels.map(renderContactChannel).join("\n"), 2)}
 </section>`;
 }
 
 function renderContactChannel(channel) {
+  const label = escapeHtml(channel.label);
+  const value = escapeHtml(channel.value);
+  const body = `<span>${label}</span>
+  <strong>${value}</strong>`;
+
+  if (channel.href) {
+    return `<a class="contact-link reveal" href="${escapeAttribute(channel.href)}">
+  ${body}
+</a>`;
+  }
+
   return `<div class="contact-link reveal">
-  <span>${escapeHtml(channel.label)}</span>
-  <strong>${escapeHtml(channel.value)}</strong>
+  ${body}
 </div>`;
+}
+
+function normalizeContactChannels(value) {
+  const channels = Array.isArray(value) && value.length ? value : PAGE_DEFAULTS.contatti.contactBand.channels;
+  return channels
+    .map((channel) => ({
+      label: String(channel?.label ?? "").trim(),
+      value: String(channel?.value ?? "").trim(),
+      href: channel?.href ? String(channel.href).trim() : null,
+    }))
+    .filter((channel) => channel.label || channel.value);
 }
 
 function renderContactAvailability(section) {

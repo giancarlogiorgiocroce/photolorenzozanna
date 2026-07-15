@@ -470,6 +470,8 @@ Fonte CSS/HTML:
 - `contact.html`;
 - `assets/css/contact.css`;
 - classi: `contact-band`, `contact-link`.
+- sezione D1: `page=contatti`, `sectionId=contact-band`, `type=text`;
+- renderer: se `channels[].href` e valorizzato, il singolo canale diventa `<a class="contact-link">`; altrimenti resta `<div class="contact-link">`.
 
 Campi:
 
@@ -493,8 +495,9 @@ Editable:
 
 Tool previsti:
 
-- `update_contact_channel`;
-- oppure `update_text` con path controllato.
+- `update_text` per `channels[0].label` e `channels[0].value`;
+- `update_cta` per `channels[0].href`, con `href` nullable;
+- futuro eventuale `update_contact_channel` solo come scorciatoia itemizzata, non come requisito architetturale.
 
 ### `contact.availability`
 
@@ -710,6 +713,7 @@ Esempio:
 home/hero       -> home.hero
 chi-sono/hero   -> about.hero
 contatti/hero   -> contact.hero
+contatti/contact-band -> contact.band
 portfolio/hero  -> portfolio.page_hero
 portfolio/gallery -> portfolio.gallery
 */faq           -> common.faq
@@ -823,3 +827,9 @@ Nota parita statico/dinamico 2026-07-14:
 - `portfolio/text_2` deve usare `portfolio.series_text` e markup `editorial-section`, non il fallback generico `<section class="section">`;
 - se cambia `assets/css`, aggiornare anche lo staging Pages `.deploy/ph/assets/css` prima del deploy statico;
 - i meta description/OG presenti negli statici devono essere replicati dal renderer dinamico quando la pagina e servita dal Worker.
+
+Nota blocchi contact 2026-07-15:
+
+- `contact-band` non deve essere renderizzato come HTML nascosto dentro `contact.hero`;
+- deve esistere come riga `page_sections` autonoma, con `styleContract: "contact.band"` in `get_page`;
+- il renderer deve leggere `section.data.channels`, cosi `update_text` e `update_cta` modificano davvero il blocco live.

@@ -181,10 +181,14 @@ test("renderPageHtml renders the contact page with the existing visual contract"
   assert.match(html, /class="contact-hero__copy reveal"/);
   assert.match(html, /class="contact-hero__image reveal"/);
   assert.match(html, /assets\/images\/portfolio\/forme\/ombre-grata\.jpg/);
-  assert.match(html, /<section class="contact-band" aria-label="Canali di contatto">/);
+  assert.match(html, /<section class="contact-band"[^>]*data-section-id="contact-band"[^>]*data-section-type="text"[^>]*aria-label="Canali di contatto">/);
   assert.match(html, /class="contact-link reveal"/);
+  assert.match(html, /<a class="contact-link reveal" href="mailto:ciao@example.com">/);
   assert.match(html, /class="availability"[^>]*data-section-id="text_2"/);
   assert.match(html, /class="availability__list reveal"/);
+
+  assert.ok(html.indexOf('data-section-id="hero"') < html.indexOf('data-section-id="contact-band"'));
+  assert.ok(html.indexOf('data-section-id="contact-band"') < html.indexOf('data-section-id="text_2"'));
 });
 
 test("renderPageHtml renders the portfolio hero with the existing page hero contract", async () => {
@@ -354,6 +358,14 @@ function createRendererDb(options = {}) {
       section("section_contact_hero", "hero", "hero", 10, true, {
         title: "Contatti",
         intro: ["Scrivi per un ritratto.", "Bastano poche informazioni chiare."],
+      }, "page_contatti"),
+      section("section_contact_band", "contact-band", "text", 15, true, {
+        type: "contact-band",
+        channels: [
+          { label: "Email", value: "ciao@example.com", href: "mailto:ciao@example.com" },
+          { label: "Instagram", value: "@lorenzo", href: "https://instagram.com/lorenzo" },
+          { label: "Telefono", value: "Da definire", href: null },
+        ],
       }, "page_contatti"),
       section("section_contact_availability", "text_2", "text", 20, true, {
         title: "Come inviare una richiesta utile",

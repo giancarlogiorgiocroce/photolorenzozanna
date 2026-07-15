@@ -122,6 +122,7 @@ const SECTION_CONTRACTS = new Map([
   ["chi-sono/text_2", "about.manifesto"],
   ["chi-sono/text_3", "about.values_grid"],
   ["contatti/hero", "contact.hero"],
+  ["contatti/contact-band", "contact.band"],
   ["contatti/text_2", "contact.availability"],
   ["portfolio/hero", "portfolio.page_hero"],
   ["portfolio/text_2", "portfolio.series_text"],

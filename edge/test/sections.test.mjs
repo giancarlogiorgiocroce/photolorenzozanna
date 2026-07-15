@@ -504,6 +504,58 @@ test("updateCta changes a contracted link field and records a revision plus chan
   assert.equal(db.changeLog[0].target, "pages/portfolio/sections/cta/primaryCta");
 });
 
+test("updateText changes a contact band channel value through its contract", async () => {
+  const db = createSectionDb();
+
+  const result = await updateText(
+    { DB: db },
+    {
+      site: "ph",
+      page: "contatti",
+      sectionId: "contact-band",
+      path: "channels[0].value",
+      value: "ciao@example.com",
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(result.page, "contatti");
+  assert.equal(result.sectionId, "contact-band");
+  assert.equal(result.path, "channels[0].value");
+  assert.equal(result.value, "ciao@example.com");
+
+  const section = db.pageSections.find((item) => item.section_key === "contact-band");
+  assert.equal(JSON.parse(section.data).channels[0].value, "ciao@example.com");
+  assert.equal(db.sectionRevisions[0].action, "update_text");
+  assert.equal(db.changeLog[0].target, "pages/contatti/sections/contact-band/channels[0].value");
+});
+
+test("updateCta changes a nullable contact band channel href through its contract", async () => {
+  const db = createSectionDb();
+
+  const result = await updateCta(
+    { DB: db },
+    {
+      site: "ph",
+      page: "contatti",
+      sectionId: "contact-band",
+      path: "channels[0].href",
+      href: "mailto:ciao@example.com",
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(result.page, "contatti");
+  assert.equal(result.sectionId, "contact-band");
+  assert.equal(result.path, "channels[0].href");
+  assert.equal(result.value, "mailto:ciao@example.com");
+
+  const section = db.pageSections.find((item) => item.section_key === "contact-band");
+  assert.equal(JSON.parse(section.data).channels[0].href, "mailto:ciao@example.com");
+  assert.equal(db.sectionRevisions[0].action, "update_cta");
+  assert.equal(db.changeLog[0].target, "pages/contatti/sections/contact-band/channels[0].href");
+});
+
 test("updateCta rejects unsafe hrefs and HTML labels", async () => {
   const db = createSectionDb();
 
@@ -667,6 +719,13 @@ function createSectionDb(options = {}) {
         title: "Portfolio",
         status: "published",
       },
+      {
+        id: "page_contatti",
+        site_id: "site_ph",
+        slug: "contatti",
+        title: "Contatti",
+        status: "published",
+      },
     ],
     pageSections: [
       ...(includeFaq ? [{
@@ -696,6 +755,22 @@ function createSectionDb(options = {}) {
         data: JSON.stringify({
           type: "cta",
           text: "Scrivi per informazioni.",
+        }),
+      },
+      {
+        id: "section_contatti_contact_band",
+        page_id: "page_contatti",
+        section_key: "contact-band",
+        type: "text",
+        section_order: 15,
+        enabled: 1,
+        data: JSON.stringify({
+          type: "contact-band",
+          channels: [
+            { label: "Email", value: "Da definire", href: null },
+            { label: "Instagram", value: "Da definire", href: null },
+            { label: "Telefono", value: "Da definire", href: null },
+          ],
         }),
       },
     ],

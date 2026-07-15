@@ -41,6 +41,40 @@ test("resolveSectionContract falls back to generic text for legacy text sections
   assert.equal(contract.editableFields.find((field) => field.path === "subsections[].paragraphs").kind, "rich_text");
 });
 
+test("resolveSectionContract exposes the contact band as an editable contact contract", () => {
+  const contract = resolveSectionContract("contatti", {
+    section_key: "contact-band",
+    type: "text",
+  });
+
+  assert.equal(contract.styleContract, "contact.band");
+  assert.deepEqual(
+    contract.editableFields.map((field) => field.path),
+    ["channels[].label", "channels[].value", "channels[].href"],
+  );
+
+  const channelValue = resolveEditableField(
+    "contatti",
+    {
+      section_key: "contact-band",
+      type: "text",
+    },
+    "channels[0].value",
+  );
+  const channelHref = resolveEditableField(
+    "contatti",
+    {
+      section_key: "contact-band",
+      type: "text",
+    },
+    "channels[1].href",
+  );
+
+  assert.equal(channelValue.kind, "plain_text");
+  assert.equal(channelHref.kind, "link");
+  assert.equal(channelHref.nullable, true);
+});
+
 test("resolveEditableField matches concrete paths against section wildcard contracts", () => {
   const faqQuestion = resolveEditableField(
     "portfolio",

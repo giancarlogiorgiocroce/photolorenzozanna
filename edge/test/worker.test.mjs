@@ -574,6 +574,40 @@ test("POST /mcp tools/call get_page returns sections with style contracts and ed
   assert.equal(faq.editableFields.find((field) => field.path === "items[].answer").kind, "rich_text");
 });
 
+test("POST /mcp tools/call get_page exposes contact-band as a contact contract", async () => {
+  const response = await fetchWorker("/mcp", {
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    privateAuth: true,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "get_page",
+        arguments: {
+          site: "ph",
+          page: "contatti",
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+  const page = payload.result.structuredContent;
+  const contactBand = page.sections.find((section) => section.sectionId === "contact-band");
+
+  assert.equal(response.status, 200);
+  assert.equal(page.page, "contatti");
+  assert.equal(contactBand.styleContract, "contact.band");
+  assert.equal(contactBand.enabled, true);
+  assert.deepEqual(
+    contactBand.editableFields.map((field) => field.path),
+    ["channels[].label", "channels[].value", "channels[].href"],
+  );
+  assert.equal(contactBand.editableFields.find((field) => field.path === "channels[].href").nullable, true);
+  assert.equal(contactBand.data.channels[0].label, "Email");
+});
+
 test("POST /mcp tools/call get_page allows viewer scoped user tokens", async () => {
   const db = createSeededDb({
     authTokens: [
@@ -1375,6 +1409,14 @@ function createSeededDb(options = {}) {
       pageSection("page_contatti", "section_contatti_hero", "hero", "hero", 10, true, {
         title: "Contatti",
         intro: "Scrivi per un ritratto.",
+      }),
+      pageSection("page_contatti", "section_contatti_contact_band", "contact-band", "text", 15, true, {
+        type: "contact-band",
+        channels: [
+          { label: "Email", value: "Da definire", href: null },
+          { label: "Instagram", value: "Da definire", href: null },
+          { label: "Telefono", value: "Da definire", href: null },
+        ],
       }),
     ],
     authTokens: options.authTokens ?? [],

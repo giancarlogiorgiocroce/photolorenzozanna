@@ -83,3 +83,25 @@ test("0007 creates OAuth code and access token tables without storing plaintext 
   assert.doesNotMatch(sql, /\bcode_verifier\b/i);
   assert.doesNotMatch(sql, /\bclient_secret\b/i);
 });
+
+test("0008 seeds the contact band as a real editable page section", async () => {
+  const sql = await readFile(
+    new URL("../migrations/0008_seed_contact_band.sql", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(sql, /INSERT OR IGNORE INTO page_sections/);
+  assert.match(sql, /section_ph_contatti_contact_band/);
+  assert.match(sql, /'contact-band'/);
+  assert.match(sql, /'text'/);
+  assert.match(sql, /\b15\b/);
+  assert.match(sql, /'channels'/);
+  assert.match(sql, /'Email'/);
+  assert.match(sql, /'Instagram'/);
+  assert.match(sql, /'Telefono'/);
+  assert.match(sql, /p\.slug = 'contatti'/);
+  assert.match(sql, /s\.slug = 'ph'/);
+  assert.doesNotMatch(sql, /\bUPDATE\s+content_entries\b/i);
+  assert.doesNotMatch(sql, /\bDELETE\s+FROM\s+content_entries\b/i);
+  assert.doesNotMatch(sql, /\bDROP\s+TABLE\b/i);
+});
