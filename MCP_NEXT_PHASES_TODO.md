@@ -180,7 +180,8 @@ Obiettivo: Lorenzo deve collegarsi da un client AI compatibile senza incollare s
 
 - [x] Decidere auth iniziale:
   - [x] token personale scoped;
-  - [ ] OAuth completo;
+  - [x] OAuth MVP per ChatGPT/client PKCE;
+  - [ ] OAuth completo con client registry/refresh/revoca UI;
   - [ ] magic link + token.
   - Decisione 2026-07-14: partire con bearer token personale scoped e hashato in D1. OAuth resta necessario per ChatGPT App nativa/pubblicabile e per altri client che richiedono discovery/authorization metadata.
 - [x] Definire ruoli:
@@ -226,15 +227,27 @@ Obiettivo: Lorenzo deve collegarsi da un client AI compatibile senza incollare s
   - Implementazione 2026-07-14: `edge/src/oauth-metadata.mjs`, route well-known in `edge/src/index.mjs`, challenge in `edge/src/auth.mjs`, security schemes in `edge/src/mcp-http.mjs`.
   - Test 2026-07-14: `npm test` in `edge/` -> 88 test verdi.
   - Deploy 2026-07-14: Worker versione `68f9b8de-ceb6-4ac9-9183-c87530762580`.
-  - Smoke remoto 2026-07-14: `/.well-known/oauth-protected-resource` -> 200 con resource `https://api.lorenzozanna.com/mcp`; `/.well-known/oauth-authorization-server` -> 200 con issuer `https://api.lorenzozanna.com`, authorization/token endpoint; `/mcp` senza token -> 401 con `WWW-Authenticate: Bearer resource_metadata=...`; `tools/list` autenticato espone `securitySchemes` read/write; `/oauth/authorize` -> 501 `oauth_flow_not_configured`.
-- [ ] Implementare OAuth authorization-code flow completo.
-  - [ ] decidere login Lorenzo: magic link, passkey, passwordless email, o provider esterno;
-  - [ ] tabella OAuth client;
-  - [ ] authorization endpoint con PKCE S256;
-  - [ ] token endpoint;
-  - [ ] access token audience/resource binding;
-  - [ ] refresh/expiry/revoca;
-  - [ ] dynamic client registration o client pre-registrato.
+  - Smoke remoto 2026-07-14: `/.well-known/oauth-protected-resource` -> 200 con resource `https://api.lorenzozanna.com/mcp`; `/.well-known/oauth-authorization-server` -> 200 con issuer `https://api.lorenzozanna.com`, authorization/token endpoint; `/mcp` senza token -> 401 con `WWW-Authenticate: Bearer resource_metadata=...`; `tools/list` autenticato espone `securitySchemes` read/write`. Nota storica: in quel momento `/oauth/authorize` era ancora 501; dal 2026-07-15 risponde con il flusso OAuth MVP.
+- [x] Implementare OAuth authorization-code flow MVP.
+  - [x] login Lorenzo MVP con password via secret `LORENZO_OAUTH_PASSWORD`;
+  - [x] client pre-registrato `chatgpt-lorenzo-dev`;
+  - [x] authorization endpoint con PKCE S256;
+  - [x] token endpoint;
+  - [x] access token audience/resource binding;
+  - [x] expiry access token 1 ora;
+  - [x] storage D1 con hash di authorization code e access token, nessun segreto in chiaro.
+  - Implementazione 2026-07-15: `edge/src/oauth.mjs`, migration `edge/migrations/0007_oauth_mvp.sql`, integrazione OAuth token in `edge/src/auth.mjs`.
+  - Test 2026-07-15: `npm test` in `edge/` -> 92 test verdi; coperti pagina login/consenso, code exchange PKCE, rifiuto verifier errato, MCP con access token OAuth.
+  - Deploy 2026-07-15: Worker versione finale `930004f2-0d0d-4085-a689-8262fc9032f2`; migration remota `0007_oauth_mvp.sql`; secret Worker `LORENZO_OAUTH_PASSWORD`.
+  - Smoke remoto 2026-07-15: authorize -> `302` verso `https://chatgpt.com/connector/oauth/...`; token endpoint -> `200` Bearer 3600s; MCP `get_page` con access token OAuth su `ph/portfolio` -> 5 sezioni; cleanup righe smoke D1 confermato.
+- [ ] Completare OAuth oltre MVP.
+  - [ ] tabella/registry OAuth client;
+  - [ ] magic link, passkey, passwordless email, o provider esterno;
+  - [ ] refresh token;
+  - [ ] endpoint revoca;
+  - [ ] UI admin/revoca sessioni;
+  - [ ] dynamic client registration o CIMD;
+  - [ ] eventuale ID token / OIDC se richiesto dal client.
 
 Nota 2026-07-14: fase 4 chiusa per token personale scoped. La direzione architetturale preferita e provider-neutral: il MCP di Lorenzo deve restare utilizzabile da qualunque client AI compatibile. Per ChatGPT nativo va pianificata una fase OAuth dedicata con protected resource metadata e authorization server metadata, ma come layer standard di compatibilita, non come architettura ChatGPT-specifica.
 Verifica 2026-07-14:
@@ -244,7 +257,7 @@ Verifica 2026-07-14:
 - Smoke tecnico: `AI_API_TOKEN` continua a chiamare `/mcp tools/list`.
 - Smoke token utente D1: token temporaneo `editor` accettato da `/mcp tools/list`, `last_used_at` aggiornato, riga temporanea cancellata; token smoke rimasti: `0`.
 
-Nota 2026-07-14, OAuth discovery: abbiamo aggiunto metadata e challenge necessari per la discovery OAuth, ma non ancora il login/consenso OAuth completo. Gli endpoint `/oauth/*` rispondono esplicitamente `oauth_flow_not_configured` finche non implementiamo authorization-code flow.
+Nota 2026-07-15, OAuth MVP: metadata, login/consenso, PKCE S256, token endpoint e validazione access token MCP sono attivi per `chatgpt-lorenzo-dev`. Resta fuori dall'MVP la parte da prodotto maturo: refresh token, revoca self-service, client registry/DCR/CIMD e login passwordless/passkey.
 
 Prompt per chat:
 

@@ -58,3 +58,28 @@ test("0006 creates scoped revocable auth tokens without storing plaintext tokens
   assert.doesNotMatch(sql, /\btoken_plaintext\b/i);
   assert.doesNotMatch(sql, /\bsecret\b/i);
 });
+
+test("0007 creates OAuth code and access token tables without storing plaintext credentials", async () => {
+  const sql = await readFile(
+    new URL("../migrations/0007_oauth_mvp.sql", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS oauth_authorization_codes/);
+  assert.match(sql, /code_hash TEXT NOT NULL UNIQUE/);
+  assert.match(sql, /code_challenge TEXT NOT NULL/);
+  assert.match(sql, /code_challenge_method TEXT NOT NULL/);
+  assert.match(sql, /redirect_uri TEXT NOT NULL/);
+  assert.match(sql, /resource TEXT NOT NULL/);
+  assert.match(sql, /expires_at TEXT NOT NULL/);
+  assert.match(sql, /used_at TEXT/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS oauth_access_tokens/);
+  assert.match(sql, /token_hash TEXT NOT NULL UNIQUE/);
+  assert.match(sql, /status TEXT NOT NULL DEFAULT 'active'/);
+  assert.match(sql, /CHECK \(status IN \('active', 'revoked'\)\)/);
+  assert.match(sql, /FOREIGN KEY \(site_id\) REFERENCES sites\(id\) ON DELETE CASCADE/);
+  assert.doesNotMatch(sql, /\baccess_token\b/i);
+  assert.doesNotMatch(sql, /\bauthorization_code\b/i);
+  assert.doesNotMatch(sql, /\bcode_verifier\b/i);
+  assert.doesNotMatch(sql, /\bclient_secret\b/i);
+});

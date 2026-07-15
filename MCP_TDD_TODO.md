@@ -175,7 +175,8 @@ Non incollare segreti in chat. Il connector deve gestire credenziali.
 
 - [x] Decidere auth iniziale:
   - [x] token personale scoped;
-  - [ ] OAuth completo;
+  - [x] OAuth MVP per ChatGPT/client PKCE;
+  - [ ] OAuth completo con registry/refresh/revoca UI;
   - [ ] magic link + token.
 - [x] Creare tabella token/utenti se si parte da token personale.
 - [x] Definire ruolo `owner`.
@@ -198,10 +199,13 @@ Non incollare segreti in chat. Il connector deve gestire credenziali.
 - [x] Testare authorization server metadata.
 - [x] Testare `WWW-Authenticate` con `resource_metadata` sui 401 MCP.
 - [x] Testare `securitySchemes` sui tool MCP.
-- [ ] Implementare authorization-code flow OAuth completo.
-- [ ] Testare PKCE S256.
-- [ ] Testare audience/resource binding dei token OAuth.
-- [ ] Testare revoca/expiry token OAuth.
+- [x] Implementare authorization-code flow OAuth MVP.
+  - Implementazione 2026-07-15: client predefinito `chatgpt-lorenzo-dev`, login `lorenzo` con secret `LORENZO_OAUTH_PASSWORD`, code hashato, access token hashato, expiry 1 ora.
+- [x] Testare PKCE S256.
+- [x] Testare audience/resource binding dei token OAuth.
+- [x] Testare expiry token OAuth.
+- [ ] Testare revoca OAuth self-service.
+- [ ] Implementare refresh token OAuth.
 
 ## 8. Tool MCP contenuti
 
@@ -337,6 +341,8 @@ Da fare dopo testi/sezioni, perche aggiunge storage e sicurezza.
 - [ ] Testare remote MCP con MCP Inspector.
 - [ ] Testare con Claude custom connector.
 - [ ] Testare con ChatGPT developer mode/app, se disponibile.
+- [x] Smoke remoto OAuth compatibile ChatGPT senza UI ChatGPT.
+  - Verifica 2026-07-15: authorize -> redirect `https://chatgpt.com/connector/oauth/...`; token endpoint -> Bearer 3600s; MCP `get_page` con access token OAuth -> `ph/portfolio` 5 sezioni; cleanup righe smoke completato.
 - [x] Testare con almeno un client MCP generico che supporta bearer token.
   - Smoke 2026-07-14: `initialize`, `tools/list`, `get_page`, `list_changes`, `disable_section` su fixture temporanea; cleanup D1 completato.
 - [x] Documentare setup per Lorenzo.

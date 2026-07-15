@@ -1,9 +1,9 @@
 import { renderPageHtml } from "./rendering.mjs";
 import { handleMcpHttpRequest } from "./mcp-http.mjs";
+import { handleOAuthRequest } from "./oauth.mjs";
 import {
   getAuthorizationServerMetadata,
   getProtectedResourceMetadata,
-  oauthFlowNotConfigured,
 } from "./oauth-metadata.mjs";
 
 const JSON_HEADERS = {
@@ -74,7 +74,7 @@ async function routeRequest(request, env, url) {
   }
 
   if (segments[0] === "oauth") {
-    return json(oauthFlowNotConfigured(), 501);
+    return handleOAuthRequest(request, env, url, segments);
   }
 
   if (!env.DB) {

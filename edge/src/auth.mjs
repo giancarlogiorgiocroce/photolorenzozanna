@@ -45,12 +45,59 @@ export async function authenticateMcpRequest(request, env) {
     .bind(tokenHash)
     .first();
 
-  if (!token) {
-    return authFailure("Invalid MCP token.", request, {
-      error: "invalid_token",
-    });
-  }
+  if (token) return authenticateUserToken(request, env, token);
 
+  const oauthToken = await env.DB.prepare(
+    `SELECT
+       oauth_access_tokens.id,
+       oauth_access_tokens.site_id,
+       oauth_access_tokens.client_id,
+       oauth_access_tokens.actor,
+       oauth_access_tokens.role,
+       oauth_access_tokens.scopes,
+       oauth_access_tokens.resource,
+       oauth_access_tokens.status,
+       oauth_access_tokens.expires_at,
+       sites.slug AS site_slug
+     FROM oauth_access_tokens
+     JOIN sites ON sites.id = oauth_access_tokens.site_id
+     WHERE oauth_access_tokens.token_hash = ?`,
+  )
+    .bind(tokenHash)
+    .first();
+
+  if (oauthToken) return authenticateOAuthAccessToken(request, env, oauthToken);
+
+  return authFailure("Invalid MCP token.", request, {
+    error: "invalid_token",
+  });
+}
+
+export function hasMcpPermission(auth, permission, site) {
+  if (!auth?.ok) return false;
+  if (site && auth.site !== "*" && auth.site !== site) return false;
+  return auth.scopes.includes(permission);
+}
+
+export function roleScopes(role) {
+  return [...(ROLE_SCOPES[role] ?? [])];
+}
+
+function authenticateTechnicalToken(request, env, bearerToken) {
+  const expectedToken = env?.AI_API_TOKEN;
+  if (!expectedToken || !timingSafeEqual(bearerToken, expectedToken)) return null;
+
+  return {
+    ok: true,
+    source: "technical-token",
+    actor: request.headers.get("x-ai-actor") || "mcp-technical",
+    role: "technical",
+    site: "*",
+    scopes: ["content:read"],
+  };
+}
+
+async function authenticateUserToken(request, env, token) {
   if (token.status === "revoked") {
     return authFailure("MCP token is revoked.", request, {
       error: "invalid_token",
@@ -82,27 +129,43 @@ export async function authenticateMcpRequest(request, env) {
   };
 }
 
-export function hasMcpPermission(auth, permission, site) {
-  if (!auth?.ok) return false;
-  if (site && auth.site !== "*" && auth.site !== site) return false;
-  return auth.scopes.includes(permission);
-}
+async function authenticateOAuthAccessToken(request, env, token) {
+  if (token.status === "revoked") {
+    return authFailure("OAuth access token is revoked.", request, {
+      error: "invalid_token",
+    });
+  }
 
-export function roleScopes(role) {
-  return [...(ROLE_SCOPES[role] ?? [])];
-}
+  if (token.expires_at <= currentSqlTimestamp()) {
+    return authFailure("OAuth access token is expired.", request, {
+      error: "invalid_token",
+    });
+  }
 
-function authenticateTechnicalToken(request, env, bearerToken) {
-  const expectedToken = env?.AI_API_TOKEN;
-  if (!expectedToken || !timingSafeEqual(bearerToken, expectedToken)) return null;
+  const expectedResource = `${new URL(request.url).origin.toLowerCase()}/mcp`;
+  if (token.resource !== expectedResource) {
+    return authFailure("OAuth access token audience does not match this MCP resource.", request, {
+      error: "invalid_token",
+    });
+  }
+
+  await env.DB.prepare(
+    `UPDATE oauth_access_tokens
+     SET last_used_at = datetime('now'), updated_at = datetime('now')
+     WHERE id = ?`,
+  )
+    .bind(token.id)
+    .run();
 
   return {
     ok: true,
-    source: "technical-token",
-    actor: request.headers.get("x-ai-actor") || "mcp-technical",
-    role: "technical",
-    site: "*",
-    scopes: ["content:read"],
+    source: "oauth-access-token",
+    tokenId: token.id,
+    clientId: token.client_id,
+    actor: token.actor,
+    role: token.role,
+    site: token.site_slug,
+    scopes: effectiveScopes(token.role, token.scopes),
   };
 }
 

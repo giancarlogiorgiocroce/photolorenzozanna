@@ -41,14 +41,6 @@ export function getAuthorizationServerMetadata(request) {
   };
 }
 
-export function oauthFlowNotConfigured() {
-  return {
-    error: "oauth_flow_not_configured",
-    message:
-      "OAuth discovery metadata is published, but the authorization-code flow is not configured yet. Use a scoped bearer token for now.",
-  };
-}
-
 export function mcpWwwAuthenticateHeader(request, options = {}) {
   const params = [
     `resource_metadata="${protectedResourceMetadataUrl(request)}"`,

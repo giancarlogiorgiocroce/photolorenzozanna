@@ -40,12 +40,33 @@ Con il token di Lorenzo:
 
 ## Cosa preparare nel client AI
 
-Nel client/connector:
+Per client MCP generici che accettano bearer token:
 
 1. Configurare un remote MCP server con URL `https://api.lorenzozanna.com/mcp`.
 2. Inserire il token dal file `.secrets/lorenzo-mcp-token.txt` nel campo segreto/credenziale.
 3. Impostare il metodo auth come bearer token o header custom `Authorization`.
 4. Fare un primo test con `tools/list` o con una richiesta naturale tipo "Mostrami le sezioni del portfolio".
+
+Per ChatGPT developer-mode app / connector OAuth:
+
+```text
+MCP server URL: https://api.lorenzozanna.com/mcp
+OAuth Client ID: chatgpt-lorenzo-dev
+Client secret: lasciare vuoto / none
+Scopes: content:read content:write
+Authorization URL: https://api.lorenzozanna.com/oauth/authorize
+Token URL: https://api.lorenzozanna.com/oauth/token
+Resource: https://api.lorenzozanna.com/mcp
+```
+
+Se ChatGPT mostra la callback/redirect URI, non va copiata in codice: il server accetta gia `https://chatgpt.com/connector/oauth/...`.
+
+Quando ChatGPT apre la pagina nostra di login:
+
+```text
+username: lorenzo
+password: .secrets/lorenzo-oauth-password.txt
+```
 
 Non serve spiegare a Lorenzo guardrail tecnici, HTML o sicurezza dei campi: il server gia blocca HTML arbitrario e scritture fuori contratto. Lorenzo puo parlare in linguaggio naturale.
 
@@ -67,7 +88,9 @@ Le modifiche passano da strumenti controllati del sito, non da accesso libero al
 
 Questa architettura e provider-neutral: endpoint MCP standard piu credenziale bearer.
 
-Un client che accetta remote MCP con bearer token puo essere configurato subito. Una ChatGPT App nativa/pubblicabile richiedera invece il flusso OAuth completo: la discovery e gia pubblicata, ma login/consenso/token endpoint non sono ancora implementati.
+Un client che accetta remote MCP con bearer token puo usare il token personale. ChatGPT puo usare l'OAuth MVP: authorization-code + PKCE, access token da 1 ora, client predefinito `chatgpt-lorenzo-dev`.
+
+Limiti MVP: non ci sono refresh token, dynamic client registration o pagina admin di revoca. Per revocare access token OAuth si interviene su D1.
 
 `GET https://api.lorenzozanna.com/mcp` da browser puo mostrare `Method Not Allowed`: e normale. `/mcp` e un endpoint POST JSON-RPC per client MCP, non una pagina navigabile.
 

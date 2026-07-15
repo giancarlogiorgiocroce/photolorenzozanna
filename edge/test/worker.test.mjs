@@ -5,6 +5,10 @@ import worker from "../src/index.mjs";
 
 const API_TOKEN = "test-token";
 const USER_TOKEN = "lz_test_user_token";
+const OAUTH_CLIENT_ID = "chatgpt-lorenzo-dev";
+const OAUTH_PASSWORD = "test-lorenzo-password";
+const OAUTH_REDIRECT_URI = "https://chatgpt.com/connector/oauth/test-callback";
+const OAUTH_RESOURCE = "https://api.lorenzozanna.com/mcp";
 
 test("GET /api/health returns the current service status", async () => {
   const response = await fetchWorker("/api/health");
@@ -198,14 +202,135 @@ test("GET /.well-known/oauth-authorization-server publishes OAuth discovery meta
   assert.deepEqual(payload.scopes_supported, ["content:read", "content:write", "content:publish"]);
 });
 
-test("GET /oauth/authorize is explicit while OAuth flow is not configured", async () => {
-  const response = await fetchWorker("/oauth/authorize", {
+test("GET /oauth/authorize renders the Lorenzo login and consent page for a valid ChatGPT client", async () => {
+  const verifier = "test-verifier-for-chatgpt-oauth-flow";
+  const challenge = await pkceChallenge(verifier);
+  const response = await fetchWorker(`/oauth/authorize?${oauthAuthorizeParams(challenge)}`, {
     host: "api.lorenzozanna.com",
   });
-  const payload = await response.json();
+  const html = await response.text();
 
-  assert.equal(response.status, 501);
-  assert.equal(payload.error, "oauth_flow_not_configured");
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/html/);
+  assert.match(html, /Lorenzo Zanna Site Editor/);
+  assert.match(html, /name="client_id" value="chatgpt-lorenzo-dev"/);
+  assert.match(html, /name="code_challenge"/);
+});
+
+test("OAuth authorization-code flow issues a PKCE-bound token accepted by MCP", async () => {
+  const db = createSeededDb();
+  const verifier = "test-verifier-for-chatgpt-oauth-flow";
+  const challenge = await pkceChallenge(verifier);
+
+  const authorizeResponse = await fetchWorker("/oauth/authorize", {
+    db,
+    host: "api.lorenzozanna.com",
+    method: "POST",
+    form: {
+      ...oauthAuthorizeForm(challenge),
+      username: "lorenzo",
+      password: OAUTH_PASSWORD,
+    },
+  });
+  const location = authorizeResponse.headers.get("location");
+  const redirected = new URL(location);
+  const code = redirected.searchParams.get("code");
+
+  assert.equal(authorizeResponse.status, 302);
+  assert.equal(redirected.origin + redirected.pathname, OAUTH_REDIRECT_URI);
+  assert.equal(redirected.searchParams.get("state"), "state-123");
+  assert.match(code, /^oc_/);
+  assert.equal(db.oauthAuthorizationCodes.length, 1);
+  assert.equal(db.oauthAuthorizationCodes[0].code_hash.length, 64);
+  assert.notEqual(db.oauthAuthorizationCodes[0].code_hash, code);
+  assert.equal(db.oauthAuthorizationCodes[0].client_id, OAUTH_CLIENT_ID);
+  assert.equal(db.oauthAuthorizationCodes[0].resource, OAUTH_RESOURCE);
+
+  const tokenResponse = await fetchWorker("/oauth/token", {
+    db,
+    host: "api.lorenzozanna.com",
+    method: "POST",
+    form: {
+      grant_type: "authorization_code",
+      client_id: OAUTH_CLIENT_ID,
+      code,
+      redirect_uri: OAUTH_REDIRECT_URI,
+      code_verifier: verifier,
+      resource: OAUTH_RESOURCE,
+    },
+  });
+  const tokenPayload = await tokenResponse.json();
+
+  assert.equal(tokenResponse.status, 200);
+  assert.equal(tokenPayload.token_type, "Bearer");
+  assert.equal(tokenPayload.expires_in, 3600);
+  assert.equal(tokenPayload.scope, "content:read content:write");
+  assert.match(tokenPayload.access_token, /^oat_/);
+  assert.equal(db.oauthAuthorizationCodes[0].used_at, "2026-07-13 00:00:01");
+  assert.equal(db.oauthAccessTokens.length, 1);
+  assert.equal(db.oauthAccessTokens[0].token_hash.length, 64);
+  assert.notEqual(db.oauthAccessTokens[0].token_hash, tokenPayload.access_token);
+
+  const mcpResponse = await fetchWorker("/mcp", {
+    db,
+    host: "api.lorenzozanna.com",
+    method: "POST",
+    bearerToken: tokenPayload.access_token,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "get_page",
+        arguments: {
+          site: "ph",
+          page: "portfolio",
+        },
+      },
+    },
+  });
+  const mcpPayload = await mcpResponse.json();
+
+  assert.equal(mcpResponse.status, 200);
+  assert.equal(mcpPayload.result.structuredContent.page, "portfolio");
+  assert.equal(db.oauthAccessTokens[0].last_used_at, "2026-07-13 00:00:01");
+});
+
+test("POST /oauth/token rejects an authorization code with a wrong PKCE verifier", async () => {
+  const db = createSeededDb();
+  const verifier = "test-verifier-for-chatgpt-oauth-flow";
+  const challenge = await pkceChallenge(verifier);
+
+  const authorizeResponse = await fetchWorker("/oauth/authorize", {
+    db,
+    host: "api.lorenzozanna.com",
+    method: "POST",
+    form: {
+      ...oauthAuthorizeForm(challenge),
+      username: "lorenzo",
+      password: OAUTH_PASSWORD,
+    },
+  });
+  const code = new URL(authorizeResponse.headers.get("location")).searchParams.get("code");
+
+  const tokenResponse = await fetchWorker("/oauth/token", {
+    db,
+    host: "api.lorenzozanna.com",
+    method: "POST",
+    form: {
+      grant_type: "authorization_code",
+      client_id: OAUTH_CLIENT_ID,
+      code,
+      redirect_uri: OAUTH_REDIRECT_URI,
+      code_verifier: "wrong-verifier",
+      resource: OAUTH_RESOURCE,
+    },
+  });
+  const tokenPayload = await tokenResponse.json();
+
+  assert.equal(tokenResponse.status, 400);
+  assert.equal(tokenPayload.error, "invalid_grant");
+  assert.equal(db.oauthAccessTokens.length, 0);
 });
 
 test("POST /mcp is reachable through the current API worker route", async () => {
@@ -1113,6 +1238,11 @@ async function fetchWorker(pathname, options = {}) {
     headers,
   };
 
+  if (options.form !== undefined) {
+    headers.set("content-type", "application/x-www-form-urlencoded");
+    init.body = new URLSearchParams(options.form).toString();
+  }
+
   if (options.body !== undefined) {
     headers.set("content-type", "application/json");
     init.body = JSON.stringify(options.body);
@@ -1121,6 +1251,7 @@ async function fetchWorker(pathname, options = {}) {
   return worker.fetch(new Request(`https://${host}${pathname}`, init), {
     DB: options.db ?? createSeededDb(),
     AI_API_TOKEN: API_TOKEN,
+    LORENZO_OAUTH_PASSWORD: OAUTH_PASSWORD,
     ROOT_DOMAIN: "lorenzozanna.com",
   });
 }
@@ -1137,6 +1268,35 @@ async function createEditorDb(options = {}) {
       }),
     ],
   });
+}
+
+function oauthAuthorizeParams(challenge) {
+  return new URLSearchParams(oauthAuthorizeForm(challenge)).toString();
+}
+
+function oauthAuthorizeForm(challenge) {
+  return {
+    response_type: "code",
+    client_id: OAUTH_CLIENT_ID,
+    redirect_uri: OAUTH_REDIRECT_URI,
+    scope: "content:read content:write",
+    state: "state-123",
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    resource: OAUTH_RESOURCE,
+  };
+}
+
+async function pkceChallenge(verifier) {
+  const bytes = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return base64Url(new Uint8Array(digest));
+}
+
+function base64Url(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
 function createSeededDb(options = {}) {
@@ -1218,6 +1378,8 @@ function createSeededDb(options = {}) {
       }),
     ],
     authTokens: options.authTokens ?? [],
+    oauthAuthorizationCodes: options.oauthAuthorizationCodes ?? [],
+    oauthAccessTokens: options.oauthAccessTokens ?? [],
   });
 }
 
@@ -1353,6 +1515,8 @@ class FakeD1Database {
     this.pages = [...seed.pages];
     this.pageSections = [...seed.pageSections];
     this.authTokens = [...seed.authTokens];
+    this.oauthAuthorizationCodes = [...seed.oauthAuthorizationCodes];
+    this.oauthAccessTokens = [...seed.oauthAccessTokens];
     this.sectionRevisions = [];
     this.changeLog = [];
   }
@@ -1450,6 +1614,28 @@ class FakeD1Database {
     if (query.includes("FROM auth_tokens") && query.includes("token_hash = ?")) {
       return {
         results: this.authTokens
+          .filter((token) => token.token_hash === params[0])
+          .map((token) => ({
+            ...token,
+            site_slug: this.sites.find((site) => site.id === token.site_id)?.slug ?? token.site_slug,
+          })),
+      };
+    }
+
+    if (query.includes("FROM oauth_authorization_codes") && query.includes("code_hash = ?")) {
+      return {
+        results: this.oauthAuthorizationCodes
+          .filter((code) => code.code_hash === params[0])
+          .map((code) => ({
+            ...code,
+            site_slug: this.sites.find((site) => site.id === code.site_id)?.slug ?? code.site_slug,
+          })),
+      };
+    }
+
+    if (query.includes("FROM oauth_access_tokens") && query.includes("token_hash = ?")) {
+      return {
+        results: this.oauthAccessTokens
           .filter((token) => token.token_hash === params[0])
           .map((token) => ({
             ...token,
@@ -1564,6 +1750,73 @@ class FakeD1Database {
     if (query.includes("UPDATE auth_tokens")) {
       const [id] = params;
       const token = this.authTokens.find((item) => item.id === id);
+      if (token) token.last_used_at = "2026-07-13 00:00:01";
+      return { success: true };
+    }
+
+    if (query.includes("INSERT INTO oauth_authorization_codes")) {
+      const [
+        id,
+        codeHash,
+        clientId,
+        siteId,
+        actor,
+        role,
+        scopes,
+        redirectUri,
+        codeChallenge,
+        codeChallengeMethod,
+        resource,
+      ] = params;
+      this.oauthAuthorizationCodes.push({
+        id,
+        code_hash: codeHash,
+        client_id: clientId,
+        site_id: siteId,
+        actor,
+        role,
+        scopes,
+        redirect_uri: redirectUri,
+        code_challenge: codeChallenge,
+        code_challenge_method: codeChallengeMethod,
+        resource,
+        expires_at: "2099-01-01 00:10:00",
+        used_at: null,
+        created_at: "2026-07-13 00:00:01",
+      });
+      return { success: true };
+    }
+
+    if (query.includes("UPDATE oauth_authorization_codes")) {
+      const [id] = params;
+      const code = this.oauthAuthorizationCodes.find((item) => item.id === id);
+      if (code) code.used_at = "2026-07-13 00:00:01";
+      return { success: true };
+    }
+
+    if (query.includes("INSERT INTO oauth_access_tokens")) {
+      const [id, tokenHash, clientId, siteId, actor, role, scopes, resource] = params;
+      this.oauthAccessTokens.push({
+        id,
+        token_hash: tokenHash,
+        client_id: clientId,
+        site_id: siteId,
+        actor,
+        role,
+        scopes,
+        resource,
+        status: "active",
+        expires_at: "2099-01-01 01:00:00",
+        last_used_at: null,
+        revoked_at: null,
+        created_at: "2026-07-13 00:00:01",
+      });
+      return { success: true };
+    }
+
+    if (query.includes("UPDATE oauth_access_tokens")) {
+      const [id] = params;
+      const token = this.oauthAccessTokens.find((item) => item.id === id);
       if (token) token.last_used_at = "2026-07-13 00:00:01";
       return { success: true };
     }

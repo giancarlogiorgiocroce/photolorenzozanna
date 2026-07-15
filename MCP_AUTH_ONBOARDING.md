@@ -4,7 +4,10 @@ Data: 2026-07-15
 
 ## Decisione fase 4
 
-La prima auth reale per Lorenzo usa token personali scoped, non OAuth completo.
+L'auth operativa per Lorenzo ora ha due canali compatibili:
+
+- token personali scoped, utili per client MCP generici o connector che accettano bearer token diretto;
+- OAuth 2.1 MVP, utile per ChatGPT e client che richiedono authorization-code + PKCE.
 
 Il token personale viene mostrato una sola volta a Lorenzo e salvato dal client/connector come credenziale. Nel database D1 viene salvato solo `token_hash`, mai il token in chiaro.
 
@@ -13,6 +16,18 @@ Il token personale viene mostrato una sola volta a Lorenzo e salvato dal client/
 Stato 2026-07-15: sul canale MCP, `AI_API_TOKEN` e limitato a lettura/smoke (`content:read`). Non puo chiamare tool di scrittura contenuti come `disable_section`, `update_text`, `add_faq_section` o `rollback_change`. Le modifiche editoriali via MCP devono passare da un token utente scoped di Lorenzo o da un token utente esplicitamente autorizzato.
 
 Stato operativo 2026-07-15: il token personale di Lorenzo e stato preparato e registrato su D1 come `token_lorenzo_editor_20260715`, actor `lorenzo`, ruolo `editor`, scope `content:read` e `content:write`. Il token in chiaro e solo nel file locale ignorato `.secrets/lorenzo-mcp-token.txt`; in D1 c'e solo l'hash.
+
+Stato OAuth MVP 2026-07-15:
+
+- client predefinito: `chatgpt-lorenzo-dev`;
+- username Lorenzo: `lorenzo`;
+- password locale: `.secrets/lorenzo-oauth-password.txt`;
+- authorization endpoint: `https://api.lorenzozanna.com/oauth/authorize`;
+- token endpoint: `https://api.lorenzozanna.com/oauth/token`;
+- redirect consentiti: `https://chatgpt.com/connector/oauth/...` e legacy `https://chatgpt.com/connector_platform_oauth_redirect`;
+- PKCE obbligatorio: `S256`;
+- access token: hashato in D1, scadenza 1 ora, audience/resource `https://api.lorenzozanna.com/mcp`;
+- niente refresh token in MVP.
 
 Smoke remoto 2026-07-15:
 
@@ -48,9 +63,7 @@ https://api.lorenzozanna.com/.well-known/oauth-protected-resource
 https://api.lorenzozanna.com/.well-known/oauth-authorization-server
 ```
 
-Stato 2026-07-14: la discovery OAuth e pubblicata per compatibilita MCP/ChatGPT futura. I 401 dell'endpoint MCP includono `WWW-Authenticate` con `resource_metadata`, e i tool MCP dichiarano `securitySchemes` OAuth2 con scope `content:read` o `content:write`.
-
-Il flusso OAuth completo non e ancora attivo: gli endpoint `/oauth/*` rispondono `oauth_flow_not_configured`. Per collegamenti operativi oggi, usare ancora il token personale scoped.
+Stato 2026-07-15: la discovery OAuth e pubblicata e il flusso authorization-code + PKCE e attivo per il client predefinito `chatgpt-lorenzo-dev`. I 401 dell'endpoint MCP includono `WWW-Authenticate` con `resource_metadata`, e i tool MCP dichiarano `securitySchemes` OAuth2 con scope `content:read` o `content:write`.
 
 ## Ruoli
 
@@ -153,11 +166,30 @@ Quando Claude consente un custom connector o remote MCP con token bearer:
 
 Per client OpenAI/API che permettono di passare un bearer token al server MCP, usa lo stesso endpoint e lo stesso header `Authorization`.
 
-Per una ChatGPT App/connector nativo, la fase token personale non basta come soluzione definitiva pubblicabile: la documentazione OpenAI Apps SDK richiede un flusso OAuth per l'autenticazione utente, con protected resource metadata, authorization server metadata e redirect OAuth.
+Per una ChatGPT App/connector nativo, usare OAuth.
 
-Questo non significa rendere l'architettura ChatGPT-specifica. Significa aggiungere OAuth standard come layer di compatibilita per i client che lo richiedono.
+Configurazione MVP:
 
-Stato attuale: metadata e challenge sono pronti; login/consenso OAuth, PKCE, token endpoint e revoca/expiry OAuth sono il prossimo slice.
+```text
+MCP server URL: https://api.lorenzozanna.com/mcp
+OAuth Client ID: chatgpt-lorenzo-dev
+Client secret: vuoto / none
+Scopes: content:read content:write
+Authorization URL: https://api.lorenzozanna.com/oauth/authorize
+Token URL: https://api.lorenzozanna.com/oauth/token
+Resource: https://api.lorenzozanna.com/mcp
+```
+
+Quando ChatGPT apre la pagina di autorizzazione, Lorenzo deve usare:
+
+```text
+username: lorenzo
+password: valore in .secrets/lorenzo-oauth-password.txt
+```
+
+Questo non rende l'architettura ChatGPT-specifica. OAuth e un layer standard di compatibilita sopra il server MCP provider-neutral.
+
+Limiti MVP: client predefinito hardcoded, login password semplice, niente refresh token, niente dynamic client registration, niente UI di revoca. Gli access token scadono dopo 1 ora e sono validi solo per il resource MCP.
 
 ## Client MCP generico
 
