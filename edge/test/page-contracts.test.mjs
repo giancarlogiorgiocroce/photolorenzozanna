@@ -50,7 +50,7 @@ test("resolveSectionContract exposes the contact band as an editable contact con
   assert.equal(contract.styleContract, "contact.band");
   assert.deepEqual(
     contract.editableFields.map((field) => field.path),
-    ["channels[].label", "channels[].value", "channels[].href"],
+    ["channels[].label", "channels[].value", "channels[].href", "channels[].enabled"],
   );
 
   const channelValue = resolveEditableField(
@@ -73,6 +73,17 @@ test("resolveSectionContract exposes the contact band as an editable contact con
   assert.equal(channelValue.kind, "plain_text");
   assert.equal(channelHref.kind, "link");
   assert.equal(channelHref.nullable, true);
+  assert.equal(
+    resolveEditableField(
+      "contatti",
+      {
+        section_key: "contact-band",
+        type: "text",
+      },
+      "channels[2].enabled",
+    ).kind,
+    "boolean",
+  );
 });
 
 test("resolveEditableField matches concrete paths against section wildcard contracts", () => {

@@ -1,4 +1,11 @@
-import { disableSection, enableSection, updateCta, updateRichText, updateText } from "./sections.mjs";
+import {
+  disableSection,
+  enableSection,
+  updateContactChannel,
+  updateCta,
+  updateRichText,
+  updateText,
+} from "./sections.mjs";
 import {
   addFaqItem,
   addFaqSection,
@@ -232,6 +239,30 @@ const TOOLS = [
         href: { type: "string", description: "Safe href: internal path, allowlisted html page, https, mailto, or tel." },
       },
       required: ["site", "page", "sectionId", "path", "href"],
+    },
+  },
+  {
+    name: "update_contact_channel",
+    title: "Update Contact Channel",
+    description:
+      "Edit or hide one contact channel in the contact-band section by semantic name, for example email, instagram, or telefono.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, usually contatti." },
+        sectionId: { type: "string", description: "Optional section identifier. Defaults to contact-band." },
+        channel: { type: "string", description: "Contact channel name, for example email, instagram, or telefono." },
+        label: { type: "string", description: "Optional visible label." },
+        value: { type: "string", description: "Optional visible value, for example zannafotografia@icloud.com." },
+        href: {
+          type: ["string", "null"],
+          description: "Optional safe href. Use null to remove the link. Email values get mailto automatically.",
+        },
+        enabled: { type: "boolean", description: "Set false to hide this single contact channel." },
+      },
+      required: ["site", "page", "channel"],
     },
   },
   {
@@ -575,6 +606,30 @@ async function handleMcpMethod(method, params, env, auth) {
       return toolResult(result);
     }
 
+    if (name === "update_contact_channel") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const input = {
+        site: args.site,
+        page: args.page,
+        channel: args.channel,
+        actor: auth.actor,
+      };
+      copyOptionalArg(input, args, "sectionId");
+      copyOptionalArg(input, args, "label");
+      copyOptionalArg(input, args, "value");
+      copyOptionalArg(input, args, "href");
+      copyOptionalArg(input, args, "enabled");
+
+      const result = await updateContactChannel(env, input);
+      return toolResult(result);
+    }
+
     if (name === "update_rich_text") {
       if (!hasMcpPermission(auth, "content:write", args.site)) {
         throw mcpError(-32003, "Permission denied for content:write.", {
@@ -630,6 +685,12 @@ function toolResult(result) {
     structuredContent: result,
     isError: false,
   };
+}
+
+function copyOptionalArg(target, source, key) {
+  if (Object.prototype.hasOwnProperty.call(Object(source), key)) {
+    target[key] = source[key];
+  }
 }
 
 function rpcError(id, code, message, data) {

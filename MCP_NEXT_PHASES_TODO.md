@@ -153,6 +153,8 @@ Obiettivo: il dominio pubblico deve leggere D1/R2 a runtime, non servire HTML st
   - Deploy parita 2026-07-14: Worker versione `591ebbb6-aaef-4986-9b5f-570e097b6424`; Pages deploy `https://a037123a.lorenzozanna-ph.pages.dev` per `assets/css/base.css`; smoke live su `/portfolio`, `/` e `/assets/css/base.css` passato.
   - Fix contratto `contact-band` 2026-07-15: il blocco contatti deve essere una `page_sections` reale (`sectionId=contact-band`, `styleContract=contact.band`), non markup fisso dentro `contact.hero`. Aggiunta migration `0008_seed_contact_band.sql`, renderer da `section.data.channels`, test su `get_page`, `update_text`, `update_cta` e HTML dinamico.
   - Deploy `contact-band` 2026-07-15: D1 migration `0008_seed_contact_band.sql` applicata, Worker versione `53f6867c-df53-4e3c-ad6c-58f97cbbf2c0`, Pages deploy `https://4118842f.lorenzozanna-ph.pages.dev`; smoke live `/contact`, CSS Pages, D1 remoto e MCP `get_page` su `contatti/contact-band` passati.
+  - UX MCP `contact-band` 2026-07-15: aggiunto `channels[].enabled` e tool `update_contact_channel`, cosi un client AI puo dire/modificare "email", "Instagram", "telefono" e nascondere singole voci senza conoscere `channels[0]`.
+  - Deploy UX MCP `contact-band` 2026-07-15: Worker versione `018d2c32-c669-4b94-b4ef-31ee446b05ac`; suite `edge` 100/100; smoke MCP `tools/list` espone `update_contact_channel`. Modifica live applicata via MCP: email `zannafotografia@icloud.com`, Instagram/Telefono `enabled:false`; `/contact` renderizza solo l'email.
 - [x] Decidere dove servire asset statici:
   - [x] Pages per asset;
   - [ ] Worker static assets;
@@ -274,6 +276,8 @@ Obiettivo: ampliare i tool oltre `disable_section`.
 Nota 2026-07-14: i tool contenutistici devono usare i contratti in `MCP_SECTION_CONTRACTS.md`. Il tipo logico (`hero`, `text`, `faq`, `cta`, `gallery`) non basta: ogni sezione deve esporre anche `styleContract`, campi editabili, primitive dati e vincoli di rendering.
 
 Nota 2026-07-15: ogni blocco visibile negli HTML statici/reference deve essere o una sezione D1 autonoma con contratto esplicito, oppure un gruppo dichiarato dentro un contratto piu grande. Non lasciare blocchi speciali renderizzati come markup fisso non esposto da `get_page`; il caso `contact-band` e stato corretto con `contatti/contact-band -> contact.band`.
+
+Nota 2026-07-15 UX tool: quando una sezione contiene item con significato umano stabile, non basta esporre solo path tipo `channels[0].value`. Aggiungere anche un tool semantico itemizzato. Caso corretto: `update_contact_channel` per `email`, `instagram`, `telefono`, con `enabled` per hide/show.
 
 - [x] `get_page`
   - [x] leggere pagina;

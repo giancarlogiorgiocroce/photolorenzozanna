@@ -96,9 +96,9 @@ const PAGE_DEFAULTS = {
     },
     contactBand: {
       channels: [
-        { label: "Email", value: "Da definire", href: null },
-        { label: "Instagram", value: "Da definire", href: null },
-        { label: "Telefono", value: "Da definire", href: null },
+        { label: "Email", value: "Da definire", href: null, enabled: true },
+        { label: "Instagram", value: "Da definire", href: null, enabled: true },
+        { label: "Telefono", value: "Da definire", href: null, enabled: true },
       ],
     },
     availability: {
@@ -375,8 +375,9 @@ function normalizeContactChannels(value) {
       label: String(channel?.label ?? "").trim(),
       value: String(channel?.value ?? "").trim(),
       href: channel?.href ? String(channel.href).trim() : null,
+      enabled: channel?.enabled !== false,
     }))
-    .filter((channel) => channel.label || channel.value);
+    .filter((channel) => channel.enabled && (channel.label || channel.value));
 }
 
 function renderContactAvailability(section) {

@@ -474,6 +474,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   const toolNames = payload.result.tools.map((tool) => tool.name);
   const getPage = payload.result.tools.find((tool) => tool.name === "get_page");
   const updateText = payload.result.tools.find((tool) => tool.name === "update_text");
+  const updateContactChannel = payload.result.tools.find((tool) => tool.name === "update_contact_channel");
 
   assert.equal(response.status, 200);
   assert.equal(payload.jsonrpc, "2.0");
@@ -491,11 +492,13 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
     "reorder_faq_items",
     "update_text",
     "update_cta",
+    "update_contact_channel",
     "update_rich_text",
     "rollback_change",
   ]);
   assert.deepEqual(getPage.securitySchemes, [{ type: "oauth2", scopes: ["content:read"] }]);
   assert.deepEqual(updateText.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
+  assert.deepEqual(updateContactChannel.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
 });
 
 test("POST /mcp tools/call list_section_presets allows viewer scoped user tokens", async () => {
@@ -602,10 +605,44 @@ test("POST /mcp tools/call get_page exposes contact-band as a contact contract",
   assert.equal(contactBand.enabled, true);
   assert.deepEqual(
     contactBand.editableFields.map((field) => field.path),
-    ["channels[].label", "channels[].value", "channels[].href"],
+    ["channels[].label", "channels[].value", "channels[].href", "channels[].enabled"],
   );
   assert.equal(contactBand.editableFields.find((field) => field.path === "channels[].href").nullable, true);
   assert.equal(contactBand.data.channels[0].label, "Email");
+});
+
+test("POST /mcp tools/call update_contact_channel edits and hides contact channels", async () => {
+  const db = await createEditorDb();
+  const response = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "update_contact_channel",
+        arguments: {
+          site: "ph",
+          page: "contatti",
+          channel: "telefono",
+          enabled: false,
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+  const contactBand = db.pageSections.find((section) => section.section_key === "contact-band");
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.result.structuredContent.sectionId, "contact-band");
+  assert.equal(payload.result.structuredContent.channel.label, "Telefono");
+  assert.equal(payload.result.structuredContent.channel.enabled, false);
+  assert.equal(JSON.parse(contactBand.data).channels[2].enabled, false);
+  assert.equal(db.sectionRevisions[0].action, "update_contact_channel");
+  assert.equal(db.changeLog[0].target, "pages/contatti/sections/contact-band/channels[2]");
 });
 
 test("POST /mcp tools/call get_page allows viewer scoped user tokens", async () => {

@@ -481,7 +481,8 @@ Campi:
     {
       "label": "Email",
       "value": "Da definire",
-      "href": null
+      "href": null,
+      "enabled": true
     }
   ]
 }
@@ -492,12 +493,13 @@ Editable:
 - `channels[].label`: `plain_text`, max 40;
 - `channels[].value`: `plain_text`, max 120;
 - `channels[].href`: `link.href`, nullable.
+- `channels[].enabled`: `boolean`, per mostrare/nascondere la singola voce.
 
 Tool previsti:
 
 - `update_text` per `channels[0].label` e `channels[0].value`;
 - `update_cta` per `channels[0].href`, con `href` nullable;
-- futuro eventuale `update_contact_channel` solo come scorciatoia itemizzata, non come requisito architetturale.
+- `update_contact_channel` per modificare/nascondere una voce per nome semantico (`email`, `instagram`, `telefono`), senza chiedere alla AI di ragionare sugli indici.
 
 ### `contact.availability`
 
@@ -832,4 +834,5 @@ Nota blocchi contact 2026-07-15:
 
 - `contact-band` non deve essere renderizzato come HTML nascosto dentro `contact.hero`;
 - deve esistere come riga `page_sections` autonoma, con `styleContract: "contact.band"` in `get_page`;
-- il renderer deve leggere `section.data.channels`, cosi `update_text` e `update_cta` modificano davvero il blocco live.
+- il renderer deve leggere `section.data.channels`, cosi `update_text`, `update_cta` e `update_contact_channel` modificano davvero il blocco live;
+- per UX AI, preferire `update_contact_channel` quando la richiesta naturale parla di "email", "Instagram", "telefono" o "nascondi".

@@ -1,4 +1,4 @@
-import { resolveEditableField } from "./page-contracts.mjs";
+import { resolveEditableField, resolveSectionContract } from "./page-contracts.mjs";
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
 const SECTION_KEY_PATTERN = /^[a-z0-9_-]{1,80}$/;
@@ -354,6 +354,73 @@ export async function updateCta(env, input) {
   };
 }
 
+export async function updateContactChannel(env, input) {
+  const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
+  const pageSlug = requiredPattern(input?.page, "page", SLUG_PATTERN);
+  const sectionKey = requiredPattern(input?.sectionId ?? "contact-band", "sectionId", SECTION_KEY_PATTERN);
+  const channelName = requiredString(input?.channel);
+  const actor = requiredString(input?.actor || "mcp");
+
+  const { site, page, section } = await loadSection(env, siteSlug, pageSlug, sectionKey);
+  const contract = resolveSectionContract(page.slug, section);
+  if (contract.styleContract !== "contact.band") {
+    throw new Error(`Section is not a contact band: ${page.slug}/${section.section_key}`);
+  }
+
+  const before = serializeSection(section);
+  const data = cloneJsonObject(before.data);
+  const channels = normalizeContactChannelList(data.channels);
+  const channelIndex = findContactChannelIndex(channels, channelName);
+  if (channelIndex < 0) {
+    throw new Error(`Contact channel not found: ${channelName}`);
+  }
+
+  const hasLabel = hasOwn(input, "label");
+  const hasValue = hasOwn(input, "value");
+  const hasHref = hasOwn(input, "href");
+  const hasEnabled = hasOwn(input, "enabled");
+  if (!hasLabel && !hasValue && !hasHref && !hasEnabled) {
+    throw new Error("Missing contact channel update.");
+  }
+
+  const channel = { ...channels[channelIndex] };
+
+  if (hasLabel) channel.label = normalizeTextValue(input.label, { maxLength: 40 });
+  if (hasValue) {
+    channel.value = normalizeTextValue(input.value, { maxLength: 120 });
+    if (!hasHref && isEmailChannel(channel, channelName) && looksLikeEmail(channel.value)) {
+      channel.href = `mailto:${channel.value}`;
+    }
+  }
+  if (hasHref) channel.href = normalizeHref(input.href, { nullable: true });
+  if (hasEnabled) channel.enabled = normalizeBooleanValue(input.enabled, "enabled");
+
+  channels[channelIndex] = channel;
+  data.channels = channels;
+
+  const revisionId = await persistSectionDataChange(env, {
+    site,
+    page,
+    section,
+    before,
+    data,
+    actor,
+    action: "update_contact_channel",
+    targetPath: `channels[${channelIndex}]`,
+  });
+
+  return {
+    site: site.slug,
+    page: page.slug,
+    sectionId: section.section_key,
+    channelIndex,
+    channel,
+    revisionId,
+    published: true,
+    previewUrl: page.slug === "home" ? "/" : `/${page.slug}`,
+  };
+}
+
 export async function updateRichText(env, input) {
   const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
   const pageSlug = requiredPattern(input?.page, "page", SLUG_PATTERN);
@@ -646,6 +713,60 @@ function normalizeHref(value, options = {}) {
   if (/^(index|portfolio|about|contact)\.html$/.test(href)) return href;
 
   throw new Error("Invalid href.");
+}
+
+function normalizeContactChannelList(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error("Invalid contact channels.");
+  }
+
+  return value.map((channel) => ({
+    label: String(channel?.label ?? "").trim(),
+    value: String(channel?.value ?? "").trim(),
+    href: channel?.href ? String(channel.href).trim() : null,
+    enabled: channel?.enabled !== false,
+  }));
+}
+
+function findContactChannelIndex(channels, channelName) {
+  const wanted = normalizeIdentifier(channelName);
+  return channels.findIndex((channel) => {
+    const label = normalizeIdentifier(channel.label);
+    if (label === wanted) return true;
+    if (wanted === "email") return label === "mail" || label === "e-mail";
+    if (wanted === "telefono") return label === "tel" || label === "phone";
+    if (wanted === "instagram") return label === "ig";
+    return false;
+  });
+}
+
+function isEmailChannel(channel, channelName) {
+  const label = normalizeIdentifier(channel?.label);
+  const wanted = normalizeIdentifier(channelName);
+  return wanted === "email" || label === "email" || label === "mail" || label === "e-mail";
+}
+
+function normalizeIdentifier(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function looksLikeEmail(value) {
+  return /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(String(value ?? "").trim());
+}
+
+function normalizeBooleanValue(value, name) {
+  if (typeof value !== "boolean") {
+    throw new Error(`Invalid ${name}.`);
+  }
+  return value;
+}
+
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(Object(object), key);
 }
 
 function cloneJsonObject(value) {

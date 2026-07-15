@@ -9,7 +9,14 @@ import {
   reorderFaqItems,
   updateFaqItem,
 } from "../src/faq-sections.mjs";
-import { disableSection, enableSection, updateCta, updateRichText, updateText } from "../src/sections.mjs";
+import {
+  disableSection,
+  enableSection,
+  updateContactChannel,
+  updateCta,
+  updateRichText,
+  updateText,
+} from "../src/sections.mjs";
 
 test("disableSection hides a section, keeps its data, and records a revision plus change log", async () => {
   const db = createSectionDb();
@@ -554,6 +561,89 @@ test("updateCta changes a nullable contact band channel href through its contrac
   assert.equal(JSON.parse(section.data).channels[0].href, "mailto:ciao@example.com");
   assert.equal(db.sectionRevisions[0].action, "update_cta");
   assert.equal(db.changeLog[0].target, "pages/contatti/sections/contact-band/channels[0].href");
+});
+
+test("updateContactChannel edits contact channels by semantic name and can hide them", async () => {
+  const db = createSectionDb();
+
+  const email = await updateContactChannel(
+    { DB: db },
+    {
+      site: "ph",
+      page: "contatti",
+      channel: "email",
+      value: "zannafotografia@icloud.com",
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(email.sectionId, "contact-band");
+  assert.equal(email.channelIndex, 0);
+  assert.deepEqual(email.channel, {
+    label: "Email",
+    value: "zannafotografia@icloud.com",
+    href: "mailto:zannafotografia@icloud.com",
+    enabled: true,
+  });
+
+  const instagram = await updateContactChannel(
+    { DB: db },
+    {
+      site: "ph",
+      page: "contatti",
+      channel: "instagram",
+      enabled: false,
+      actor: "tdd-suite",
+    },
+  );
+
+  const data = JSON.parse(db.pageSections.find((item) => item.section_key === "contact-band").data);
+  assert.equal(instagram.channelIndex, 1);
+  assert.equal(data.channels[0].value, "zannafotografia@icloud.com");
+  assert.equal(data.channels[0].href, "mailto:zannafotografia@icloud.com");
+  assert.equal(data.channels[1].enabled, false);
+  assert.deepEqual(db.sectionRevisions.map((entry) => entry.action), ["update_contact_channel", "update_contact_channel"]);
+  assert.deepEqual(
+    db.changeLog.map((entry) => entry.target),
+    [
+      "pages/contatti/sections/contact-band/channels[0]",
+      "pages/contatti/sections/contact-band/channels[1]",
+    ],
+  );
+});
+
+test("updateContactChannel rejects unknown channels and unsafe hrefs", async () => {
+  const db = createSectionDb();
+
+  await assert.rejects(
+    () =>
+      updateContactChannel(
+        { DB: db },
+        {
+          site: "ph",
+          page: "contatti",
+          channel: "fax",
+          enabled: false,
+          actor: "tdd-suite",
+        },
+      ),
+    /Contact channel not found/,
+  );
+
+  await assert.rejects(
+    () =>
+      updateContactChannel(
+        { DB: db },
+        {
+          site: "ph",
+          page: "contatti",
+          channel: "email",
+          href: "javascript:alert(1)",
+          actor: "tdd-suite",
+        },
+      ),
+    /Invalid href/,
+  );
 });
 
 test("updateCta rejects unsafe hrefs and HTML labels", async () => {

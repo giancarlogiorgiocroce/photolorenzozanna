@@ -29,6 +29,7 @@ const FIELD = {
   contactChannelLabel: { path: "channels[].label", kind: "plain_text", maxLength: 40 },
   contactChannelValue: { path: "channels[].value", kind: "plain_text", maxLength: 120 },
   contactChannelHref: { path: "channels[].href", kind: "link", nullable: true },
+  contactChannelEnabled: { path: "channels[].enabled", kind: "boolean", tool: "update_contact_channel" },
   listItems: { path: "items[]", kind: "plain_text", maxLength: 180 },
 };
 
@@ -82,7 +83,12 @@ const CONTRACTS = {
   },
   "contact.band": {
     styleContract: "contact.band",
-    editableFields: [FIELD.contactChannelLabel, FIELD.contactChannelValue, FIELD.contactChannelHref],
+    editableFields: [
+      FIELD.contactChannelLabel,
+      FIELD.contactChannelValue,
+      FIELD.contactChannelHref,
+      FIELD.contactChannelEnabled,
+    ],
   },
   "contact.availability": {
     styleContract: "contact.availability",
