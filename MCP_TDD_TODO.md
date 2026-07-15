@@ -186,6 +186,7 @@ Non incollare segreti in chat. Il connector deve gestire credenziali.
 - [x] Testare token revocato.
 - [x] Testare permesso lettura.
 - [x] Testare permesso scrittura.
+- [x] Testare che `AI_API_TOKEN` non possa scrivere contenuti via MCP.
 - [ ] Testare permesso pubblicazione.
 - [x] Loggare `actor` reale, non solo `mcp-lorenzozanna`.
 - [x] Preparare istruzioni di onboarding Lorenzo.

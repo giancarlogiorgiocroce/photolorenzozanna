@@ -199,6 +199,11 @@ Obiettivo: Lorenzo deve collegarsi da un client AI compatibile senza incollare s
   - Test 2026-07-14: `disable_section` via token utente scrive `lorenzo` in `section_revisions` e `change_log`.
 - [x] Separare token tecnico `AI_API_TOKEN` da token utente Lorenzo.
   - Implementazione 2026-07-14: `AI_API_TOKEN` resta percorso tecnico `technical-token`; i token utente passano da `auth_tokens`.
+- [x] Bloccare scritture MCP contenuti con token tecnico.
+  - Implementazione 2026-07-15: `technical-token` mantiene solo `content:read`; `content:write` richiede token utente scoped. Gli amministratori restano tali via Cloudflare/D1/deploy/API privata, ma i connector AI non usano il token tecnico per modifiche editoriali.
+  - Test 2026-07-15: `npm test` in `edge/` -> 89 test verdi; coperto `POST /mcp tools/call rejects technical token for content write tools`.
+  - Deploy 2026-07-15: Worker versione `4f6a37af-16f7-439c-9830-aff7cfa9465d`.
+  - Smoke remoto sicuro 2026-07-15: `AI_API_TOKEN` legge `get_page` su `ph/portfolio` -> 5 sezioni; `tools/call disable_section` con token tecnico su pagina inesistente -> JSON-RPC `-32003 Permission denied for content:write` prima di qualunque mutazione. Smoke write con token utente su D1 live non eseguito per evitare fixture/mutazioni produzione senza autorizzazione esplicita; coperto localmente dai test.
 - [x] Definire istruzioni onboarding per:
   - [x] Claude custom connector;
   - [x] ChatGPT app/connector;

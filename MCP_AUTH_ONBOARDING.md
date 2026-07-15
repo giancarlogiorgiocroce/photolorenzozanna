@@ -10,6 +10,8 @@ Il token personale viene mostrato una sola volta a Lorenzo e salvato dal client/
 
 `AI_API_TOKEN` resta un token tecnico per smoke test, API privata e fallback operativo. Non va dato a Lorenzo e non va configurato nei connector utente.
 
+Stato 2026-07-15: sul canale MCP, `AI_API_TOKEN` e limitato a lettura/smoke (`content:read`). Non puo chiamare tool di scrittura contenuti come `disable_section`, `update_text`, `add_faq_section` o `rollback_change`. Le modifiche editoriali via MCP devono passare da un token utente scoped di Lorenzo o da un token utente esplicitamente autorizzato.
+
 ## Architettura preferita
 
 L'auth deve restare provider-neutral.
@@ -65,6 +67,17 @@ viewer
 ```
 
 Per Lorenzo, il ruolo iniziale consigliato e `owner` se il token resta personale e custodito nel connector. Per prove con AI o collaboratori, usare `editor` o `viewer`.
+
+Regola operativa:
+
+```text
+MCP contenuti:
+  legge/smoke tecnico -> AI_API_TOKEN
+  modifica contenuti -> token utente Lorenzo/editor/owner
+
+Cloudflare, deploy, D1, API privata:
+  restano canali amministrativi nostri, separati dai connector AI di Lorenzo.
+```
 
 ## Generare un token
 
@@ -160,6 +173,7 @@ Il token deve vivere nel secret store del client, non nel testo della conversazi
 - Non mandare screenshot del token.
 - Non condividere il token personale con collaboratori.
 - Non usare `AI_API_TOKEN` nei connector.
+- Non chiedere all'AI di usare token tecnici o segreti amministrativi per modificare contenuti.
 - Se sospetta una compromissione, chiedere revoca e rigenerazione.
 
 ## Fonti operative

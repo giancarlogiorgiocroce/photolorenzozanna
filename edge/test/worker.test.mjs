@@ -593,8 +593,39 @@ test("POST /mcp tools/call rejects viewer tokens for write tools", async () => {
   assert.equal(db.changeLog.length, 0);
 });
 
-test("POST /mcp tools/call disable_section updates D1 and the dynamic portfolio HTML", async () => {
+test("POST /mcp tools/call rejects technical token for content write tools", async () => {
   const db = createSeededDb();
+  const response = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    privateAuth: true,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "disable_section",
+        arguments: {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "faq",
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+  const faq = db.pageSections.find((section) => section.section_key === "faq");
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.error.code, -32003);
+  assert.equal(payload.error.message, "Permission denied for content:write.");
+  assert.equal(faq.enabled, 1);
+  assert.equal(db.changeLog.length, 0);
+});
+
+test("POST /mcp tools/call disable_section updates D1 and the dynamic portfolio HTML", async () => {
+  const db = await createEditorDb();
   const beforeResponse = await fetchWorker("/portfolio", {
     db,
     host: "ph.lorenzozanna.com",
@@ -606,7 +637,7 @@ test("POST /mcp tools/call disable_section updates D1 and the dynamic portfolio 
     db,
     host: "mcp.lorenzozanna.com",
     method: "POST",
-    privateAuth: true,
+    bearerToken: USER_TOKEN,
     body: {
       jsonrpc: "2.0",
       id: 1,
@@ -637,7 +668,7 @@ test("POST /mcp tools/call disable_section updates D1 and the dynamic portfolio 
 });
 
 test("POST /mcp tools/call enable_section updates D1 and the dynamic portfolio HTML", async () => {
-  const db = createSeededDb({
+  const db = await createEditorDb({
     faqEnabled: false,
   });
   const beforeResponse = await fetchWorker("/portfolio", {
@@ -651,7 +682,7 @@ test("POST /mcp tools/call enable_section updates D1 and the dynamic portfolio H
     db,
     host: "mcp.lorenzozanna.com",
     method: "POST",
-    privateAuth: true,
+    bearerToken: USER_TOKEN,
     body: {
       jsonrpc: "2.0",
       id: 1,
@@ -684,7 +715,7 @@ test("POST /mcp tools/call enable_section updates D1 and the dynamic portfolio H
 });
 
 test("POST /mcp tools/call update_text updates D1 and the dynamic portfolio HTML", async () => {
-  const db = createSeededDb();
+  const db = await createEditorDb();
   const beforeResponse = await fetchWorker("/portfolio", {
     db,
     host: "ph.lorenzozanna.com",
@@ -696,7 +727,7 @@ test("POST /mcp tools/call update_text updates D1 and the dynamic portfolio HTML
     db,
     host: "mcp.lorenzozanna.com",
     method: "POST",
-    privateAuth: true,
+    bearerToken: USER_TOKEN,
     body: {
       jsonrpc: "2.0",
       id: 1,
@@ -732,12 +763,12 @@ test("POST /mcp tools/call update_text updates D1 and the dynamic portfolio HTML
 });
 
 test("POST /mcp tools/call rollback_change reverts a previous text change", async () => {
-  const db = createSeededDb();
+  const db = await createEditorDb();
   const updateResponse = await fetchWorker("/mcp", {
     db,
     host: "mcp.lorenzozanna.com",
     method: "POST",
-    privateAuth: true,
+    bearerToken: USER_TOKEN,
     body: {
       jsonrpc: "2.0",
       id: 1,
@@ -767,7 +798,7 @@ test("POST /mcp tools/call rollback_change reverts a previous text change", asyn
     db,
     host: "mcp.lorenzozanna.com",
     method: "POST",
-    privateAuth: true,
+    bearerToken: USER_TOKEN,
     body: {
       jsonrpc: "2.0",
       id: 2,
@@ -800,12 +831,12 @@ test("POST /mcp tools/call rollback_change reverts a previous text change", asyn
 });
 
 test("POST /mcp tools/call add_faq_section creates and renders a FAQ from preset", async () => {
-  const db = createSeededDb({ includeFaq: false });
+  const db = await createEditorDb({ includeFaq: false });
   const response = await fetchWorker("/mcp", {
     db,
     host: "mcp.lorenzozanna.com",
     method: "POST",
-    privateAuth: true,
+    bearerToken: USER_TOKEN,
     body: {
       jsonrpc: "2.0",
       id: 1,
@@ -843,12 +874,12 @@ test("POST /mcp tools/call add_faq_section creates and renders a FAQ from preset
 });
 
 test("POST /mcp tools/call update_cta updates D1 and the dynamic home HTML", async () => {
-  const db = createSeededDb();
+  const db = await createEditorDb();
   const mcpResponse = await fetchWorker("/mcp", {
     db,
     host: "mcp.lorenzozanna.com",
     method: "POST",
-    privateAuth: true,
+    bearerToken: USER_TOKEN,
     body: {
       jsonrpc: "2.0",
       id: 1,
@@ -883,7 +914,7 @@ test("POST /mcp tools/call update_cta updates D1 and the dynamic home HTML", asy
 });
 
 test("POST /mcp tools/call update_rich_text updates D1 and renders marks plus links", async () => {
-  const db = createSeededDb();
+  const db = await createEditorDb();
   const richText = richTextValue([
     [
       { text: "Risposta ", marks: [] },
@@ -899,7 +930,7 @@ test("POST /mcp tools/call update_rich_text updates D1 and renders marks plus li
     db,
     host: "mcp.lorenzozanna.com",
     method: "POST",
-    privateAuth: true,
+    bearerToken: USER_TOKEN,
     body: {
       jsonrpc: "2.0",
       id: 1,
@@ -975,7 +1006,7 @@ test("POST /mcp tools/call reports a clear error before the dynamic D1 schema is
   const response = await fetchWorker("/mcp", {
     db: createMissingPagesSchemaDb(),
     method: "POST",
-    privateAuth: true,
+    bearerToken: USER_TOKEN,
     body: {
       jsonrpc: "2.0",
       id: 1,
@@ -1091,6 +1122,20 @@ async function fetchWorker(pathname, options = {}) {
     DB: options.db ?? createSeededDb(),
     AI_API_TOKEN: API_TOKEN,
     ROOT_DOMAIN: "lorenzozanna.com",
+  });
+}
+
+async function createEditorDb(options = {}) {
+  return createSeededDb({
+    ...options,
+    authTokens: options.authTokens ?? [
+      await scopedAuthToken({
+        token: USER_TOKEN,
+        actor: "lorenzo",
+        role: "editor",
+        scopes: ["content:read", "content:write"],
+      }),
+    ],
   });
 }
 
@@ -1257,6 +1302,20 @@ function createMissingPagesSchemaDb() {
           return this;
         },
         async first() {
+          if (query.includes("FROM auth_tokens") && query.includes("token_hash = ?")) {
+            return {
+              id: "token_lorenzo_editor_missing_schema",
+              site_id: "site_ph",
+              label: "Lorenzo editor",
+              actor: "lorenzo",
+              role: "editor",
+              scopes: JSON.stringify(["content:read", "content:write"]),
+              status: "active",
+              expires_at: null,
+              site_slug: "ph",
+            };
+          }
+
           if (query.includes("FROM sites WHERE slug = ?")) {
             return {
               id: "site_ph",
@@ -1274,6 +1333,13 @@ function createMissingPagesSchemaDb() {
         },
         async all() {
           throw new Error(`Unhandled missing schema all query: ${query}`);
+        },
+        async run() {
+          if (query.includes("UPDATE auth_tokens")) {
+            return { success: true };
+          }
+
+          throw new Error(`Unhandled missing schema run query: ${query}`);
         },
       };
     },

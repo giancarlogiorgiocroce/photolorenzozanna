@@ -84,8 +84,7 @@ export async function authenticateMcpRequest(request, env) {
 
 export function hasMcpPermission(auth, permission, site) {
   if (!auth?.ok) return false;
-  if (auth.source === "technical-token") return true;
-  if (site && auth.site !== site) return false;
+  if (site && auth.site !== "*" && auth.site !== site) return false;
   return auth.scopes.includes(permission);
 }
 
@@ -101,9 +100,9 @@ function authenticateTechnicalToken(request, env, bearerToken) {
     ok: true,
     source: "technical-token",
     actor: request.headers.get("x-ai-actor") || "mcp-technical",
-    role: "owner",
+    role: "technical",
     site: "*",
-    scopes: roleScopes("owner"),
+    scopes: ["content:read"],
   };
 }
 
