@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import worker from "../src/index.mjs";
@@ -100,6 +101,22 @@ test("GET / on a public site host renders the dynamic home page, not the API man
   assert.match(response.headers.get("content-type"), /text\/html/);
   assert.match(html, /<h1[^>]*>Lorenzo Zanna Photography<\/h1>/);
   assert.doesNotMatch(html, /"lorenzozanna-edge"/);
+});
+
+test("public pages do not set cookies or use persistent browser storage", async () => {
+  for (const pathname of ["/", "/portfolio", "/about", "/contact"]) {
+    const db = createSeededDb();
+    const response = await fetchWorker(pathname, {
+      db,
+      host: "ph.lorenzozanna.com",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.has("set-cookie"), false);
+  }
+
+  const mainJs = await readFile(new URL("../../assets/js/main.js", import.meta.url), "utf8");
+  assert.doesNotMatch(mainJs, /document\.cookie|localStorage|sessionStorage|indexedDB|sendBeacon|gtag|analytics/i);
 });
 
 test("GET /index.html and /index.php redirect to the canonical home", async () => {

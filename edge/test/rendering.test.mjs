@@ -47,18 +47,21 @@ test("renderPageHtml includes the existing site shell and page assets", async ()
     },
   );
 
-  assert.match(html, /<link rel="stylesheet" href="assets\/css\/base\.css\?v=20260714-lightbox-nav" \/>/);
-  assert.match(html, /<link rel="stylesheet" href="assets\/css\/portfolio\.css\?v=20260714-lightbox-nav" \/>/);
+  assert.match(html, /<link rel="stylesheet" href="assets\/css\/base\.css\?v=20260715-cookie-note" \/>/);
+  assert.match(html, /<link rel="stylesheet" href="assets\/css\/portfolio\.css\?v=20260715-cookie-note" \/>/);
   assert.match(html, /<meta\s+name="description"\s+content="Ritratti, strada, natura, forme e ombre: una selezione fotografica di Lorenzo Zanna tra volti, paesaggio, luce e superfici\."\s+\/>/);
   assert.match(html, /<link rel="canonical" href="https:\/\/ph\.lorenzozanna\.com\/portfolio" \/>/);
   assert.match(html, /<meta property="og:url" content="https:\/\/ph\.lorenzozanna\.com\/portfolio" \/>/);
-  assert.match(html, /<script src="assets\/js\/main\.js\?v=20260714-lightbox-nav" defer><\/script>/);
-  assert.match(html, /<script src="assets\/js\/gallery\.js\?v=20260714-lightbox-nav" defer><\/script>/);
+  assert.match(html, /<script src="assets\/js\/main\.js\?v=20260715-cookie-note" defer><\/script>/);
+  assert.match(html, /<script src="assets\/js\/gallery\.js\?v=20260715-cookie-note" defer><\/script>/);
   assert.match(html, /class="site-header"/);
   assert.match(html, /<a class="brand" href="\/" aria-label="Lorenzo Zanna home">/);
   assert.match(html, /<nav class="site-nav"/);
   assert.match(html, /href="\/portfolio" aria-current="page"/);
   assert.doesNotMatch(html, /href="index\.html"/);
+  assert.match(html, /<aside class="privacy-note" data-privacy-note aria-label="Informazione sui cookie">/);
+  assert.match(html, /Nessun cookie/);
+  assert.match(html, /non usa cookie, analytics o strumenti di tracciamento/);
   assert.match(html, /<footer class="site-footer">/);
 });
 

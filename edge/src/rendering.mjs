@@ -1,7 +1,7 @@
 import { resolveSectionContract } from "./page-contracts.mjs";
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
-const ASSET_VERSION = "20260714-lightbox-nav";
+const ASSET_VERSION = "20260715-cookie-note";
 const CANONICAL_ORIGIN = "https://ph.lorenzozanna.com";
 
 const GALLERY_LAYOUTS = {
@@ -180,9 +180,22 @@ ${indent(renderHeader(context), 4)}
     <main id="main">
 ${indent(body, 6)}
     </main>
+${indent(renderPrivacyNote(), 4)}
 ${indent(renderFooter(context), 4)}
   </body>
 </html>`;
+}
+
+function renderPrivacyNote() {
+  return `<aside class="privacy-note" data-privacy-note aria-label="Informazione sui cookie">
+  <div>
+    <strong>Nessun cookie</strong>
+    <p>Questo sito non usa cookie, analytics o strumenti di tracciamento.</p>
+  </div>
+  <button type="button" data-privacy-note-close aria-label="Chiudi informazione sui cookie">
+    <span aria-hidden="true">&times;</span>
+  </button>
+</aside>`;
 }
 
 function normalizeSection(pageSlug, section) {

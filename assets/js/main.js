@@ -2,6 +2,8 @@ const body = document.body;
 const header = document.querySelector("[data-site-header]");
 const navToggle = document.querySelector(".nav-toggle");
 const siteNav = document.querySelector(".site-nav");
+const privacyNote = document.querySelector("[data-privacy-note]");
+const privacyNoteClose = document.querySelector("[data-privacy-note-close]");
 
 const setHeaderState = () => {
   if (!header) return;
@@ -23,6 +25,12 @@ if (navToggle && siteNav) {
     body.classList.remove("nav-open");
     header?.classList.remove("is-open");
     navToggle.setAttribute("aria-expanded", "false");
+  });
+}
+
+if (privacyNote && privacyNoteClose) {
+  privacyNoteClose.addEventListener("click", () => {
+    privacyNote.hidden = true;
   });
 }
 
