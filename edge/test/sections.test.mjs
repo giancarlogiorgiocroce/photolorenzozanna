@@ -537,6 +537,52 @@ test("updateText changes a contact band channel value through its contract", asy
   assert.equal(db.changeLog[0].target, "pages/contatti/sections/contact-band/channels[0].value");
 });
 
+test("updateText can toggle a contracted boolean field for conservative clients", async () => {
+  const db = createSectionDb();
+
+  const result = await updateText(
+    { DB: db },
+    {
+      site: "ph",
+      page: "contatti",
+      sectionId: "contact-band",
+      path: "channels[2].enabled",
+      value: "true",
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(result.page, "contatti");
+  assert.equal(result.sectionId, "contact-band");
+  assert.equal(result.path, "channels[2].enabled");
+  assert.equal(result.value, true);
+
+  const section = db.pageSections.find((item) => item.section_key === "contact-band");
+  assert.equal(JSON.parse(section.data).channels[2].enabled, true);
+  assert.equal(db.sectionRevisions[0].action, "update_text");
+  assert.equal(db.changeLog[0].target, "pages/contatti/sections/contact-band/channels[2].enabled");
+});
+
+test("updateText rejects invalid boolean text for boolean fields", async () => {
+  const db = createSectionDb();
+
+  await assert.rejects(
+    () =>
+      updateText(
+        { DB: db },
+        {
+          site: "ph",
+          page: "contatti",
+          sectionId: "contact-band",
+          path: "channels[2].enabled",
+          value: "maybe",
+          actor: "tdd-suite",
+        },
+      ),
+    /Invalid boolean value/,
+  );
+});
+
 test("updateCta changes a nullable contact band channel href through its contract", async () => {
   const db = createSectionDb();
 

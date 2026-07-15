@@ -576,11 +576,14 @@ async function persistSectionDataChange(env, options) {
 }
 
 function canUpdateWithPlainText(field) {
+  if (field.kind === "boolean") return true;
   if (field.kind === "plain_text" || field.kind === "text_list") return true;
   return field.kind === "rich_text" && field.plainTextTool === "update_text";
 }
 
 function normalizeTextValue(value, field) {
+  if (field.kind === "boolean") return normalizeLooseBooleanValue(value);
+
   if (typeof value !== "string") {
     throw new Error("Missing text value.");
   }
@@ -599,6 +602,23 @@ function normalizeTextValue(value, field) {
   }
 
   return normalized;
+}
+
+function normalizeLooseBooleanValue(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") {
+    throw new Error("Invalid boolean value.");
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (["true", "1", "yes", "si", "sì", "show", "enable", "enabled", "abilita", "attiva", "visibile"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "0", "no", "hide", "disable", "disabled", "nascondi", "disabilita", "disattiva", "nascosto"].includes(normalized)) {
+    return false;
+  }
+
+  throw new Error("Invalid boolean value.");
 }
 
 function normalizeCtaValue(input, field) {

@@ -960,6 +960,37 @@ test("POST /mcp tools/call update_text updates D1 and the dynamic portfolio HTML
   assert.equal(db.changeLog[0].target, "pages/portfolio/sections/hero/title");
 });
 
+test("POST /mcp tools/call update_text can toggle contact channel visibility", async () => {
+  const db = await createEditorDb();
+  const mcpResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "update_text",
+        arguments: {
+          site: "ph",
+          page: "contatti",
+          sectionId: "contact-band",
+          path: "channels[2].enabled",
+          value: "true",
+        },
+      },
+    },
+  });
+  const mcpPayload = await mcpResponse.json();
+  const contactBand = db.pageSections.find((section) => section.section_key === "contact-band");
+
+  assert.equal(mcpResponse.status, 200);
+  assert.equal(mcpPayload.result.structuredContent.value, true);
+  assert.equal(JSON.parse(contactBand.data).channels[2].enabled, true);
+});
+
 test("POST /mcp tools/call rollback_change reverts a previous text change", async () => {
   const db = await createEditorDb();
   const updateResponse = await fetchWorker("/mcp", {

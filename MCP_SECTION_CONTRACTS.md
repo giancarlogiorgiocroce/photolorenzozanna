@@ -498,6 +498,7 @@ Editable:
 Tool previsti:
 
 - `update_text` per `channels[0].label` e `channels[0].value`;
+- `update_text` puo modificare anche `channels[0].enabled` usando valori booleani testuali (`true`/`false`, `abilita`/`nascondi`) per compatibilita con client che non mostrano tool itemizzati;
 - `update_cta` per `channels[0].href`, con `href` nullable;
 - `update_contact_channel` per modificare/nascondere una voce per nome semantico (`email`, `instagram`, `telefono`), senza chiedere alla AI di ragionare sugli indici.
 

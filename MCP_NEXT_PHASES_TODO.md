@@ -156,6 +156,7 @@ Obiettivo: il dominio pubblico deve leggere D1/R2 a runtime, non servire HTML st
   - UX MCP `contact-band` 2026-07-15: aggiunto `channels[].enabled` e tool `update_contact_channel`, cosi un client AI puo dire/modificare "email", "Instagram", "telefono" e nascondere singole voci senza conoscere `channels[0]`.
   - Deploy UX MCP `contact-band` 2026-07-15: Worker versione `018d2c32-c669-4b94-b4ef-31ee446b05ac`; suite `edge` 100/100; smoke MCP `tools/list` espone `update_contact_channel`. Modifica live applicata via MCP: email `zannafotografia@icloud.com`, Instagram/Telefono `enabled:false`; `/contact` renderizza solo l'email.
   - Compat ChatGPT `update_contact_channel` 2026-07-15: semplificato lo schema MCP del tool (`href` solo `string` opzionale, `channel` enum `email|instagram|telefono`) per evitare che client rigidi scartino il tool. Worker versione `daf46dc7-4b36-472e-aab9-7674a36af7ea`; smoke live `tools/list` conferma schema nuovo dopo breve propagazione.
+  - Fallback compat `channels[].enabled` 2026-07-15: `update_text` ora accetta campi booleani dichiarati nel contratto e interpreta `true/false`, `abilita/nascondi`, ecc. Worker versione `8ead3dcf-9ec3-4b46-9fd2-998edc19a57f`; suite `edge` 103/103; telefono abilitato live via `update_text` (`channels[2].enabled = true`), `/contact` mostra email e telefono, Instagram resta nascosto.
 - [x] Decidere dove servire asset statici:
   - [x] Pages per asset;
   - [ ] Worker static assets;
