@@ -563,6 +563,29 @@ test("updateText can toggle a contracted boolean field for conservative clients"
   assert.equal(db.changeLog[0].target, "pages/contatti/sections/contact-band/channels[2].enabled");
 });
 
+test("updateText derives a tel href when changing a contact phone value", async () => {
+  const db = createSectionDb();
+
+  const result = await updateText(
+    { DB: db },
+    {
+      site: "ph",
+      page: "contatti",
+      sectionId: "contact-band",
+      path: "channels[2].value",
+      value: "123123123",
+      actor: "tdd-suite",
+    },
+  );
+
+  const section = db.pageSections.find((item) => item.section_key === "contact-band");
+  const phone = JSON.parse(section.data).channels[2];
+
+  assert.equal(result.value, "123123123");
+  assert.equal(phone.value, "123123123");
+  assert.equal(phone.href, "tel:123123123");
+});
+
 test("updateText rejects invalid boolean text for boolean fields", async () => {
   const db = createSectionDb();
 
@@ -656,6 +679,27 @@ test("updateContactChannel edits contact channels by semantic name and can hide 
       "pages/contatti/sections/contact-band/channels[1]",
     ],
   );
+});
+
+test("updateContactChannel derives a tel href when changing the phone value", async () => {
+  const db = createSectionDb();
+
+  const result = await updateContactChannel(
+    { DB: db },
+    {
+      site: "ph",
+      page: "contatti",
+      channel: "telefono",
+      value: "123123123",
+      actor: "tdd-suite",
+    },
+  );
+
+  const section = db.pageSections.find((item) => item.section_key === "contact-band");
+  const phone = JSON.parse(section.data).channels[2];
+
+  assert.equal(result.channel.href, "tel:123123123");
+  assert.equal(phone.href, "tel:123123123");
 });
 
 test("updateContactChannel rejects unknown channels and unsafe hrefs", async () => {

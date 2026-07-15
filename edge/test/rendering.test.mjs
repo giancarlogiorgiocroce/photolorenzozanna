@@ -184,6 +184,7 @@ test("renderPageHtml renders the contact page with the existing visual contract"
   assert.match(html, /<section class="contact-band"[^>]*data-section-id="contact-band"[^>]*data-section-type="text"[^>]*aria-label="Canali di contatto">/);
   assert.match(html, /class="contact-link reveal"/);
   assert.match(html, /<a class="contact-link reveal" href="mailto:ciao@example.com">/);
+  assert.match(html, /<a class="contact-link reveal" href="tel:123123123">/);
   assert.doesNotMatch(html, /@lorenzo/);
   assert.match(html, /class="availability"[^>]*data-section-id="text_2"/);
   assert.match(html, /class="availability__list reveal"/);
@@ -365,7 +366,7 @@ function createRendererDb(options = {}) {
         channels: [
           { label: "Email", value: "ciao@example.com", href: "mailto:ciao@example.com" },
           { label: "Instagram", value: "@lorenzo", href: "https://instagram.com/lorenzo", enabled: false },
-          { label: "Telefono", value: "Da definire", href: null },
+          { label: "Telefono", value: "123123123", href: null },
         ],
       }, "page_contatti"),
       section("section_contact_availability", "text_2", "text", 20, true, {

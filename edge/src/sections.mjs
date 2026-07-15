@@ -254,6 +254,7 @@ export async function updateText(env, input) {
   const before = serializeSection(section);
   const data = cloneJsonObject(before.data);
   setTextAtPath(data, fieldPath, value);
+  syncContactChannelHref(page.slug, section, data, fieldPath);
   const after = {
     ...before,
     data,
@@ -388,9 +389,7 @@ export async function updateContactChannel(env, input) {
   if (hasLabel) channel.label = normalizeTextValue(input.label, { maxLength: 40 });
   if (hasValue) {
     channel.value = normalizeTextValue(input.value, { maxLength: 120 });
-    if (!hasHref && isEmailChannel(channel, channelName) && looksLikeEmail(channel.value)) {
-      channel.href = `mailto:${channel.value}`;
-    }
+    if (!hasHref) channel.href = deriveContactHref(channel, channelName);
   }
   if (hasHref) channel.href = normalizeHref(input.href, { nullable: true });
   if (hasEnabled) channel.enabled = normalizeBooleanValue(input.enabled, "enabled");
@@ -748,6 +747,19 @@ function normalizeContactChannelList(value) {
   }));
 }
 
+function syncContactChannelHref(pageSlug, section, data, path) {
+  const contract = resolveSectionContract(pageSlug, section);
+  if (contract.styleContract !== "contact.band") return;
+
+  const match = /^channels\[((?:0|[1-9]\d*))\]\.value$/.exec(path);
+  if (!match || !Array.isArray(data.channels)) return;
+
+  const channel = data.channels[Number(match[1])];
+  if (!isObjectRecord(channel)) return;
+
+  channel.href = deriveContactHref(channel);
+}
+
 function findContactChannelIndex(channels, channelName) {
   const wanted = normalizeIdentifier(channelName);
   return channels.findIndex((channel) => {
@@ -766,6 +778,25 @@ function isEmailChannel(channel, channelName) {
   return wanted === "email" || label === "email" || label === "mail" || label === "e-mail";
 }
 
+function isPhoneChannel(channel, channelName) {
+  const label = normalizeIdentifier(channel?.label);
+  const wanted = normalizeIdentifier(channelName);
+  return wanted === "telefono" || wanted === "tel" || wanted === "phone" || label === "telefono" || label === "tel" || label === "phone";
+}
+
+function deriveContactHref(channel, channelName = "") {
+  if (isEmailChannel(channel, channelName) && looksLikeEmail(channel?.value)) {
+    return `mailto:${String(channel.value).trim()}`;
+  }
+
+  if (isPhoneChannel(channel, channelName)) {
+    const tel = normalizeTelHref(channel?.value);
+    if (tel) return tel;
+  }
+
+  return null;
+}
+
 function normalizeIdentifier(value) {
   return String(value ?? "")
     .trim()
@@ -776,6 +807,15 @@ function normalizeIdentifier(value) {
 
 function looksLikeEmail(value) {
   return /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(String(value ?? "").trim());
+}
+
+function normalizeTelHref(value) {
+  const raw = String(value ?? "").trim();
+  if (!/^\+?[0-9 ().-]{3,30}$/.test(raw)) return null;
+
+  const compact = raw.replace(/[ ().-]/g, "");
+  if (!/^\+?[0-9]{3,30}$/.test(compact)) return null;
+  return `tel:${compact}`;
 }
 
 function normalizeBooleanValue(value, name) {

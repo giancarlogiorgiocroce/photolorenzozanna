@@ -471,7 +471,7 @@ Fonte CSS/HTML:
 - `assets/css/contact.css`;
 - classi: `contact-band`, `contact-link`.
 - sezione D1: `page=contatti`, `sectionId=contact-band`, `type=text`;
-- renderer: se `channels[].href` e valorizzato, il singolo canale diventa `<a class="contact-link">`; altrimenti resta `<div class="contact-link">`.
+- renderer: se `channels[].href` e valorizzato, il singolo canale diventa `<a class="contact-link">`; se manca, il renderer deriva automaticamente `mailto:` dai canali email e `tel:` dai canali telefono quando il valore e valido; altrimenti resta `<div class="contact-link">`.
 
 Campi:
 
@@ -491,7 +491,7 @@ Campi:
 Editable:
 
 - `channels[].label`: `plain_text`, max 40;
-- `channels[].value`: `plain_text`, max 120;
+- `channels[].value`: `plain_text`, max 120. Per canali email/telefono, `update_text` e `update_contact_channel` aggiornano anche `channels[].href` derivando rispettivamente `mailto:` e `tel:` quando il valore e valido;
 - `channels[].href`: `link.href`, nullable.
 - `channels[].enabled`: `boolean`, per mostrare/nascondere la singola voce.
 

@@ -371,13 +371,77 @@ function renderContactChannel(channel) {
 function normalizeContactChannels(value) {
   const channels = Array.isArray(value) && value.length ? value : PAGE_DEFAULTS.contatti.contactBand.channels;
   return channels
-    .map((channel) => ({
-      label: String(channel?.label ?? "").trim(),
-      value: String(channel?.value ?? "").trim(),
-      href: channel?.href ? String(channel.href).trim() : null,
-      enabled: channel?.enabled !== false,
-    }))
+    .map((channel) => {
+      const normalized = {
+        label: String(channel?.label ?? "").trim(),
+        value: String(channel?.value ?? "").trim(),
+        href: null,
+        enabled: channel?.enabled !== false,
+      };
+      normalized.href = normalizeContactHref(channel?.href, normalized);
+      return normalized;
+    })
     .filter((channel) => channel.enabled && (channel.label || channel.value));
+}
+
+function normalizeContactHref(value, channel) {
+  const href = String(value ?? "").trim();
+  if (href && isSafeContactHref(href)) return href;
+  return deriveContactHref(channel);
+}
+
+function deriveContactHref(channel) {
+  if (isEmailChannel(channel) && looksLikeEmail(channel.value)) {
+    return `mailto:${channel.value}`;
+  }
+
+  if (isPhoneChannel(channel)) {
+    const tel = normalizeTelHref(channel.value);
+    if (tel) return tel;
+  }
+
+  return null;
+}
+
+function isSafeContactHref(href) {
+  if (/<\/?[A-Za-z][^>]*>/.test(href) || href.includes("..")) return false;
+  if (/^https:\/\/[^\s<>"']+$/i.test(href)) return true;
+  if (/^mailto:[^\s<>"']+@[^\s<>"']+$/i.test(href)) return true;
+  if (/^tel:\+?[0-9 ().-]{3,30}$/i.test(href)) return true;
+  if (/^\/(?!\/)[A-Za-z0-9._~!$&'()*+,;=:@/%?#-]*$/.test(href)) return true;
+  if (/^(index|portfolio|about|contact)\.html$/.test(href)) return true;
+  return false;
+}
+
+function isEmailChannel(channel) {
+  const label = normalizeIdentifier(channel?.label);
+  return label === "email" || label === "mail" || label === "e-mail";
+}
+
+function isPhoneChannel(channel) {
+  const label = normalizeIdentifier(channel?.label);
+  return label === "telefono" || label === "tel" || label === "phone";
+}
+
+function normalizeIdentifier(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function looksLikeEmail(value) {
+  return /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(String(value ?? "").trim());
+}
+
+function normalizeTelHref(value) {
+  const raw = String(value ?? "").trim();
+  if (!/^\+?[0-9 ().-]{3,30}$/.test(raw)) return null;
+
+  const compact = raw.replace(/[ ().-]/g, "");
+  if (!/^\+?[0-9]{3,30}$/.test(compact)) return null;
+  return `tel:${compact}`;
 }
 
 function renderContactAvailability(section) {
