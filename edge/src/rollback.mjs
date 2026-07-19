@@ -1,6 +1,7 @@
 const SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
 const SECTION_KEY_PATTERN = /^[a-z0-9_-]{1,80}$/;
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,160}$/;
+const PATH_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
 
 export async function rollbackChange(env, input) {
   const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
@@ -63,6 +64,8 @@ export async function rollbackChange(env, input) {
       rollbackSource.section.id,
     )
     .run();
+
+  await syncSectionMediaUsages(env, rollbackSource.page.id, rollbackSource.section.id, rollbackSnapshot.data);
 
   await env.DB.prepare(
     `INSERT INTO section_revisions (
@@ -288,6 +291,56 @@ function serializeSection(section) {
 
 function snapshotsEqual(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+async function syncSectionMediaUsages(env, pageId, sectionId, data) {
+  const usages = collectMediaAssetUsages(data);
+
+  await env.DB.prepare(
+    `DELETE FROM media_usages
+     WHERE page_id = ? AND section_id = ?`,
+  )
+    .bind(pageId, sectionId)
+    .run();
+
+  for (const usage of usages) {
+    await env.DB.prepare(
+      `INSERT INTO media_usages (
+         id, asset_id, page_id, section_id, path, created_at, updated_at
+       )
+       VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), usage.assetId, pageId, sectionId, usage.path)
+      .run();
+  }
+}
+
+function collectMediaAssetUsages(data) {
+  const usagesByPath = new Map();
+
+  function walk(value, path) {
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => {
+        if (path) walk(item, `${path}[${index}]`);
+      });
+      return;
+    }
+
+    if (!value || typeof value !== "object") return;
+
+    const assetId = typeof value.assetId === "string" ? value.assetId.trim() : "";
+    if (assetId && path) {
+      usagesByPath.set(path, assetId);
+    }
+
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "assetId" || !PATH_KEY_PATTERN.test(key)) continue;
+      walk(child, path ? `${path}.${key}` : key);
+    }
+  }
+
+  walk(data, "");
+  return [...usagesByPath.entries()].map(([path, assetId]) => ({ path, assetId }));
 }
 
 function positiveInteger(value) {

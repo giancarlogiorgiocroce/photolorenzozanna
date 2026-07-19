@@ -528,8 +528,12 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   const payload = await response.json();
   const toolNames = payload.result.tools.map((tool) => tool.name);
   const getPage = payload.result.tools.find((tool) => tool.name === "get_page");
+  const listMediaAssets = payload.result.tools.find((tool) => tool.name === "list_media_assets");
+  const createImageUpload = payload.result.tools.find((tool) => tool.name === "create_image_upload");
   const updateText = payload.result.tools.find((tool) => tool.name === "update_text");
   const updateContactChannel = payload.result.tools.find((tool) => tool.name === "update_contact_channel");
+  const replaceImage = payload.result.tools.find((tool) => tool.name === "replace_image");
+  const setImageFocalPoint = payload.result.tools.find((tool) => tool.name === "set_image_focal_point");
 
   assert.equal(response.status, 200);
   assert.equal(payload.jsonrpc, "2.0");
@@ -537,6 +541,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
     "get_page",
     "list_section_presets",
     "list_changes",
+    "list_media_assets",
     "disable_section",
     "enable_section",
     "add_section_from_preset",
@@ -545,17 +550,31 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
     "update_faq_item",
     "remove_faq_item",
     "reorder_faq_items",
+    "add_text_subsection",
     "update_text",
     "update_cta",
     "update_contact_channel",
+    "create_image_upload",
+    "confirm_image_upload",
+    "update_image_alt",
+    "replace_image",
+    "set_image_focal_point",
     "update_rich_text",
     "rollback_change",
   ]);
   assert.deepEqual(getPage.securitySchemes, [{ type: "oauth2", scopes: ["content:read"] }]);
+  assert.deepEqual(listMediaAssets.securitySchemes, [{ type: "oauth2", scopes: ["content:read"] }]);
   assert.deepEqual(updateText.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(updateContactChannel.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
+  assert.deepEqual(createImageUpload.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
+  assert.deepEqual(replaceImage.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
+  assert.deepEqual(setImageFocalPoint.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(updateContactChannel.inputSchema.properties.channel.enum, ["email", "instagram", "telefono"]);
   assert.equal(updateContactChannel.inputSchema.properties.href.type, "string");
+  assert.equal(replaceImage.inputSchema.properties.assetId.type, "string");
+  assert.equal(setImageFocalPoint.inputSchema.properties.x.minimum, 0);
+  assert.equal(setImageFocalPoint.inputSchema.properties.y.maximum, 100);
+  assert.equal(createImageUpload.inputSchema.properties.mimeType.enum.includes("image/jpeg"), true);
 });
 
 test("POST /mcp tools/call list_section_presets allows viewer scoped user tokens", async () => {
@@ -634,6 +653,59 @@ test("POST /mcp tools/call get_page returns sections with style contracts and ed
   assert.equal(faq.editableFields.find((field) => field.path === "items[].answer").kind, "rich_text");
 });
 
+test("POST /mcp tools/call list_media_assets allows viewer scoped user tokens", async () => {
+  const db = createSeededDb({
+    authTokens: [
+      await scopedAuthToken({
+        token: USER_TOKEN,
+        actor: "lorenzo",
+        role: "viewer",
+        scopes: ["content:read"],
+      }),
+    ],
+    mediaAssets: [
+      mediaAsset({
+        id: "asset_ready_portrait",
+        public_url: "assets/images/media/portrait.jpg",
+        alt: "Ritratto dalla libreria media",
+        status: "ready",
+      }),
+      mediaAsset({
+        id: "asset_draft",
+        public_url: "assets/images/media/draft.jpg",
+        alt: "Bozza",
+        status: "draft",
+      }),
+    ],
+  });
+  const response = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "list_media_assets",
+        arguments: {
+          site: "ph",
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    payload.result.structuredContent.assets.map((asset) => asset.id),
+    ["asset_ready_portrait"],
+  );
+  assert.equal(payload.result.structuredContent.assets[0].publicUrl, "assets/images/media/portrait.jpg");
+  assert.equal(db.authTokens[0].last_used_at, "2026-07-13 00:00:01");
+});
+
 test("POST /mcp tools/call get_page exposes contact-band as a contact contract", async () => {
   const response = await fetchWorker("/mcp", {
     host: "mcp.lorenzozanna.com",
@@ -700,6 +772,492 @@ test("POST /mcp tools/call update_contact_channel edits and hides contact channe
   assert.equal(JSON.parse(contactBand.data).channels[2].enabled, false);
   assert.equal(db.sectionRevisions[0].action, "update_contact_channel");
   assert.equal(db.changeLog[0].target, "pages/contatti/sections/contact-band/channels[2]");
+});
+
+test("POST /mcp tools/call create_image_upload creates a pending media upload", async () => {
+  const db = await createEditorDb();
+  const response = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "create_image_upload",
+        arguments: {
+          site: "ph",
+          filename: "Nuovo Ritratto.JPG",
+          mimeType: "image/jpeg",
+          sizeBytes: 456789,
+          width: 1800,
+          height: 1200,
+          alt: "Ritratto caricato via MCP",
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.result.structuredContent.upload.status, "pending");
+  assert.match(payload.result.structuredContent.upload.uploadToken, /^mu_/);
+  assert.equal(payload.result.structuredContent.asset.status, "draft");
+  assert.equal(db.mediaUploads.length, 1);
+  assert.equal(db.mediaAssets.find((asset) => asset.id === payload.result.structuredContent.asset.id).status, "draft");
+  assert.equal(db.changeLog[0].action, "create_image_upload");
+});
+
+test("POST /mcp tools/call confirm_image_upload promotes an uploaded object to ready media", async () => {
+  const db = await createEditorDb();
+  const createResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "create_image_upload",
+        arguments: {
+          site: "ph",
+          filename: "ritratto.jpg",
+          mimeType: "image/jpeg",
+          sizeBytes: 456789,
+          width: 1800,
+          height: 1200,
+          alt: "Ritratto caricato via MCP",
+        },
+      },
+    },
+  });
+  const created = (await createResponse.json()).result.structuredContent;
+  db.changeLog = [];
+
+  const response = await fetchWorker("/mcp", {
+    db,
+    mediaBucket: new FakeMediaBucket({
+      [created.upload.r2Key]: {
+        size: 456789,
+        contentType: "image/jpeg",
+      },
+    }),
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "confirm_image_upload",
+        arguments: {
+          site: "ph",
+          uploadId: created.upload.id,
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.result.structuredContent.upload.status, "uploaded");
+  assert.equal(payload.result.structuredContent.asset.status, "ready");
+  assert.equal(db.mediaUploads[0].status, "uploaded");
+  assert.equal(db.mediaAssets.find((asset) => asset.id === created.asset.id).status, "ready");
+  assert.equal(db.changeLog[0].action, "confirm_image_upload");
+});
+
+test("PUT /media/uploads/:uploadId stores an image object in R2 using the upload token", async () => {
+  const db = await createEditorDb();
+  const createResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "create_image_upload",
+        arguments: {
+          site: "ph",
+          filename: "ritratto.jpg",
+          mimeType: "image/jpeg",
+          sizeBytes: 5,
+          width: 1800,
+          height: 1200,
+          alt: "Ritratto caricato via endpoint",
+        },
+      },
+    },
+  });
+  const created = (await createResponse.json()).result.structuredContent;
+  const bucket = new FakeMediaBucket({});
+
+  const response = await fetchWorker(created.upload.uploadUrl, {
+    db,
+    mediaBucket: bucket,
+    host: "api.lorenzozanna.com",
+    method: "PUT",
+    bearerToken: created.upload.uploadToken,
+    headers: {
+      "content-type": "image/jpeg",
+      "content-length": "5",
+    },
+    rawBody: new Uint8Array([1, 2, 3, 4, 5]),
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.uploadId, created.upload.id);
+  assert.equal(payload.status, "stored");
+  assert.equal(payload.r2Key, created.upload.r2Key);
+  assert.equal(bucket.puts.length, 1);
+  assert.equal(bucket.puts[0].key, created.upload.r2Key);
+  assert.equal(bucket.puts[0].body.byteLength, 5);
+  assert.equal(bucket.puts[0].options.httpMetadata.contentType, "image/jpeg");
+});
+
+test("PUT /media/uploads/:uploadId rejects invalid tokens and invalid image payloads", async () => {
+  const db = await createEditorDb();
+  const createResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "create_image_upload",
+        arguments: {
+          site: "ph",
+          filename: "ritratto.jpg",
+          mimeType: "image/jpeg",
+          sizeBytes: 5,
+          width: 1800,
+          height: 1200,
+          alt: "Ritratto caricato via endpoint",
+        },
+      },
+    },
+  });
+  const created = (await createResponse.json()).result.structuredContent;
+
+  const badToken = await fetchWorker(created.upload.uploadUrl, {
+    db,
+    mediaBucket: new FakeMediaBucket({}),
+    host: "api.lorenzozanna.com",
+    method: "PUT",
+    bearerToken: "mu_wrong",
+    headers: {
+      "content-type": "image/jpeg",
+      "content-length": "5",
+    },
+    rawBody: new Uint8Array([1, 2, 3, 4, 5]),
+  });
+  const badTokenPayload = await badToken.json();
+
+  assert.equal(badToken.status, 401);
+  assert.equal(badTokenPayload.error, "invalid_upload_token");
+
+  const badType = await fetchWorker(created.upload.uploadUrl, {
+    db,
+    mediaBucket: new FakeMediaBucket({}),
+    host: "api.lorenzozanna.com",
+    method: "PUT",
+    bearerToken: created.upload.uploadToken,
+    headers: {
+      "content-type": "image/png",
+      "content-length": "5",
+    },
+    rawBody: new Uint8Array([1, 2, 3, 4, 5]),
+  });
+  const badTypePayload = await badType.json();
+
+  assert.equal(badType.status, 415);
+  assert.equal(badTypePayload.error, "invalid_content_type");
+
+  const badSize = await fetchWorker(created.upload.uploadUrl, {
+    db,
+    mediaBucket: new FakeMediaBucket({}),
+    host: "api.lorenzozanna.com",
+    method: "PUT",
+    bearerToken: created.upload.uploadToken,
+    headers: {
+      "content-type": "image/jpeg",
+      "content-length": "6",
+    },
+    rawBody: new Uint8Array([1, 2, 3, 4, 5, 6]),
+  });
+  const badSizePayload = await badSize.json();
+
+  assert.equal(badSize.status, 413);
+  assert.equal(badSizePayload.error, "invalid_upload_size");
+});
+
+test("PUT /media/uploads/:uploadId rejects expired upload sessions", async () => {
+  const db = await createEditorDb();
+  const mediaBucket = new FakeMediaBucket({});
+  const createResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "create_image_upload",
+        arguments: {
+          site: "ph",
+          filename: "expired.jpg",
+          mimeType: "image/jpeg",
+          sizeBytes: 5,
+          width: 800,
+          height: 600,
+          alt: "Upload scaduto",
+        },
+      },
+    },
+  });
+  const created = (await createResponse.json()).result.structuredContent;
+  db.mediaUploads[0].expires_at = "2000-01-01T00:00:00.000Z";
+
+  const response = await fetchWorker(created.upload.uploadUrl, {
+    db,
+    mediaBucket,
+    host: "api.lorenzozanna.com",
+    method: "PUT",
+    bearerToken: created.upload.uploadToken,
+    headers: {
+      "content-type": "image/jpeg",
+      "content-length": "5",
+    },
+    rawBody: new Uint8Array([1, 2, 3, 4, 5]),
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 410);
+  assert.equal(payload.error, "upload_expired");
+  assert.equal(mediaBucket.puts.length, 0);
+});
+
+test("POST /mcp tools/call replace_image updates a contracted image from the media library", async () => {
+  const db = await createEditorDb({
+    mediaAssets: [
+      mediaAsset({
+        id: "asset_ready_portrait",
+        public_url: "assets/images/media/portrait.jpg",
+        alt: "Ritratto dalla libreria media",
+        caption: "Ritratto media",
+        status: "ready",
+      }),
+    ],
+  });
+  db.pageSections.push(
+    pageSection("page_portfolio", "section_portfolio_gallery", "gallery", "gallery", 25, true, {
+      items: [
+        {
+          key: "ritratti",
+          title: "Ritratti",
+          images: [
+            {
+              src: "assets/images/old.jpg",
+              alt: "Vecchio alt",
+              caption: "Vecchia caption",
+              variant: "wide",
+            },
+          ],
+        },
+      ],
+    }),
+  );
+
+  const response = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "replace_image",
+        arguments: {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images[0]",
+          assetId: "asset_ready_portrait",
+          alt: "Nuovo ritratto dal media manager",
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+  const gallery = db.pageSections.find((section) => section.section_key === "gallery");
+  const image = JSON.parse(gallery.data).items[0].images[0];
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.result.structuredContent.image.assetId, "asset_ready_portrait");
+  assert.equal(payload.result.structuredContent.image.src, "assets/images/media/portrait.jpg");
+  assert.equal(image.assetId, "asset_ready_portrait");
+  assert.equal(image.alt, "Nuovo ritratto dal media manager");
+  assert.equal(db.mediaUsages[0].path, "items[0].images[0]");
+  assert.equal(db.sectionRevisions[0].action, "replace_image");
+  assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[0]");
+});
+
+test("POST /mcp tools/call rollback_change reverts an image replacement and media usage index", async () => {
+  const db = await createEditorDb({
+    mediaAssets: [
+      mediaAsset({
+        id: "asset_ready_portrait",
+        public_url: "assets/images/media/portrait.jpg",
+        alt: "Ritratto dalla libreria media",
+        caption: "Ritratto media",
+        status: "ready",
+      }),
+    ],
+  });
+  db.pageSections.push(
+    pageSection("page_portfolio", "section_portfolio_gallery", "gallery", "gallery", 25, true, {
+      items: [
+        {
+          key: "ritratti",
+          title: "Ritratti",
+          images: [
+            {
+              src: "assets/images/old.jpg",
+              alt: "Vecchio alt",
+              caption: "Vecchia caption",
+              variant: "wide",
+            },
+          ],
+        },
+      ],
+    }),
+  );
+
+  const replaceResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "replace_image",
+        arguments: {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images[0]",
+          assetId: "asset_ready_portrait",
+          alt: "Nuovo ritratto dal media manager",
+        },
+      },
+    },
+  });
+  assert.equal(replaceResponse.status, 200);
+  assert.equal(db.mediaUsages.length, 1);
+
+  const rollbackResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "rollback_change",
+        arguments: {
+          site: "ph",
+          changeId: db.changeLog[0].id,
+        },
+      },
+    },
+  });
+  const payload = await rollbackResponse.json();
+  const gallery = db.pageSections.find((section) => section.section_key === "gallery");
+  const image = JSON.parse(gallery.data).items[0].images[0];
+
+  assert.equal(rollbackResponse.status, 200);
+  assert.equal(payload.result.structuredContent.rolledBackAction, "replace_image");
+  assert.equal(image.assetId, undefined);
+  assert.equal(image.src, "assets/images/old.jpg");
+  assert.equal(image.alt, "Vecchio alt");
+  assert.equal(db.mediaUsages.length, 0);
+  assert.equal(db.sectionRevisions[1].action, "rollback_change");
+  assert.equal(db.changeLog[1].action, "rollback_change");
+});
+
+test("POST /mcp tools/call set_image_focal_point updates a contracted image", async () => {
+  const db = await createEditorDb();
+  db.pageSections.push(
+    pageSection("page_portfolio", "section_portfolio_gallery", "gallery", "gallery", 25, true, {
+      items: [
+        {
+          key: "ritratti",
+          title: "Ritratti",
+          images: [
+            {
+              src: "assets/images/old.jpg",
+              alt: "Vecchio alt",
+              caption: "Vecchia caption",
+              variant: "wide",
+            },
+          ],
+        },
+      ],
+    }),
+  );
+
+  const response = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "set_image_focal_point",
+        arguments: {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images[0]",
+          x: 35,
+          y: 42,
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+  const gallery = db.pageSections.find((section) => section.section_key === "gallery");
+  const image = JSON.parse(gallery.data).items[0].images[0];
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(payload.result.structuredContent.focalPoint, { x: 35, y: 42 });
+  assert.deepEqual(image.focalPoint, { x: 35, y: 42 });
+  assert.equal(db.sectionRevisions[0].action, "set_image_focal_point");
+  assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[0]/focalPoint");
 });
 
 test("POST /mcp tools/call get_page allows viewer scoped user tokens", async () => {
@@ -1157,6 +1715,47 @@ test("POST /mcp tools/call add_faq_section creates and renders a FAQ from preset
   assert.equal(db.changeLog.at(-1).action, "add_faq_section");
 });
 
+test("POST /mcp tools/call add_text_subsection adds and renders an editorial item", async () => {
+  const db = await createEditorDb();
+  const response = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "add_text_subsection",
+        arguments: {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "text_2",
+          title: "Stampe fine art",
+          paragraphs: ["Una voce aggiunta dentro la sezione editoriale live."],
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+  const html = await (
+    await fetchWorker("/portfolio", {
+      db,
+      host: "ph.lorenzozanna.com",
+    })
+  ).text();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.result.structuredContent.sectionId, "text_2");
+  assert.equal(payload.result.structuredContent.itemIndex, 1);
+  assert.match(html, /data-section-id="text_2"/);
+  assert.match(html, /Stampe fine art/);
+  assert.match(html, /Una voce aggiunta dentro la sezione editoriale live\./);
+  assert.equal(db.changeLog.at(-1).action, "add_text_subsection");
+  assert.equal(db.changeLog.at(-1).target, "pages/portfolio/sections/text_2/subsections[1]");
+});
+
 test("POST /mcp tools/call update_cta updates D1 and the dynamic home HTML", async () => {
   const db = await createEditorDb();
   const mcpResponse = await fetchWorker("/mcp", {
@@ -1407,8 +2006,13 @@ async function fetchWorker(pathname, options = {}) {
     init.body = JSON.stringify(options.body);
   }
 
+  if (options.rawBody !== undefined) {
+    init.body = options.rawBody;
+  }
+
   return worker.fetch(new Request(`https://${host}${pathname}`, init), {
     DB: options.db ?? createSeededDb(),
+    MEDIA_BUCKET: options.mediaBucket,
     AI_API_TOKEN: API_TOKEN,
     LORENZO_OAUTH_PASSWORD: OAUTH_PASSWORD,
     ROOT_DOMAIN: "lorenzozanna.com",
@@ -1522,6 +2126,17 @@ function createSeededDb(options = {}) {
         title: "Portfolio fotografico",
         intro: "Ritratti, strada, natura, forme e ombre.",
       }),
+      pageSection("page_portfolio", "section_portfolio_text_2", "text_2", "text", 20, true, {
+        type: "text",
+        title: "Serie",
+        paragraphs: [],
+        subsections: [
+          {
+            title: "Ritratti",
+            paragraphs: ["Persone, posture, riflessi, distanza."],
+          },
+        ],
+      }),
       ...(includeFaq ? [pageSection("page_portfolio", "section_portfolio_faq", "faq", "faq", 90, faqEnabled, {
         title: "Domande frequenti",
         items: [
@@ -1547,6 +2162,9 @@ function createSeededDb(options = {}) {
     authTokens: options.authTokens ?? [],
     oauthAuthorizationCodes: options.oauthAuthorizationCodes ?? [],
     oauthAccessTokens: options.oauthAccessTokens ?? [],
+    mediaAssets: options.mediaAssets ?? [],
+    mediaUploads: options.mediaUploads ?? [],
+    mediaUsages: options.mediaUsages ?? [],
   });
 }
 
@@ -1606,6 +2224,24 @@ function pageSection(pageId, id, key, type, order, enabled, data) {
     section_order: order,
     enabled: enabled ? 1 : 0,
     data: JSON.stringify(data),
+  };
+}
+
+function mediaAsset(options) {
+  return {
+    id: options.id,
+    site_id: options.site_id ?? "site_ph",
+    r2_key: options.r2_key ?? `ph/originals/${options.id}.jpg`,
+    public_url: options.public_url,
+    alt: options.alt ?? "",
+    caption: options.caption ?? null,
+    width: options.width ?? 1600,
+    height: options.height ?? 1200,
+    mime_type: options.mime_type ?? "image/jpeg",
+    size_bytes: options.size_bytes ?? 345678,
+    status: options.status ?? "ready",
+    created_at: "2026-07-15 00:00:00",
+    updated_at: "2026-07-15 00:00:00",
   };
 }
 
@@ -1684,6 +2320,9 @@ class FakeD1Database {
     this.authTokens = [...seed.authTokens];
     this.oauthAuthorizationCodes = [...seed.oauthAuthorizationCodes];
     this.oauthAccessTokens = [...seed.oauthAccessTokens];
+    this.mediaAssets = [...seed.mediaAssets];
+    this.mediaUploads = [...seed.mediaUploads];
+    this.mediaUsages = [...seed.mediaUsages];
     this.sectionRevisions = [];
     this.changeLog = [];
   }
@@ -1778,6 +2417,67 @@ class FakeD1Database {
       };
     }
 
+    if (query.includes("FROM media_assets") && query.includes("AND id = ?")) {
+      return {
+        results: this.mediaAssets.filter((asset) => asset.site_id === params[0] && asset.id === params[1]),
+      };
+    }
+
+    if (query.includes("FROM media_assets") && query.includes("status = ?")) {
+      const [siteId, status, limit] = params;
+      return {
+        results: this.mediaAssets
+          .filter((asset) => asset.site_id === siteId && asset.status === status)
+          .slice(0, limit),
+      };
+    }
+
+    if (query.includes("FROM media_assets") && query.includes("WHERE site_id = ?")) {
+      const [siteId, limit] = params;
+      return {
+        results: this.mediaAssets
+          .filter((asset) => asset.site_id === siteId)
+          .slice(0, limit),
+      };
+    }
+
+    if (query.includes("FROM media_uploads") && query.includes("u.id = ?")) {
+      return {
+        results: this.mediaUploads
+          .filter((upload) => upload.site_id === params[0] && upload.id === params[1])
+          .map((upload) => {
+            const asset = this.mediaAssets.find((item) => item.id === upload.asset_id);
+            return {
+              upload_id: upload.id,
+              upload_status: upload.status,
+              upload_r2_key: upload.r2_key,
+              upload_filename: upload.filename,
+              upload_mime_type: upload.mime_type,
+              upload_size_bytes: upload.size_bytes,
+              upload_expires_at: upload.expires_at,
+              asset_id: asset?.id,
+              asset_r2_key: asset?.r2_key,
+              asset_public_url: asset?.public_url,
+              asset_alt: asset?.alt,
+              asset_caption: asset?.caption,
+              asset_width: asset?.width,
+              asset_height: asset?.height,
+              asset_mime_type: asset?.mime_type,
+              asset_size_bytes: asset?.size_bytes,
+              asset_status: asset?.status,
+              asset_created_at: asset?.created_at,
+              asset_updated_at: asset?.updated_at,
+            };
+          }),
+      };
+    }
+
+    if (query.includes("FROM media_uploads") && query.includes("WHERE id = ?")) {
+      return {
+        results: this.mediaUploads.filter((upload) => upload.id === params[0]),
+      };
+    }
+
     if (query.includes("FROM auth_tokens") && query.includes("token_hash = ?")) {
       return {
         results: this.authTokens
@@ -1831,6 +2531,58 @@ class FakeD1Database {
       return { success: true };
     }
 
+    if (query.includes("INSERT INTO media_assets")) {
+      const [
+        id,
+        siteId,
+        r2Key,
+        publicUrl,
+        alt,
+        caption,
+        width,
+        height,
+        mimeType,
+        sizeBytes,
+        status,
+      ] = params;
+      this.mediaAssets.push({
+        id,
+        site_id: siteId,
+        r2_key: r2Key,
+        public_url: publicUrl,
+        alt,
+        caption,
+        width,
+        height,
+        mime_type: mimeType,
+        size_bytes: sizeBytes,
+        status,
+        created_at: "2026-07-13 00:00:01",
+        updated_at: "2026-07-13 00:00:01",
+      });
+      return { success: true };
+    }
+
+    if (query.includes("INSERT INTO media_uploads")) {
+      const [id, siteId, assetId, r2Key, filename, mimeType, sizeBytes, tokenHash, expiresAt] = params;
+      this.mediaUploads.push({
+        id,
+        site_id: siteId,
+        asset_id: assetId,
+        r2_key: r2Key,
+        filename,
+        mime_type: mimeType,
+        size_bytes: sizeBytes,
+        upload_token_hash: tokenHash,
+        status: "pending",
+        expires_at: expiresAt,
+        uploaded_at: null,
+        created_at: "2026-07-13 00:00:01",
+        updated_at: "2026-07-13 00:00:01",
+      });
+      return { success: true };
+    }
+
     if (query.includes("INSERT INTO content_entries")) {
       const [id, siteId, collection, key, data, status] = params;
       const existing = this.contentEntries.find(
@@ -1874,13 +2626,82 @@ class FakeD1Database {
       return { success: true };
     }
 
+    if (query.includes("UPDATE media_assets")) {
+      if (query.includes("status = ?")) {
+        const [status, assetId] = params;
+        const asset = this.mediaAssets.find((item) => item.id === assetId);
+        if (asset) {
+          asset.status = status;
+          asset.updated_at = "2026-07-13 00:00:01";
+        }
+        return { success: true };
+      }
+
+      const [alt, assetId] = params;
+      const asset = this.mediaAssets.find((item) => item.id === assetId);
+      if (asset) {
+        asset.alt = alt;
+        asset.updated_at = "2026-07-13 00:00:01";
+      }
+      return { success: true };
+    }
+
+    if (query.includes("UPDATE media_uploads")) {
+      const [status, uploadId] = params;
+      const upload = this.mediaUploads.find((item) => item.id === uploadId);
+      if (upload) {
+        upload.status = status;
+        upload.uploaded_at = status === "uploaded" ? "2026-07-13 00:00:01" : upload.uploaded_at;
+        upload.updated_at = "2026-07-13 00:00:01";
+      }
+      return { success: true };
+    }
+
+    if (query.includes("DELETE FROM media_usages")) {
+      const [pageId, sectionId] = params;
+      this.mediaUsages = this.mediaUsages.filter(
+        (usage) => usage.page_id !== pageId || usage.section_id !== sectionId,
+      );
+      return { success: true };
+    }
+
+    if (query.includes("INSERT INTO media_usages")) {
+      const [id, assetId, pageId, sectionId, path] = params;
+      const existing = this.mediaUsages.find(
+        (usage) => usage.page_id === pageId && usage.section_id === sectionId && usage.path === path,
+      );
+      if (existing) {
+        existing.asset_id = assetId;
+        existing.updated_at = "2026-07-13 00:00:01";
+      } else {
+        this.mediaUsages.push({
+          id,
+          asset_id: assetId,
+          page_id: pageId,
+          section_id: sectionId,
+          path,
+          created_at: "2026-07-13 00:00:01",
+          updated_at: "2026-07-13 00:00:01",
+        });
+      }
+      return { success: true };
+    }
+
     if (query.includes("UPDATE page_sections")) {
-      if (query.includes("section_order = ?")) {
+      if (query.includes("section_order = ?") && query.includes("enabled = ?")) {
         const [enabled, order, data, sectionId] = params;
         const section = this.pageSections.find((item) => item.id === sectionId);
         section.enabled = enabled;
         section.section_order = order;
         section.data = data;
+        section.updated_at = "2026-07-13 00:00:01";
+        return { success: true };
+      }
+
+      if (query.includes("section_order = ?")) {
+        const [order, sectionId] = params;
+        const section = this.pageSections.find((item) => item.id === sectionId);
+        section.section_order = order;
         section.updated_at = "2026-07-13 00:00:01";
         return { success: true };
       }
@@ -2014,6 +2835,40 @@ class FakeD1Statement {
 
   run() {
     return Promise.resolve(this.db._run(this.query, this.params));
+  }
+}
+
+class FakeMediaBucket {
+  constructor(objects) {
+    this.objects = objects;
+    this.puts = [];
+  }
+
+  head(key) {
+    const object = this.objects[key];
+    if (!object) return Promise.resolve(null);
+    return Promise.resolve({
+      size: object.size,
+      httpMetadata: {
+        contentType: object.contentType,
+      },
+    });
+  }
+
+  async put(key, body, options) {
+    const bytes = body instanceof Uint8Array ? body : new Uint8Array(await new Response(body).arrayBuffer());
+    this.puts.push({
+      key,
+      body: bytes,
+      options,
+    });
+    this.objects[key] = {
+      size: bytes.byteLength,
+      contentType: options?.httpMetadata?.contentType,
+    };
+    return {
+      key,
+    };
   }
 }
 

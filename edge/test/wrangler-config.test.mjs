@@ -13,6 +13,10 @@ test("wrangler.toml targets the current production API custom domain", async () 
     config,
     /\[\[d1_databases\]\][\s\S]*binding = "DB"[\s\S]*database_name = "lorenzozanna_content"[\s\S]*database_id = "909a730d-0eb9-458a-ae34-c97a597cdcc4"/,
   );
+  assert.match(
+    config,
+    /\[\[r2_buckets\]\][\s\S]*binding = "MEDIA_BUCKET"[\s\S]*bucket_name = "lorenzozanna-media"/,
+  );
   assert.match(config, /\[\[routes\]\][\s\S]*pattern = "api\.lorenzozanna\.com"[\s\S]*custom_domain = true/);
   for (const route of [
     "ph.lorenzozanna.com/",

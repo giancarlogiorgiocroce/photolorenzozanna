@@ -231,11 +231,16 @@ Dopo la prima slice, aggiungere tool uno per volta.
   - [x] validare lunghezze;
   - [x] bloccare HTML arbitrario;
   - [x] scrivere `section_revisions` e `change_log`.
+- [x] `add_text_subsection`.
+  - [x] lavorare solo su sezioni `text` reali con `subsections[]` esposte dai contratti;
+  - [x] caso iniziale: `portfolio/text_2`, renderizzata live come `editorial-section`;
+  - [x] validare testo plain, bloccare HTML arbitrario;
+  - [x] scrivere `section_revisions` e `change_log`.
 - [x] `update_rich_text`.
 - [ ] `add_link`.
 - [ ] `remove_link`.
 - [x] `update_cta`.
-- [ ] `add_section_from_preset`.
+- [x] `add_section_from_preset`.
 - [x] `disable_section`.
 - [x] `enable_section`.
 - [ ] `reorder_sections`.
@@ -281,6 +286,7 @@ Le sezioni aggiunte da Lorenzo devono essere preimpostate da noi.
 - [x] Tool `list_section_presets`.
 - [x] Tool `add_section_from_preset`.
   - Stato 2026-07-14: supporta `faq` in v1; preset non ancora addable come `gallery` e `image_text` vengono rifiutati.
+  - Pulizia 2026-07-16: anche `text` e `cta` restano definiti ma non addable finche non servono una sezione live specifica con renderer/contratto gia in uso.
 - [x] Testare aggiunta FAQ a pagina senza FAQ.
 - [x] Testare che non si possano creare tipi sezione arbitrari.
 

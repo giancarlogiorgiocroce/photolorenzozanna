@@ -105,3 +105,60 @@ test("0008 seeds the contact band as a real editable page section", async () => 
   assert.doesNotMatch(sql, /\bDELETE\s+FROM\s+content_entries\b/i);
   assert.doesNotMatch(sql, /\bDROP\s+TABLE\b/i);
 });
+
+test("0009 creates structured media asset and usage tables without plaintext secrets", async () => {
+  const sql = await readFile(
+    new URL("../migrations/0009_media_assets.sql", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS media_assets/);
+  assert.match(sql, /site_id TEXT NOT NULL/);
+  assert.match(sql, /r2_key TEXT/);
+  assert.match(sql, /public_url TEXT NOT NULL/);
+  assert.match(sql, /alt TEXT NOT NULL DEFAULT ''/);
+  assert.match(sql, /caption TEXT/);
+  assert.match(sql, /width INTEGER NOT NULL/);
+  assert.match(sql, /height INTEGER NOT NULL/);
+  assert.match(sql, /mime_type TEXT NOT NULL/);
+  assert.match(sql, /size_bytes INTEGER NOT NULL/);
+  assert.match(sql, /status TEXT NOT NULL DEFAULT 'ready'/);
+  assert.match(sql, /CHECK \(status IN \('draft', 'ready', 'archived'\)\)/);
+  assert.match(sql, /FOREIGN KEY \(site_id\) REFERENCES sites\(id\) ON DELETE CASCADE/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS media_usages/);
+  assert.match(sql, /asset_id TEXT NOT NULL/);
+  assert.match(sql, /page_id TEXT NOT NULL/);
+  assert.match(sql, /section_id TEXT NOT NULL/);
+  assert.match(sql, /path TEXT NOT NULL/);
+  assert.match(sql, /UNIQUE \(page_id, section_id, path\)/);
+  assert.match(sql, /FOREIGN KEY \(asset_id\) REFERENCES media_assets\(id\) ON DELETE RESTRICT/);
+  assert.doesNotMatch(sql, /\bsecret\b/i);
+  assert.doesNotMatch(sql, /\btoken\b/i);
+  assert.doesNotMatch(sql, /\bDROP\s+TABLE\b/i);
+});
+
+test("0010 creates media upload sessions with hashed upload tokens", async () => {
+  const sql = await readFile(
+    new URL("../migrations/0010_media_uploads.sql", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS media_uploads/);
+  assert.match(sql, /site_id TEXT NOT NULL/);
+  assert.match(sql, /asset_id TEXT NOT NULL UNIQUE/);
+  assert.match(sql, /r2_key TEXT NOT NULL UNIQUE/);
+  assert.match(sql, /filename TEXT NOT NULL/);
+  assert.match(sql, /mime_type TEXT NOT NULL/);
+  assert.match(sql, /size_bytes INTEGER NOT NULL/);
+  assert.match(sql, /upload_token_hash TEXT NOT NULL UNIQUE/);
+  assert.match(sql, /status TEXT NOT NULL DEFAULT 'pending'/);
+  assert.match(sql, /CHECK \(status IN \('pending', 'uploaded', 'expired', 'cancelled'\)\)/);
+  assert.match(sql, /expires_at TEXT NOT NULL/);
+  assert.match(sql, /uploaded_at TEXT/);
+  assert.match(sql, /FOREIGN KEY \(site_id\) REFERENCES sites\(id\) ON DELETE CASCADE/);
+  assert.match(sql, /FOREIGN KEY \(asset_id\) REFERENCES media_assets\(id\) ON DELETE CASCADE/);
+  assert.doesNotMatch(sql, /\bupload_token TEXT\b/i);
+  assert.doesNotMatch(sql, /\btoken_plaintext\b/i);
+  assert.doesNotMatch(sql, /\bsecret\b/i);
+  assert.doesNotMatch(sql, /\bDROP\s+TABLE\b/i);
+});

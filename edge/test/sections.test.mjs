@@ -17,6 +17,7 @@ import {
   updateRichText,
   updateText,
 } from "../src/sections.mjs";
+import { addTextSubsection } from "../src/text-sections.mjs";
 
 test("disableSection hides a section, keeps its data, and records a revision plus change log", async () => {
   const db = createSectionDb();
@@ -203,18 +204,86 @@ test("addSectionFromPreset rejects arbitrary and not-yet-addable section presets
     /Unknown section preset/,
   );
 
+  for (const presetId of ["text", "cta", "gallery", "image_text"]) {
+    await assert.rejects(
+      () =>
+        addSectionFromPreset(
+          { DB: createSectionDb() },
+          {
+            site: "ph",
+            page: "portfolio",
+            presetId,
+            actor: "tdd-suite",
+          },
+        ),
+      /not addable yet/,
+    );
+  }
+});
+
+test("addTextSubsection adds an item to a contracted editorial text section", async () => {
+  const db = createSectionDb();
+
+  const result = await addTextSubsection(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      sectionId: "text_2",
+      title: "Stampe fine art",
+      paragraphs: ["Una nuova voce editoriale dentro la sezione Serie."],
+      actor: "tdd-suite",
+    },
+  );
+
+  const section = db.pageSections.find((item) => item.section_key === "text_2");
+  const data = JSON.parse(section.data);
+
+  assert.equal(result.site, "ph");
+  assert.equal(result.page, "portfolio");
+  assert.equal(result.sectionId, "text_2");
+  assert.equal(result.itemIndex, 1);
+  assert.deepEqual(result.item, {
+    title: "Stampe fine art",
+    paragraphs: ["Una nuova voce editoriale dentro la sezione Serie."],
+  });
+  assert.equal(data.subsections[1].title, "Stampe fine art");
+  assert.equal(db.sectionRevisions[0].action, "add_text_subsection");
+  assert.equal(db.changeLog[0].action, "add_text_subsection");
+  assert.equal(db.changeLog[0].target, "pages/portfolio/sections/text_2/subsections[1]");
+});
+
+test("addTextSubsection rejects unsupported sections and unsafe text", async () => {
   await assert.rejects(
     () =>
-      addSectionFromPreset(
+      addTextSubsection(
         { DB: createSectionDb() },
         {
           site: "ph",
           page: "portfolio",
-          presetId: "gallery",
+          sectionId: "faq",
+          title: "Non valido",
+          paragraphs: ["Le FAQ usano add_faq_item."],
           actor: "tdd-suite",
         },
       ),
-    /not addable yet/,
+    /does not support text subsections/,
+  );
+
+  await assert.rejects(
+    () =>
+      addTextSubsection(
+        { DB: createSectionDb() },
+        {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "text_2",
+          title: "<strong>HTML</strong>",
+          paragraphs: ["No."],
+          actor: "tdd-suite",
+        },
+      ),
+    /HTML is not allowed/,
   );
 });
 
@@ -926,6 +995,25 @@ function createSectionDb(options = {}) {
         }),
       }] : []),
       {
+        id: "section_portfolio_text_2",
+        page_id: "page_portfolio",
+        section_key: "text_2",
+        type: "text",
+        section_order: 20,
+        enabled: 1,
+        data: JSON.stringify({
+          type: "text",
+          title: "Serie",
+          paragraphs: [],
+          subsections: [
+            {
+              title: "Ritratti",
+              paragraphs: ["Persone, posture, riflessi, distanza."],
+            },
+          ],
+        }),
+      },
+      {
         id: "section_portfolio_cta",
         page_id: "page_portfolio",
         section_key: "cta",
@@ -1033,6 +1121,14 @@ class FakeSectionD1Database {
     }
 
     if (query.includes("UPDATE page_sections")) {
+      if (query.includes("section_order = ?")) {
+        const [order, sectionId] = params;
+        const section = this.pageSections.find((item) => item.id === sectionId);
+        section.section_order = order;
+        section.updated_at = "2026-07-13 00:00:01";
+        return { success: true };
+      }
+
       if (query.includes("data = ?")) {
         const [data, sectionId] = params;
         const section = this.pageSections.find((item) => item.id === sectionId);

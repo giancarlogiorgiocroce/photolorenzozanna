@@ -20,10 +20,18 @@ const FIELD = {
   cta: { path: "cta", kind: "link" },
   primaryCta: { path: "primaryCta", kind: "link" },
   secondaryCta: { path: "secondaryCta", kind: "link" },
+  imageAsset: { path: "image.assetId", kind: "media_asset", tool: "replace_image" },
+  imageFocalPoint: { path: "image.focalPoint", kind: "focal_point", tool: "set_image_focal_point" },
   imageAlt: { path: "image.alt", kind: "plain_text", maxLength: 180 },
   faqQuestion: { path: "items[].question", kind: "plain_text", maxLength: 160 },
   faqAnswer: { path: "items[].answer", kind: "rich_text", maxLength: 700, ...RICH_TEXT_TOOLS },
   galleryGroupTitle: { path: "items[].title", kind: "plain_text", maxLength: 90 },
+  galleryImageAsset: { path: "items[].images[].assetId", kind: "media_asset", tool: "replace_image" },
+  galleryImageFocalPoint: {
+    path: "items[].images[].focalPoint",
+    kind: "focal_point",
+    tool: "set_image_focal_point",
+  },
   galleryImageAlt: { path: "items[].images[].alt", kind: "plain_text", maxLength: 180 },
   galleryImageCaption: { path: "items[].images[].caption", kind: "plain_text", maxLength: 120 },
   contactChannelLabel: { path: "channels[].label", kind: "plain_text", maxLength: 40 },
@@ -42,6 +50,8 @@ const CONTRACTS = {
       FIELD.intro,
       FIELD.primaryCta,
       FIELD.secondaryCta,
+      FIELD.imageAsset,
+      FIELD.imageFocalPoint,
       FIELD.imageAlt,
     ],
   },
@@ -51,6 +61,8 @@ const CONTRACTS = {
       FIELD.kicker,
       FIELD.title,
       FIELD.intro,
+      { path: "shots[].assetId", kind: "media_asset", tool: "replace_image" },
+      { path: "shots[].focalPoint", kind: "focal_point", tool: "set_image_focal_point" },
       { path: "shots[].caption", kind: "plain_text", maxLength: 80 },
       { path: "shots[].alt", kind: "plain_text", maxLength: 180 },
       { path: "shots[].variant", kind: "enum", values: ["standard", "wide"] },
@@ -62,7 +74,7 @@ const CONTRACTS = {
   },
   "about.hero": {
     styleContract: "about.hero",
-    editableFields: [FIELD.eyebrow, FIELD.title, FIELD.intro, FIELD.imageAlt],
+    editableFields: [FIELD.eyebrow, FIELD.title, FIELD.intro, FIELD.imageAsset, FIELD.imageFocalPoint, FIELD.imageAlt],
   },
   "about.manifesto": {
     styleContract: "about.manifesto",
@@ -79,7 +91,7 @@ const CONTRACTS = {
   },
   "contact.hero": {
     styleContract: "contact.hero",
-    editableFields: [FIELD.eyebrow, FIELD.title, FIELD.intro, FIELD.imageAlt],
+    editableFields: [FIELD.eyebrow, FIELD.title, FIELD.intro, FIELD.imageAsset, FIELD.imageFocalPoint, FIELD.imageAlt],
   },
   "contact.band": {
     styleContract: "contact.band",
@@ -104,7 +116,13 @@ const CONTRACTS = {
   },
   "portfolio.gallery": {
     styleContract: "portfolio.gallery",
-    editableFields: [FIELD.galleryGroupTitle, FIELD.galleryImageAlt, FIELD.galleryImageCaption],
+    editableFields: [
+      FIELD.galleryGroupTitle,
+      FIELD.galleryImageAsset,
+      FIELD.galleryImageFocalPoint,
+      FIELD.galleryImageAlt,
+      FIELD.galleryImageCaption,
+    ],
   },
   "common.faq": {
     styleContract: "common.faq",

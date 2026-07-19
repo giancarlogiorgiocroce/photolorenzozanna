@@ -1,5 +1,6 @@
 import { renderPageHtml } from "./rendering.mjs";
 import { handleMcpHttpRequest } from "./mcp-http.mjs";
+import { handleMediaUploadRequest } from "./media.mjs";
 import { handleOAuthRequest } from "./oauth.mjs";
 import {
   getAuthorizationServerMetadata,
@@ -103,6 +104,10 @@ async function routeRequest(request, env, url) {
   if (segments[0] !== "api") {
     if (segments[0] === "mcp" && segments.length === 1) {
       return handleMcpHttpRequest(request, env);
+    }
+
+    if (segments[0] === "media") {
+      return handleMediaUploadRequest(request, env, segments);
     }
 
     return handlePageRoute(request, env, url, segments);
@@ -688,7 +693,11 @@ function invalidSlugResponse() {
 
 function isMissingDynamicSchemaError(error) {
   const message = String(error?.message ?? "");
-  return message.includes("no such table: pages") || message.includes("no such table: page_sections");
+  return message.includes("no such table: pages")
+    || message.includes("no such table: page_sections")
+    || message.includes("no such table: media_assets")
+    || message.includes("no such table: media_usages")
+    || message.includes("no such table: media_uploads");
 }
 
 function isPlainObject(value) {

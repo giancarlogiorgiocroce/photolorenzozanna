@@ -121,6 +121,49 @@ test("resolveEditableField matches concrete paths against section wildcard contr
   );
 });
 
+test("resolveEditableField exposes image asset fields without allowing free src edits", () => {
+  const homeHeroAsset = resolveEditableField(
+    "home",
+    {
+      section_key: "hero",
+      type: "hero",
+    },
+    "image.assetId",
+  );
+  const galleryAsset = resolveEditableField(
+    "portfolio",
+    {
+      section_key: "gallery",
+      type: "gallery",
+    },
+    "items[1].images[2].assetId",
+  );
+  const galleryFocalPoint = resolveEditableField(
+    "portfolio",
+    {
+      section_key: "gallery",
+      type: "gallery",
+    },
+    "items[1].images[2].focalPoint",
+  );
+  const gallerySrc = resolveEditableField(
+    "portfolio",
+    {
+      section_key: "gallery",
+      type: "gallery",
+    },
+    "items[1].images[2].src",
+  );
+
+  assert.equal(homeHeroAsset.kind, "media_asset");
+  assert.equal(homeHeroAsset.tool, "replace_image");
+  assert.equal(galleryAsset.kind, "media_asset");
+  assert.equal(galleryAsset.tool, "replace_image");
+  assert.equal(galleryFocalPoint.kind, "focal_point");
+  assert.equal(galleryFocalPoint.tool, "set_image_focal_point");
+  assert.equal(gallerySrc, null);
+});
+
 test("resolveEditableField exposes transitional paths for current structured page data", () => {
   const aboutValue = resolveEditableField(
     "chi-sono",

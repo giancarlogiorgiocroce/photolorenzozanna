@@ -111,6 +111,45 @@ test("renderPageHtml renders portfolio gallery sections from legacy series data"
   assert.match(html, /<figcaption data-lightbox-caption><\/figcaption>/);
 });
 
+test("renderPageHtml resolves gallery images from media asset metadata", async () => {
+  const db = createRendererDb({
+    gallery: true,
+    galleryAssetIds: true,
+  });
+  const html = await renderPageHtml(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+    },
+  );
+
+  assert.match(html, /data-full="assets\/images\/media\/ritratto-media\.jpg"/);
+  assert.match(html, /data-caption="Ritratti \/ asset"/);
+  assert.match(html, /<img src="assets\/images\/media\/ritratto-media\.jpg" alt="Ritratto dalla libreria media" width="1800" height="1200" loading="lazy" decoding="async" \/>/);
+  assert.doesNotMatch(html, /assets\/images\/portfolio\/ritratti\/ritratto-riflesso\.jpg/);
+});
+
+test("renderPageHtml renders image focal points as safe object-position styles", async () => {
+  const db = createRendererDb({
+    gallery: true,
+    galleryAssetIds: true,
+    galleryFocalPoint: true,
+  });
+  const html = await renderPageHtml(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+    },
+  );
+
+  assert.match(
+    html,
+    /<img src="assets\/images\/media\/ritratto-media\.jpg" alt="Ritratto dalla libreria media" width="1800" height="1200" style="object-position: 35% 42%;" loading="lazy" decoding="async" \/>/,
+  );
+});
+
 test("renderPageHtml uses curated portfolio gallery layout patterns", async () => {
   const db = createRendererDb({
     gallery: true,
@@ -289,6 +328,8 @@ function createRendererDb(options = {}) {
   const faqEnabled = options.faqEnabled !== false;
   const pageBlocksShape = options.pageBlocksShape === true;
   const gallery = options.gallery === true;
+  const galleryAssetIds = options.galleryAssetIds === true;
+  const galleryFocalPoint = options.galleryFocalPoint === true;
   const richText = options.richText === true;
 
   return new FakeRendererD1Database({
@@ -412,13 +453,19 @@ function createRendererDb(options = {}) {
                   key: "ritratti",
                   title: "Ritratti",
                   images: [
-                    {
-                      caption: "Ritratti / riflesso",
-                      alt: "Ritratto sovrapposto a riflessi di rami",
-                      width: 1600,
-                      height: 1071,
-                      src: "/assets/images/portfolio/ritratti/ritratto-riflesso.jpg",
-                    },
+                    galleryAssetIds
+                      ? {
+                          assetId: "asset_media_portrait",
+                          caption: "Ritratti / asset",
+                          ...(galleryFocalPoint ? { focalPoint: { x: 35, y: 42 } } : {}),
+                        }
+                      : {
+                          caption: "Ritratti / riflesso",
+                          alt: "Ritratto sovrapposto a riflessi di rami",
+                          width: 1600,
+                          height: 1071,
+                          src: "/assets/images/portfolio/ritratti/ritratto-riflesso.jpg",
+                        },
                   ],
                 },
                 {
@@ -487,6 +534,21 @@ function createRendererDb(options = {}) {
           ]
         : []),
     ],
+    mediaAssets: [
+      {
+        id: "asset_media_portrait",
+        site_id: "site_ph",
+        r2_key: "ph/originals/ritratto-media.jpg",
+        public_url: "assets/images/media/ritratto-media.jpg",
+        alt: "Ritratto dalla libreria media",
+        caption: "Ritratto media",
+        width: 1800,
+        height: 1200,
+        mime_type: "image/jpeg",
+        size_bytes: 456789,
+        status: "ready",
+      },
+    ],
   });
 }
 
@@ -517,6 +579,7 @@ class FakeRendererD1Database {
     this.sites = [...seed.sites];
     this.pages = [...seed.pages];
     this.pageSections = [...seed.pageSections];
+    this.mediaAssets = [...(seed.mediaAssets ?? [])];
   }
 
   prepare(query) {
@@ -546,6 +609,12 @@ class FakeRendererD1Database {
         results: this.pageSections
           .filter((section) => section.page_id === params[0] && section.enabled === 1)
           .sort((left, right) => left.section_order - right.section_order),
+      };
+    }
+
+    if (query.includes("FROM media_assets") && query.includes("WHERE site_id = ?")) {
+      return {
+        results: this.mediaAssets.filter((asset) => asset.site_id === params[0] && asset.status === "ready"),
       };
     }
 

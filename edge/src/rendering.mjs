@@ -160,7 +160,8 @@ export async function renderPageHtml(env, input) {
     .all();
 
   const context = getPageContext(page.slug, page.title);
-  const sections = (sectionsResult.results ?? []).map((section) => normalizeSection(page.slug, section));
+  const rawSections = (sectionsResult.results ?? []).map((section) => normalizeSection(page.slug, section));
+  const sections = await hydrateSectionMedia(env, site.id, rawSections);
   const body = sections.map((section) => renderSection(section, context)).filter(Boolean).join("\n");
 
   return `<!doctype html>
@@ -208,6 +209,77 @@ function normalizeSection(pageSlug, section) {
     order: Number(section.section_order),
     data: safeJson(section.data) ?? {},
   };
+}
+
+async function hydrateSectionMedia(env, siteId, sections) {
+  const assetIds = new Set();
+  for (const section of sections) {
+    collectMediaAssetIds(section.data, assetIds);
+  }
+
+  if (assetIds.size === 0) return sections;
+
+  const rows = await env.DB.prepare(
+    `SELECT id, public_url, alt, caption, width, height, status
+     FROM media_assets
+     WHERE site_id = ? AND status = 'ready'`,
+  )
+    .bind(siteId)
+    .all();
+
+  const assets = new Map(
+    (rows.results ?? [])
+      .filter((asset) => assetIds.has(asset.id))
+      .map((asset) => [asset.id, asset]),
+  );
+
+  if (assets.size === 0) return sections;
+
+  return sections.map((section) => ({
+    ...section,
+    data: hydrateMediaValue(section.data, assets),
+  }));
+}
+
+function collectMediaAssetIds(value, assetIds) {
+  if (Array.isArray(value)) {
+    for (const item of value) collectMediaAssetIds(item, assetIds);
+    return;
+  }
+
+  if (!value || typeof value !== "object") return;
+
+  if (typeof value.assetId === "string" && value.assetId.trim()) {
+    assetIds.add(value.assetId.trim());
+  }
+
+  for (const item of Object.values(value)) {
+    collectMediaAssetIds(item, assetIds);
+  }
+}
+
+function hydrateMediaValue(value, assets) {
+  if (Array.isArray(value)) {
+    return value.map((item) => hydrateMediaValue(item, assets));
+  }
+
+  if (!value || typeof value !== "object") return value;
+
+  const hydrated = {};
+  for (const [key, item] of Object.entries(value)) {
+    hydrated[key] = hydrateMediaValue(item, assets);
+  }
+
+  const asset = assets.get(hydrated.assetId);
+  if (!asset) return hydrated;
+
+  if (!hydrated.src && asset.public_url) hydrated.src = asset.public_url;
+  if (!hydrated.alt && asset.alt) hydrated.alt = asset.alt;
+  if (!hydrated.caption && asset.caption) hydrated.caption = asset.caption;
+  if (!positiveInteger(hydrated.width) && positiveInteger(asset.width)) hydrated.width = Number(asset.width);
+  if (!positiveInteger(hydrated.height) && positiveInteger(asset.height)) hydrated.height = Number(asset.height);
+
+  return hydrated;
 }
 
 function renderSection(section, context) {
@@ -592,9 +664,10 @@ function renderGalleryImage(image, context = {}) {
     width ? `width="${width}"` : "",
     height ? `height="${height}"` : "",
   ].filter(Boolean).join(" ");
+  const styleAttribute = renderFocalPointStyle(image);
 
   return `<button class="${className}" type="button" data-full="${escapeAttribute(src)}" data-caption="${caption}">
-  <img src="${escapeAttribute(src)}" alt="${alt}" ${sizeAttributes} loading="lazy" decoding="async" />
+  <img src="${escapeAttribute(src)}" alt="${alt}" ${sizeAttributes}${styleAttribute} loading="lazy" decoding="async" />
 </button>`;
 }
 
@@ -816,9 +889,23 @@ function renderImage(image, options = {}) {
     width ? `width="${width}"` : "",
     height ? `height="${height}"` : "",
   ].filter(Boolean).join(" ");
+  const styleAttribute = renderFocalPointStyle(image);
   const priorityAttribute = options.fetchPriority ? ` fetchpriority="${escapeAttribute(options.fetchPriority)}"` : "";
 
-  return `<img src="${escapeAttribute(src)}" alt="${escapeAttribute(alt)}" ${sizeAttributes}${priorityAttribute} decoding="async" />`;
+  return `<img src="${escapeAttribute(src)}" alt="${escapeAttribute(alt)}" ${sizeAttributes}${styleAttribute}${priorityAttribute} decoding="async" />`;
+}
+
+function renderFocalPointStyle(image) {
+  const x = normalizeFocalPercent(image?.focalPoint?.x);
+  const y = normalizeFocalPercent(image?.focalPoint?.y);
+  if (x === null || y === null) return "";
+  return ` style="object-position: ${x}% ${y}%;"`;
+}
+
+function normalizeFocalPercent(value) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0 || number > 100) return null;
+  return number;
 }
 
 function normalizeCardItems(items, subsections) {
@@ -874,6 +961,8 @@ function normalizeAssetPath(value) {
   if (!normalized) return "";
   if (normalized.startsWith("/assets/")) return normalized.slice(1);
   if (normalized.startsWith("assets/")) return normalized;
+  if (normalized.startsWith("/media/")) return normalized.slice(1);
+  if (normalized.startsWith("media/")) return normalized;
   return "";
 }
 

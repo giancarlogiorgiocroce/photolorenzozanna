@@ -313,6 +313,13 @@ Nota 2026-07-15 UX tool: quando una sezione contiene item con significato umano 
   - Test 2026-07-14: dominio, resolver contratti e MCP HTTP coperti; la suite `npm test` in `edge` passa con 52 test.
   - Deploy 2026-07-14: Worker versione `9f35c365-7a72-4a47-b47b-72816065af98`.
   - Smoke remoto 2026-07-14: pagina temporanea `codex-update-smoke` creata; `tools/list` -> `get_page`, `disable_section`, `enable_section`, `update_text`; `tools/call update_text` su `hero.title` -> `Smoke Updated`; D1 verificato con JSON aggiornato, `section_revisions.action = update_text`, `change_log.action = update_text`; cleanup completato.
+- [x] `add_text_subsection`
+  - [x] aggiungere un item testuale a sezioni reali con `subsections[]`;
+  - [x] caso iniziale: `portfolio/text_2`, renderizzata live come `editorial-section`;
+  - [x] validare contratto, plain text e assenza di HTML;
+  - [x] creare `section_revisions` e `change_log`.
+  - Implementazione TDD 2026-07-16: `edge/src/text-sections.mjs` espone `addTextSubsection`; `edge/src/mcp-http.mjs` espone `add_text_subsection` con permesso `content:write`; il tool rifiuta sezioni senza campi `subsections[].title`/`subsections[].paragraphs` editabili.
+  - Test 2026-07-16: dominio e MCP HTTP coperti; `add_text_subsection` aggiorna D1 e il renderer mostra subito il nuovo item dentro `data-section-id="text_2"`; suite `npm test` in `edge` -> 136 test verdi.
 - [x] `update_rich_text`
   - [x] bold;
   - [x] italic;
@@ -382,6 +389,7 @@ Obiettivo: Lorenzo puo aggiungere o togliere sezioni solo da preset sicuri.
   - Test 2026-07-14: suite `npm test` in `edge` passa con 85 test; coperti `list_section_presets`, pagina senza FAQ -> `add_faq_section`, FAQ esistente disabilitata -> riabilitazione senza duplicato, FAQ vuota, item add/update/remove/reorder, rifiuto HTML e rifiuto preset arbitrari.
   - Deploy 2026-07-14: Worker versione `5ca0affc-0d5e-4491-8742-74e0d6ab59d3`.
   - Smoke remoto 2026-07-14: fixture `codex-faq-preset-smoke`; `tools/list` espone `list_section_presets` e `add_faq_section`; `list_section_presets` -> `faq,text,cta,gallery,image_text`; `add_faq_section` -> `created: true`, `sectionId: faq`, `itemCount: 1`, `revisionId` presente; render live della fixture contiene `data-section-id="faq"` e la domanda; cleanup D1 completato con `smoke_pages = 0`, `smoke_sections = 0`, `smoke_changes = 0`.
+  - Pulizia 2026-07-16: niente apertura generica di `text`/`cta` come preset addable e niente `reorder_sections` locale finche non vengono ricondotti a sezioni effettivamente live e modificabili; il lavoro nuovo e stato spostato sul caso reale `editorial-section` (`portfolio/text_2`) tramite `add_text_subsection`.
 
 Prompt per chat:
 
@@ -393,27 +401,46 @@ Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentr
 
 Obiettivo: gestire upload e sostituzione immagini senza modificare HTML.
 
-- [ ] Decidere storage:
-  - [ ] R2 puro;
+- [x] Decidere storage:
+  - [x] R2 puro;
   - [ ] Cloudflare Images;
   - [ ] R2 + servizio trasformazioni.
-- [ ] Disegnare tabella `media_assets`.
-- [ ] Creare bucket R2 se necessario.
-- [ ] Tool `create_image_upload`.
-- [ ] Tool `confirm_image_upload`.
-- [ ] Tool `replace_image`.
+  - Decisione 2026-07-19: v1 su R2 puro, con bucket privato e accesso solo via Worker/MCP.
+- [x] Disegnare tabella `media_assets`.
+  - Implementazione TDD 2026-07-15: migration `edge/migrations/0009_media_assets.sql` crea `media_assets` e `media_usages`, con ownership `site_id`, metadata immagine, status `draft|ready|archived` e uso per pagina/sezione/path.
+- [x] Creare bucket R2 se necessario.
+  - Risolto remoto 2026-07-19: dopo attivazione R2 sull'account, creato bucket `lorenzozanna-media`; `npx wrangler r2 bucket list` lo conferma con `creation_date` 2026-07-19T13:20:32.977Z.
+  - [x] Configurare binding Worker `MEDIA_BUCKET` in `edge/wrangler.toml`.
+    - Implementazione TDD 2026-07-15: aggiunto binding R2 `lorenzozanna-media` e test di configurazione.
+  - Migrazioni remote 2026-07-19: applicate su D1 `lorenzozanna_content` le migration `0009_media_assets.sql` e `0010_media_uploads.sql`.
+  - Deploy 2026-07-19: Worker versione `ce843b68-0146-43f8-978b-ca71cf3e85b3`, binding `env.MEDIA_BUCKET (lorenzozanna-media)` presente.
+  - Smoke remoto 2026-07-19: token editor temporaneo `codex-media-smoke`; `create_image_upload` -> upload R2 via `PUT /media/uploads/:uploadId` -> `confirm_image_upload` con asset `ready`; cleanup confermato con conteggi D1 a zero e oggetto R2 smoke rimosso dal bucket remoto.
+- [x] Tool `create_image_upload`.
+  - Implementazione TDD 2026-07-15: crea asset bozza + sessione upload `pending`, valida MIME/dimensione/dimensioni/alt, genera `r2Key`, `uploadUrl` e `uploadToken` one-time salvato solo come hash.
+- [x] Endpoint `PUT /media/uploads/:uploadId`.
+  - Implementazione TDD 2026-07-15: riceve il binario con `uploadToken`, valida MIME, dimensione e scadenza dichiarati nella sessione, poi salva l'oggetto via binding `MEDIA_BUCKET.put`.
+- [x] Tool `confirm_image_upload`.
+  - Implementazione TDD 2026-07-15: controlla l'oggetto via binding `MEDIA_BUCKET.head(r2Key)`, verifica size/MIME e promuove l'asset da `draft` a `ready`.
+- [x] Tool `list_media_assets`.
+  - Implementazione TDD 2026-07-15: tool MCP read-only che espone asset filtrati per status, senza richiedere path manuali.
+- [x] Tool `replace_image`.
+  - Implementazione TDD 2026-07-15: sostituisce immagini solo tramite `assetId` esistente e pronto, aggiorna la sezione, registra `media_usages`, `section_revisions` e `change_log`; non accetta `src` libero.
 - [ ] Tool `attach_image_to_section`.
-- [ ] Tool `update_image_alt`.
-- [ ] Tool `set_image_focal_point`.
+- [x] Tool `update_image_alt`.
+  - Implementazione TDD 2026-07-15: aggiorna l'alt text dell'asset media con validazione anti-HTML e log in `change_log`.
+- [x] Tool `set_image_focal_point`.
+  - Implementazione TDD 2026-07-15: aggiorna `focalPoint {x,y}` solo su immagini previste dal contratto, accetta percentuali intere 0-100, registra revisione/log e il renderer le traduce in `object-position` sicuro.
 - [ ] Tool `remove_image_from_section`.
 - [ ] Validare:
-  - [ ] formato file;
-  - [ ] dimensione massima;
-  - [ ] alt text obbligatorio;
-  - [ ] ownership site;
+  - [x] formato file;
+  - [x] dimensione massima;
+  - [x] alt text obbligatorio;
+  - [x] ownership site;
   - [ ] virus/security se applicabile.
-- [ ] Renderizzare immagini da media metadata.
-- [ ] Rollback immagine.
+- [x] Renderizzare immagini da media metadata.
+  - Implementazione TDD 2026-07-15: il renderer risolve `assetId` nei dati sezione usando `media_assets` e popola `src`, `alt`, `caption`, `width`, `height`.
+- [x] Rollback immagine.
+  - Implementazione TDD 2026-07-15: test esplicito `replace_image` -> `rollback_change`; il rollback ripristina il JSON immagine precedente e risincronizza `media_usages` per evitare riferimenti asset obsoleti.
 
 Prompt per chat:
 

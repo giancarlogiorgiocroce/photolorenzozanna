@@ -230,6 +230,7 @@ class FakeRollbackD1Database {
     this.pageSections = [...seed.pageSections];
     this.changeLog = [...seed.changeLog];
     this.sectionRevisions = [...(seed.sectionRevisions ?? [])];
+    this.mediaUsages = [...(seed.mediaUsages ?? [])];
   }
 
   prepare(query) {
@@ -330,6 +331,28 @@ class FakeRollbackD1Database {
         before_json: beforeJson,
         after_json: afterJson,
         created_at: "2026-07-14 12:00:00",
+      });
+      return { success: true };
+    }
+
+    if (query.includes("DELETE FROM media_usages")) {
+      const [pageId, sectionId] = params;
+      this.mediaUsages = this.mediaUsages.filter(
+        (usage) => usage.page_id !== pageId || usage.section_id !== sectionId,
+      );
+      return { success: true };
+    }
+
+    if (query.includes("INSERT INTO media_usages")) {
+      const [id, assetId, pageId, sectionId, path] = params;
+      this.mediaUsages.push({
+        id,
+        asset_id: assetId,
+        page_id: pageId,
+        section_id: sectionId,
+        path,
+        created_at: "2026-07-14 12:00:00",
+        updated_at: "2026-07-14 12:00:00",
       });
       return { success: true };
     }

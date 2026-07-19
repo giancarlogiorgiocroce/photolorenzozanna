@@ -11,6 +11,10 @@ binding = "DB"
 database_name = "lorenzozanna_content"
 database_id = "909a730d-0eb9-458a-ae34-c97a597cdcc4"
 
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "lorenzozanna-media"
+
 [[routes]]
 pattern = "api.lorenzozanna.com"
 custom_domain = true

@@ -7,6 +7,14 @@ import {
   updateText,
 } from "./sections.mjs";
 import {
+  confirmImageUpload,
+  createImageUpload,
+  listMediaAssets,
+  replaceImage,
+  setImageFocalPoint,
+  updateImageAlt,
+} from "./media.mjs";
+import {
   addFaqItem,
   addFaqSection,
   addSectionFromPreset,
@@ -14,6 +22,7 @@ import {
   reorderFaqItems,
   updateFaqItem,
 } from "./faq-sections.mjs";
+import { addTextSubsection } from "./text-sections.mjs";
 import { getPage } from "./pages.mjs";
 import { listChanges } from "./changes.mjs";
 import { rollbackChange } from "./rollback.mjs";
@@ -67,6 +76,25 @@ const TOOLS = [
         page: { type: "string", description: "Optional page slug, for example portfolio." },
         sectionId: { type: "string", description: "Optional section identifier. Requires page." },
         limit: { type: "integer", description: "Maximum changes to return, from 1 to 50." },
+      },
+      required: ["site"],
+    },
+  },
+  {
+    name: "list_media_assets",
+    title: "List Media Assets",
+    description: "List ready media assets for a site so images can be chosen by assetId instead of arbitrary src paths.",
+    securitySchemes: READ_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        status: {
+          type: "string",
+          enum: ["ready", "draft", "archived", "all"],
+          description: "Optional media status filter. Defaults to ready.",
+        },
+        limit: { type: "integer", description: "Maximum assets to return, from 1 to 100." },
       },
       required: ["site"],
     },
@@ -207,6 +235,29 @@ const TOOLS = [
     },
   },
   {
+    name: "add_text_subsection",
+    title: "Add Text Subsection",
+    description: "Add one safe text item to a contracted text section with subsections, such as portfolio/text_2.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, for example portfolio." },
+        sectionId: { type: "string", description: "Text section identifier, for example text_2." },
+        title: { type: "string", description: "Safe plain-text item title." },
+        paragraphs: {
+          type: "array",
+          description: "Safe plain-text paragraphs for the item.",
+          items: { type: "string" },
+        },
+        text: { type: "string", description: "Optional single paragraph alias." },
+        index: { type: "integer", description: "Optional insert index." },
+      },
+      required: ["site", "page", "sectionId", "title"],
+    },
+  },
+  {
     name: "update_text",
     title: "Update Text",
     description: "Update a contracted plain-text field without accepting arbitrary HTML.",
@@ -267,6 +318,97 @@ const TOOLS = [
         enabled: { type: "boolean", description: "Set false to hide this single contact channel." },
       },
       required: ["site", "page", "channel"],
+    },
+  },
+  {
+    name: "create_image_upload",
+    title: "Create Image Upload",
+    description: "Create a short-lived upload session and draft media asset for a new image.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        filename: { type: "string", description: "Original image filename." },
+        mimeType: {
+          type: "string",
+          enum: ["image/jpeg", "image/png", "image/webp", "image/avif"],
+          description: "Allowed image MIME type.",
+        },
+        sizeBytes: { type: "integer", description: "Image file size in bytes." },
+        width: { type: "integer", description: "Image pixel width." },
+        height: { type: "integer", description: "Image pixel height." },
+        alt: { type: "string", description: "Accessible alt text. Required for non-decorative images." },
+        caption: { type: "string", description: "Optional caption." },
+      },
+      required: ["site", "filename", "mimeType", "sizeBytes", "width", "height", "alt"],
+    },
+  },
+  {
+    name: "confirm_image_upload",
+    title: "Confirm Image Upload",
+    description: "Confirm that a pending upload exists in R2 and promote the draft media asset to ready.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        uploadId: { type: "string", description: "Upload session id returned by create_image_upload." },
+      },
+      required: ["site", "uploadId"],
+    },
+  },
+  {
+    name: "update_image_alt",
+    title: "Update Image Alt",
+    description: "Update the alt text stored on a media asset. HTML is not accepted.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        assetId: { type: "string", description: "Media asset id from list_media_assets." },
+        alt: { type: "string", description: "Accessible alt text. Required for non-decorative images." },
+      },
+      required: ["site", "assetId", "alt"],
+    },
+  },
+  {
+    name: "replace_image",
+    title: "Replace Image",
+    description: "Replace a contracted image field with an existing media asset. The client supplies assetId, never a free src.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, for example portfolio." },
+        sectionId: { type: "string", description: "Section identifier, for example gallery or hero." },
+        path: { type: "string", description: "Concrete image object path, for example items[0].images[0] or image." },
+        assetId: { type: "string", description: "Ready media asset id from list_media_assets." },
+        alt: { type: "string", description: "Optional replacement alt text. Required if the asset has no alt and image is not decorative." },
+        caption: { type: "string", description: "Optional caption override." },
+        decorative: { type: "boolean", description: "Set true only for decorative images that should render with empty alt." },
+      },
+      required: ["site", "page", "sectionId", "path", "assetId"],
+    },
+  },
+  {
+    name: "set_image_focal_point",
+    title: "Set Image Focal Point",
+    description: "Set a controlled focal point for a contracted image object using percentage coordinates from 0 to 100.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, for example portfolio." },
+        sectionId: { type: "string", description: "Section identifier, for example gallery or hero." },
+        path: { type: "string", description: "Concrete image object path, for example items[0].images[0] or image." },
+        x: { type: "integer", minimum: 0, maximum: 100, description: "Horizontal focal point percentage." },
+        y: { type: "integer", minimum: 0, maximum: 100, description: "Vertical focal point percentage." },
+      },
+      required: ["site", "page", "sectionId", "path", "x", "y"],
     },
   },
   {
@@ -419,6 +561,22 @@ async function handleMcpMethod(method, params, env, auth) {
       return toolResult(result);
     }
 
+    if (name === "list_media_assets") {
+      if (!hasMcpPermission(auth, "content:read", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:read.", {
+          permission: "content:read",
+          site: args.site,
+        });
+      }
+
+      const result = await listMediaAssets(env, {
+        site: args.site,
+        status: args.status,
+        limit: args.limit,
+      });
+      return toolResult(result);
+    }
+
     if (name === "add_section_from_preset") {
       if (!hasMcpPermission(auth, "content:write", args.site)) {
         throw mcpError(-32003, "Permission denied for content:write.", {
@@ -537,6 +695,28 @@ async function handleMcpMethod(method, params, env, auth) {
       return toolResult(result);
     }
 
+    if (name === "add_text_subsection") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await addTextSubsection(env, {
+        site: args.site,
+        page: args.page,
+        sectionId: args.sectionId,
+        title: args.title,
+        paragraphs: args.paragraphs,
+        text: args.text,
+        index: args.index,
+        position: args.position,
+        actor: auth.actor,
+      });
+      return toolResult(result);
+    }
+
     if (name === "disable_section") {
       if (!hasMcpPermission(auth, "content:write", args.site)) {
         throw mcpError(-32003, "Permission denied for content:write.", {
@@ -631,6 +811,105 @@ async function handleMcpMethod(method, params, env, auth) {
       copyOptionalArg(input, args, "enabled");
 
       const result = await updateContactChannel(env, input);
+      return toolResult(result);
+    }
+
+    if (name === "create_image_upload") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await createImageUpload(env, {
+        site: args.site,
+        filename: args.filename,
+        mimeType: args.mimeType,
+        sizeBytes: args.sizeBytes,
+        width: args.width,
+        height: args.height,
+        alt: args.alt,
+        caption: args.caption,
+        actor: auth.actor,
+      });
+      return toolResult(result);
+    }
+
+    if (name === "confirm_image_upload") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await confirmImageUpload(env, {
+        site: args.site,
+        uploadId: args.uploadId,
+        actor: auth.actor,
+      });
+      return toolResult(result);
+    }
+
+    if (name === "update_image_alt") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await updateImageAlt(env, {
+        site: args.site,
+        assetId: args.assetId,
+        alt: args.alt,
+        actor: auth.actor,
+      });
+      return toolResult(result);
+    }
+
+    if (name === "replace_image") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const input = {
+        site: args.site,
+        page: args.page,
+        sectionId: args.sectionId,
+        path: args.path,
+        assetId: args.assetId,
+        actor: auth.actor,
+      };
+      copyOptionalArg(input, args, "alt");
+      copyOptionalArg(input, args, "caption");
+      copyOptionalArg(input, args, "decorative");
+
+      const result = await replaceImage(env, input);
+      return toolResult(result);
+    }
+
+    if (name === "set_image_focal_point") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await setImageFocalPoint(env, {
+        site: args.site,
+        page: args.page,
+        sectionId: args.sectionId,
+        path: args.path,
+        x: args.x,
+        y: args.y,
+        actor: auth.actor,
+      });
       return toolResult(result);
     }
 
@@ -736,7 +1015,11 @@ function normalizeMcpError(error) {
 
 function isMissingDynamicSchemaError(error) {
   const message = String(error?.message ?? "");
-  return message.includes("no such table: pages") || message.includes("no such table: page_sections");
+  return message.includes("no such table: pages")
+    || message.includes("no such table: page_sections")
+    || message.includes("no such table: media_assets")
+    || message.includes("no such table: media_usages")
+    || message.includes("no such table: media_uploads");
 }
 
 function json(payload, status = 200, headers = {}) {
