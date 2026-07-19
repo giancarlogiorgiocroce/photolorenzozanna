@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  attachImageToSection,
   confirmImageUpload,
   createImageUpload,
   listMediaAssets,
@@ -333,6 +334,110 @@ test("replaceImage rejects non-ready assets, arbitrary src paths, and missing al
         },
       ),
     /Alt text is required/,
+  );
+});
+
+test("attachImageToSection appends a ready asset to a contracted image array", async () => {
+  const db = createMediaDb();
+
+  const result = await attachImageToSection(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      sectionId: "gallery",
+      path: "items[0].images",
+      assetId: "asset_ready_portrait",
+      alt: "Ritratto aggiunto alla gallery",
+      caption: "Nuova immagine in gallery",
+      variant: "tall",
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(result.site, "ph");
+  assert.equal(result.page, "portfolio");
+  assert.equal(result.sectionId, "gallery");
+  assert.equal(result.path, "items[0].images");
+  assert.equal(result.imagePath, "items[0].images[1]");
+  assert.equal(result.itemIndex, 1);
+  assert.equal(result.asset.id, "asset_ready_portrait");
+  assert.equal(result.image.assetId, "asset_ready_portrait");
+  assert.equal(result.image.src, "assets/images/media/portrait.jpg");
+  assert.equal(result.image.alt, "Ritratto aggiunto alla gallery");
+  assert.equal(result.image.caption, "Nuova immagine in gallery");
+  assert.equal(result.image.variant, "tall");
+
+  const section = db.pageSections.find((item) => item.section_key === "gallery");
+  const images = JSON.parse(section.data).items[0].images;
+  assert.equal(images.length, 2);
+  assert.equal(images[1].assetId, "asset_ready_portrait");
+  assert.equal(images[1].variant, "tall");
+
+  assert.equal(db.mediaUsages.length, 1);
+  assert.equal(db.mediaUsages[0].asset_id, "asset_ready_portrait");
+  assert.equal(db.mediaUsages[0].path, "items[0].images[1]");
+
+  assert.equal(db.sectionRevisions.length, 1);
+  assert.equal(db.sectionRevisions[0].action, "attach_image_to_section");
+  assert.equal(JSON.parse(db.sectionRevisions[0].after_json).data.items[0].images[1].assetId, "asset_ready_portrait");
+
+  assert.equal(db.changeLog.length, 1);
+  assert.equal(db.changeLog[0].action, "attach_image_to_section");
+  assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[1]");
+});
+
+test("attachImageToSection rejects non-array paths, non-ready assets, and unsupported variants", async () => {
+  await assert.rejects(
+    () =>
+      attachImageToSection(
+        { DB: createMediaDb() },
+        {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images[0]",
+          assetId: "asset_ready_portrait",
+          alt: "Path sbagliato",
+          actor: "tdd-suite",
+        },
+      ),
+    /Field is not editable with attach_image_to_section/,
+  );
+
+  await assert.rejects(
+    () =>
+      attachImageToSection(
+        { DB: createMediaDb() },
+        {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images",
+          assetId: "asset_draft",
+          alt: "Bozza",
+          actor: "tdd-suite",
+        },
+      ),
+    /Media asset is not ready/,
+  );
+
+  await assert.rejects(
+    () =>
+      attachImageToSection(
+        { DB: createMediaDb() },
+        {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images",
+          assetId: "asset_ready_portrait",
+          alt: "Variante sbagliata",
+          variant: "panorama",
+          actor: "tdd-suite",
+        },
+      ),
+    /Invalid image variant/,
   );
 });
 

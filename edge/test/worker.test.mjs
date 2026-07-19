@@ -533,6 +533,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   const updateText = payload.result.tools.find((tool) => tool.name === "update_text");
   const updateContactChannel = payload.result.tools.find((tool) => tool.name === "update_contact_channel");
   const replaceImage = payload.result.tools.find((tool) => tool.name === "replace_image");
+  const attachImageToSection = payload.result.tools.find((tool) => tool.name === "attach_image_to_section");
   const setImageFocalPoint = payload.result.tools.find((tool) => tool.name === "set_image_focal_point");
 
   assert.equal(response.status, 200);
@@ -558,6 +559,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
     "confirm_image_upload",
     "update_image_alt",
     "replace_image",
+    "attach_image_to_section",
     "set_image_focal_point",
     "update_rich_text",
     "rollback_change",
@@ -568,10 +570,13 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.deepEqual(updateContactChannel.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(createImageUpload.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(replaceImage.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
+  assert.deepEqual(attachImageToSection.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(setImageFocalPoint.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(updateContactChannel.inputSchema.properties.channel.enum, ["email", "instagram", "telefono"]);
   assert.equal(updateContactChannel.inputSchema.properties.href.type, "string");
   assert.equal(replaceImage.inputSchema.properties.assetId.type, "string");
+  assert.equal(attachImageToSection.inputSchema.properties.path.type, "string");
+  assert.equal(attachImageToSection.inputSchema.properties.variant.enum.includes("tall"), true);
   assert.equal(setImageFocalPoint.inputSchema.properties.x.minimum, 0);
   assert.equal(setImageFocalPoint.inputSchema.properties.y.maximum, 100);
   assert.equal(createImageUpload.inputSchema.properties.mimeType.enum.includes("image/jpeg"), true);
@@ -1204,6 +1209,76 @@ test("POST /mcp tools/call rollback_change reverts an image replacement and medi
   assert.equal(db.mediaUsages.length, 0);
   assert.equal(db.sectionRevisions[1].action, "rollback_change");
   assert.equal(db.changeLog[1].action, "rollback_change");
+});
+
+test("POST /mcp tools/call attach_image_to_section appends a media asset to a gallery group", async () => {
+  const db = await createEditorDb({
+    mediaAssets: [
+      mediaAsset({
+        id: "asset_ready_portrait",
+        public_url: "assets/images/media/portrait.jpg",
+        alt: "Ritratto dalla libreria media",
+        caption: "Ritratto media",
+        status: "ready",
+      }),
+    ],
+  });
+  db.pageSections.push(
+    pageSection("page_portfolio", "section_portfolio_gallery", "gallery", "gallery", 25, true, {
+      items: [
+        {
+          key: "ritratti",
+          title: "Ritratti",
+          images: [
+            {
+              src: "assets/images/old.jpg",
+              alt: "Vecchio alt",
+              caption: "Vecchia caption",
+              variant: "wide",
+            },
+          ],
+        },
+      ],
+    }),
+  );
+
+  const response = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "attach_image_to_section",
+        arguments: {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images",
+          assetId: "asset_ready_portrait",
+          alt: "Ritratto aggiunto dal media manager",
+          caption: "Nuova immagine",
+          variant: "tall",
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+  const gallery = db.pageSections.find((section) => section.section_key === "gallery");
+  const images = JSON.parse(gallery.data).items[0].images;
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.result.structuredContent.imagePath, "items[0].images[1]");
+  assert.equal(payload.result.structuredContent.image.assetId, "asset_ready_portrait");
+  assert.equal(images.length, 2);
+  assert.equal(images[1].assetId, "asset_ready_portrait");
+  assert.equal(images[1].variant, "tall");
+  assert.equal(db.mediaUsages[0].path, "items[0].images[1]");
+  assert.equal(db.sectionRevisions[0].action, "attach_image_to_section");
+  assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[1]");
 });
 
 test("POST /mcp tools/call set_image_focal_point updates a contracted image", async () => {

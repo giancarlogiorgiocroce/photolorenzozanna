@@ -138,6 +138,14 @@ test("resolveEditableField exposes image asset fields without allowing free src 
     },
     "items[1].images[2].assetId",
   );
+  const galleryImages = resolveEditableField(
+    "portfolio",
+    {
+      section_key: "gallery",
+      type: "gallery",
+    },
+    "items[1].images",
+  );
   const galleryFocalPoint = resolveEditableField(
     "portfolio",
     {
@@ -157,6 +165,8 @@ test("resolveEditableField exposes image asset fields without allowing free src 
 
   assert.equal(homeHeroAsset.kind, "media_asset");
   assert.equal(homeHeroAsset.tool, "replace_image");
+  assert.equal(galleryImages.kind, "media_asset_list");
+  assert.equal(galleryImages.tool, "attach_image_to_section");
   assert.equal(galleryAsset.kind, "media_asset");
   assert.equal(galleryAsset.tool, "replace_image");
   assert.equal(galleryFocalPoint.kind, "focal_point");

@@ -425,7 +425,9 @@ Obiettivo: gestire upload e sostituzione immagini senza modificare HTML.
   - Implementazione TDD 2026-07-15: tool MCP read-only che espone asset filtrati per status, senza richiedere path manuali.
 - [x] Tool `replace_image`.
   - Implementazione TDD 2026-07-15: sostituisce immagini solo tramite `assetId` esistente e pronto, aggiorna la sezione, registra `media_usages`, `section_revisions` e `change_log`; non accetta `src` libero.
-- [ ] Tool `attach_image_to_section`.
+- [x] Tool `attach_image_to_section`.
+  - Implementazione TDD 2026-07-19: aggiunge un asset media `ready` a una lista immagini prevista dal contratto (`items[].images` o `shots`), senza accettare `src` libero; valida alt/decorative e variante layout, registra `media_usages`, `section_revisions` e `change_log`.
+  - Deploy 2026-07-19: Worker versione `1bc03b68-eb4f-4b28-8224-8bbb7cf6b3cf`; smoke remoto non mutativo `tools/list` conferma `attach_image_to_section` esposto con `path` string e variante `tall`.
 - [x] Tool `update_image_alt`.
   - Implementazione TDD 2026-07-15: aggiorna l'alt text dell'asset media con validazione anti-HTML e log in `change_log`.
 - [x] Tool `set_image_focal_point`.

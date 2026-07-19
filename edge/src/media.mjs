@@ -324,6 +324,120 @@ export async function replaceImage(env, input) {
   return writeImageReference(env, input, "replace_image");
 }
 
+export async function attachImageToSection(env, input) {
+  const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
+  const pageSlug = requiredPattern(input?.page, "page", SLUG_PATTERN);
+  const sectionKey = requiredPattern(input?.sectionId, "sectionId", SECTION_KEY_PATTERN);
+  const path = requiredPattern(input?.path, "path", IMAGE_PATH_PATTERN);
+  const assetId = requiredPattern(input?.assetId, "assetId", ID_PATTERN);
+  const actor = requiredString(input?.actor || "mcp");
+
+  const { site, page, section } = await loadSection(env, siteSlug, pageSlug, sectionKey);
+  const field = resolveEditableField(page.slug, section, path);
+  if (!field || field.kind !== "media_asset_list") {
+    throw new Error(`Field is not editable with attach_image_to_section: ${path}`);
+  }
+
+  const asset = await loadMediaAsset(env, site.id, assetId);
+  if (asset.status !== "ready") {
+    throw new Error(`Media asset is not ready: ${assetId}`);
+  }
+
+  const assetPublicUrl = normalizeMediaPublicUrl(asset.public_url);
+  const before = serializeSection(section);
+  const data = cloneJsonObject(before.data);
+  const images = readArrayAtPath(data, path);
+  const itemIndex = images.length;
+  const imagePath = `${path}[${itemIndex}]`;
+  const assetField = resolveEditableField(page.slug, section, `${imagePath}.assetId`);
+  if (!assetField || assetField.kind !== "media_asset") {
+    throw new Error(`Field is not editable with attach_image_to_section: ${imagePath}.assetId`);
+  }
+
+  const decorative = hasOwn(input, "decorative")
+    ? normalizeBoolean(input.decorative, "decorative")
+    : false;
+  const alt = decorative ? "" : normalizeImageAltForReplacement(input, asset);
+  const captionField = resolveEditableField(page.slug, section, `${imagePath}.caption`);
+  const captionMaxLength = captionField?.maxLength ?? 120;
+  const caption = hasOwn(input, "caption")
+    ? normalizeOptionalText(input.caption, { maxLength: captionMaxLength, name: "caption" })
+    : normalizeOptionalText(asset.caption, { maxLength: captionMaxLength, name: "caption" });
+  const variant = normalizeImageVariant(input, page, section, imagePath);
+
+  const nextImage = {
+    assetId: asset.id,
+    src: assetPublicUrl,
+    alt,
+    width: positiveInteger(asset.width, "width"),
+    height: positiveInteger(asset.height, "height"),
+  };
+
+  if (caption) nextImage.caption = caption;
+  if (variant) nextImage.variant = variant;
+  if (decorative) nextImage.decorative = true;
+
+  images.push(nextImage);
+
+  const revisionId = crypto.randomUUID();
+  const after = {
+    ...before,
+    data,
+  };
+
+  await env.DB.prepare(
+    `UPDATE page_sections
+     SET data = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+  )
+    .bind(JSON.stringify(data), section.id)
+    .run();
+
+  await env.DB.prepare(
+    `INSERT INTO media_usages (
+       id, asset_id, page_id, section_id, path, created_at, updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+     ON CONFLICT(page_id, section_id, path) DO UPDATE SET
+       asset_id = excluded.asset_id,
+       updated_at = datetime('now')`,
+  )
+    .bind(crypto.randomUUID(), asset.id, page.id, section.id, imagePath)
+    .run();
+
+  await env.DB.prepare(
+    `INSERT INTO section_revisions (
+       id, section_id, actor, action, before_json, after_json, created_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+  )
+    .bind(revisionId, section.id, actor, "attach_image_to_section", JSON.stringify(before), JSON.stringify(after))
+    .run();
+
+  await insertChangeLog(env, {
+    siteId: site.id,
+    actor,
+    action: "attach_image_to_section",
+    target: `pages/${page.slug}/sections/${section.section_key}/${imagePath}`,
+    before,
+    after,
+  });
+
+  return {
+    site: site.slug,
+    page: page.slug,
+    sectionId: section.section_key,
+    path,
+    imagePath,
+    itemIndex,
+    asset: serializeAsset(asset),
+    image: nextImage,
+    revisionId,
+    published: true,
+    previewUrl: page.slug === "home" ? "/" : `/${page.slug}`,
+  };
+}
+
 export async function setImageFocalPoint(env, input) {
   const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
   const pageSlug = requiredPattern(input?.page, "page", SLUG_PATTERN);
@@ -750,6 +864,19 @@ function normalizeImageAltForReplacement(input, asset) {
   throw new Error("Alt text is required for non-decorative images.");
 }
 
+function normalizeImageVariant(input, page, section, imagePath) {
+  if (!hasOwn(input, "variant") || input.variant == null || input.variant === "") {
+    return "";
+  }
+
+  const variant = requiredString(input.variant);
+  const field = resolveEditableField(page.slug, section, `${imagePath}.variant`);
+  if (!field || field.kind !== "enum" || !field.values?.includes(variant)) {
+    throw new Error("Invalid image variant.");
+  }
+  return variant;
+}
+
 function normalizeFocalPercent(value, name) {
   const number = Number(value);
   if (!Number.isInteger(number) || number < 0 || number > 100) {
@@ -839,6 +966,14 @@ function readObjectAtPath(data, path) {
   const value = readValueAtPath(data, path);
   if (!isObjectRecord(value)) {
     throw new Error(`Path does not contain an image object: ${path}`);
+  }
+  return value;
+}
+
+function readArrayAtPath(data, path) {
+  const value = readValueAtPath(data, path);
+  if (!Array.isArray(value)) {
+    throw new Error(`Path does not contain an image array: ${path}`);
   }
   return value;
 }

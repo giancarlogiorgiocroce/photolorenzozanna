@@ -26,6 +26,7 @@ const FIELD = {
   faqQuestion: { path: "items[].question", kind: "plain_text", maxLength: 160 },
   faqAnswer: { path: "items[].answer", kind: "rich_text", maxLength: 700, ...RICH_TEXT_TOOLS },
   galleryGroupTitle: { path: "items[].title", kind: "plain_text", maxLength: 90 },
+  galleryImageList: { path: "items[].images", kind: "media_asset_list", tool: "attach_image_to_section" },
   galleryImageAsset: { path: "items[].images[].assetId", kind: "media_asset", tool: "replace_image" },
   galleryImageFocalPoint: {
     path: "items[].images[].focalPoint",
@@ -34,6 +35,7 @@ const FIELD = {
   },
   galleryImageAlt: { path: "items[].images[].alt", kind: "plain_text", maxLength: 180 },
   galleryImageCaption: { path: "items[].images[].caption", kind: "plain_text", maxLength: 120 },
+  galleryImageVariant: { path: "items[].images[].variant", kind: "enum", values: ["standard", "wide", "tall"] },
   contactChannelLabel: { path: "channels[].label", kind: "plain_text", maxLength: 40 },
   contactChannelValue: { path: "channels[].value", kind: "plain_text", maxLength: 120 },
   contactChannelHref: { path: "channels[].href", kind: "link", nullable: true },
@@ -61,6 +63,7 @@ const CONTRACTS = {
       FIELD.kicker,
       FIELD.title,
       FIELD.intro,
+      { path: "shots", kind: "media_asset_list", tool: "attach_image_to_section" },
       { path: "shots[].assetId", kind: "media_asset", tool: "replace_image" },
       { path: "shots[].focalPoint", kind: "focal_point", tool: "set_image_focal_point" },
       { path: "shots[].caption", kind: "plain_text", maxLength: 80 },
@@ -118,10 +121,12 @@ const CONTRACTS = {
     styleContract: "portfolio.gallery",
     editableFields: [
       FIELD.galleryGroupTitle,
+      FIELD.galleryImageList,
       FIELD.galleryImageAsset,
       FIELD.galleryImageFocalPoint,
       FIELD.galleryImageAlt,
       FIELD.galleryImageCaption,
+      FIELD.galleryImageVariant,
     ],
   },
   "common.faq": {

@@ -7,6 +7,7 @@ import {
   updateText,
 } from "./sections.mjs";
 import {
+  attachImageToSection,
   confirmImageUpload,
   createImageUpload,
   listMediaAssets,
@@ -388,6 +389,31 @@ const TOOLS = [
         assetId: { type: "string", description: "Ready media asset id from list_media_assets." },
         alt: { type: "string", description: "Optional replacement alt text. Required if the asset has no alt and image is not decorative." },
         caption: { type: "string", description: "Optional caption override." },
+        decorative: { type: "boolean", description: "Set true only for decorative images that should render with empty alt." },
+      },
+      required: ["site", "page", "sectionId", "path", "assetId"],
+    },
+  },
+  {
+    name: "attach_image_to_section",
+    title: "Attach Image To Section",
+    description: "Append a ready media asset to a contracted image array, such as a portfolio gallery group.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, for example portfolio." },
+        sectionId: { type: "string", description: "Section identifier, for example gallery." },
+        path: { type: "string", description: "Concrete image array path, for example items[0].images or shots." },
+        assetId: { type: "string", description: "Ready media asset id from list_media_assets." },
+        alt: { type: "string", description: "Optional image alt text. Required if the asset has no alt and image is not decorative." },
+        caption: { type: "string", description: "Optional caption override." },
+        variant: {
+          type: "string",
+          enum: ["standard", "wide", "tall"],
+          description: "Optional layout variant allowed by the target section contract.",
+        },
         decorative: { type: "boolean", description: "Set true only for decorative images that should render with empty alt." },
       },
       required: ["site", "page", "sectionId", "path", "assetId"],
@@ -890,6 +916,31 @@ async function handleMcpMethod(method, params, env, auth) {
       copyOptionalArg(input, args, "decorative");
 
       const result = await replaceImage(env, input);
+      return toolResult(result);
+    }
+
+    if (name === "attach_image_to_section") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const input = {
+        site: args.site,
+        page: args.page,
+        sectionId: args.sectionId,
+        path: args.path,
+        assetId: args.assetId,
+        actor: auth.actor,
+      };
+      copyOptionalArg(input, args, "alt");
+      copyOptionalArg(input, args, "caption");
+      copyOptionalArg(input, args, "variant");
+      copyOptionalArg(input, args, "decorative");
+
+      const result = await attachImageToSection(env, input);
       return toolResult(result);
     }
 
