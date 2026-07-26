@@ -47,13 +47,19 @@ test("renderPageHtml includes the existing site shell and page assets", async ()
     },
   );
 
-  assert.match(html, /<link rel="stylesheet" href="assets\/css\/base\.css\?v=20260715-cookie-footer" \/>/);
-  assert.match(html, /<link rel="stylesheet" href="assets\/css\/portfolio\.css\?v=20260715-cookie-footer" \/>/);
+  assert.match(html, /<link rel="stylesheet" href="assets\/css\/base\.css\?v=20260726-faq-animation" \/>/);
+  assert.match(html, /<meta name="theme-color" content="#0f1010" \/>/);
+  assert.match(html, /<link rel="icon" href="\/favicon\.ico" sizes="any" \/>/);
+  assert.match(html, /<link rel="icon" type="image\/png" href="\/assets\/icons\/favicon-32x32\.png" sizes="32x32" \/>/);
+  assert.match(html, /<link rel="icon" type="image\/png" href="\/assets\/icons\/favicon-16x16\.png" sizes="16x16" \/>/);
+  assert.match(html, /<link rel="apple-touch-icon" href="\/assets\/icons\/apple-touch-icon\.png" sizes="180x180" \/>/);
+  assert.match(html, /<link rel="manifest" href="\/site\.webmanifest" \/>/);
+  assert.match(html, /<link rel="stylesheet" href="assets\/css\/portfolio\.css\?v=20260726-faq-animation" \/>/);
   assert.match(html, /<meta\s+name="description"\s+content="Ritratti, strada, natura, forme e ombre: una selezione fotografica di Lorenzo Zanna tra volti, paesaggio, luce e superfici\."\s+\/>/);
   assert.match(html, /<link rel="canonical" href="https:\/\/ph\.lorenzozanna\.com\/portfolio" \/>/);
   assert.match(html, /<meta property="og:url" content="https:\/\/ph\.lorenzozanna\.com\/portfolio" \/>/);
-  assert.match(html, /<script src="assets\/js\/main\.js\?v=20260715-cookie-footer" defer><\/script>/);
-  assert.match(html, /<script src="assets\/js\/gallery\.js\?v=20260715-cookie-footer" defer><\/script>/);
+  assert.match(html, /<script src="assets\/js\/main\.js\?v=20260726-faq-animation" defer><\/script>/);
+  assert.match(html, /<script src="assets\/js\/gallery\.js\?v=20260726-faq-animation" defer><\/script>/);
   assert.match(html, /class="site-header"/);
   assert.match(html, /<a class="brand" href="\/" aria-label="Lorenzo Zanna home">/);
   assert.match(html, /<nav class="site-nav"/);

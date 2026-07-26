@@ -1,7 +1,7 @@
 import { resolveSectionContract } from "./page-contracts.mjs";
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
-const ASSET_VERSION = "20260715-cookie-footer";
+const ASSET_VERSION = "20260726-faq-animation";
 const CANONICAL_ORIGIN = "https://ph.lorenzozanna.com";
 
 const GALLERY_LAYOUTS = {
@@ -170,6 +170,12 @@ export async function renderPageHtml(env, input) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 ${indent(renderHeadMeta(context), 4)}
+    <meta name="theme-color" content="#0f1010" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/assets/icons/favicon-32x32.png" sizes="32x32" />
+    <link rel="icon" type="image/png" href="/assets/icons/favicon-16x16.png" sizes="16x16" />
+    <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png" sizes="180x180" />
+    <link rel="manifest" href="/site.webmanifest" />
     <link rel="stylesheet" href="${assetUrl("assets/css/base.css")}" />
     <link rel="stylesheet" href="${assetUrl(`assets/css/${context.css}`)}" />
     <script src="${assetUrl("assets/js/main.js")}" defer></script>
