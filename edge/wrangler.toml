@@ -62,3 +62,7 @@ zone_name = "lorenzozanna.com"
 [[routes]]
 pattern = "ph.lorenzozanna.com/contact.html"
 zone_name = "lorenzozanna.com"
+
+[[routes]]
+pattern = "ph.lorenzozanna.com/media/assets/*"
+zone_name = "lorenzozanna.com"
