@@ -86,6 +86,7 @@ export async function createImageUpload(env, input) {
       status: "pending",
       method: "PUT",
       uploadUrl: `/media/uploads/${uploadId}`,
+      uploadPageUrl: buildMediaUploadPageUrl(env, uploadId, uploadToken),
       uploadToken,
       headers: {
         authorization: `Bearer ${uploadToken}`,
@@ -174,8 +175,20 @@ export async function confirmImageUpload(env, input) {
 }
 
 export async function handleMediaUploadRequest(request, env, segments) {
-  if (segments.length !== 3 || segments[1] !== "uploads") {
+  const isUploadObjectRoute = segments.length === 3 && segments[1] === "uploads";
+  const isUploadFormRoute = segments.length === 4 && segments[1] === "uploads" && segments[3] === "form";
+
+  if (!isUploadObjectRoute && !isUploadFormRoute) {
     return json({ error: "not_found", message: "Media route not found." }, 404);
+  }
+
+  const uploadId = String(segments[2] ?? "").trim();
+  if (!ID_PATTERN.test(uploadId)) {
+    return json({ error: "invalid_upload", message: "Invalid upload id." }, 400);
+  }
+
+  if (isUploadFormRoute) {
+    return handleMediaUploadFormRequest(request, uploadId);
   }
 
   if (request.method !== "PUT") {
@@ -188,11 +201,6 @@ export async function handleMediaUploadRequest(request, env, segments) {
 
   if (!env?.MEDIA_BUCKET || typeof env.MEDIA_BUCKET.put !== "function") {
     return json({ error: "missing_media_bucket", message: "R2 binding MEDIA_BUCKET is not configured." }, 500);
-  }
-
-  const uploadId = String(segments[2] ?? "").trim();
-  if (!ID_PATTERN.test(uploadId)) {
-    return json({ error: "invalid_upload", message: "Invalid upload id." }, 400);
   }
 
   const upload = await loadMediaUploadById(env, uploadId);
@@ -219,16 +227,12 @@ export async function handleMediaUploadRequest(request, env, segments) {
     return json({ error: "invalid_content_type", message: "Upload content type does not match the session." }, 415);
   }
 
-  const contentLength = Number(request.headers.get("content-length"));
-  if (!Number.isInteger(contentLength) || contentLength !== Number(upload.size_bytes)) {
-    return json({ error: "invalid_upload_size", message: "Upload size does not match the session." }, 413);
+  const uploadBody = await readValidatedUploadBody(request, upload.size_bytes);
+  if (uploadBody.error) {
+    return json(uploadBody.error, uploadBody.status);
   }
 
-  if (!request.body) {
-    return json({ error: "missing_upload_body", message: "Upload body is required." }, 400);
-  }
-
-  await env.MEDIA_BUCKET.put(upload.r2_key, request.body, {
+  await env.MEDIA_BUCKET.put(upload.r2_key, uploadBody.body, {
     httpMetadata: {
       contentType,
     },
@@ -246,6 +250,133 @@ export async function handleMediaUploadRequest(request, env, segments) {
   });
 }
 
+function handleMediaUploadFormRequest(request, uploadId) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return json({ error: "method_not_allowed", message: "Use GET for the media upload form." }, 405);
+  }
+
+  return html(renderMediaUploadForm(uploadId), 200, { head: request.method === "HEAD" });
+}
+
+async function readValidatedUploadBody(request, expectedSizeBytes) {
+  if (!request.body) {
+    return {
+      status: 400,
+      error: { error: "missing_upload_body", message: "Upload body is required." },
+    };
+  }
+
+  const expectedSize = Number(expectedSizeBytes);
+  const contentLengthHeader = request.headers.get("content-length");
+  if (contentLengthHeader != null && contentLengthHeader !== "") {
+    const contentLength = Number(contentLengthHeader);
+    if (!Number.isInteger(contentLength) || contentLength !== expectedSize) {
+      return {
+        status: 413,
+        error: { error: "invalid_upload_size", message: "Upload size does not match the session." },
+      };
+    }
+
+    return { body: request.body };
+  }
+
+  const body = await request.arrayBuffer();
+  if (body.byteLength !== expectedSize) {
+    return {
+      status: 413,
+      error: { error: "invalid_upload_size", message: "Upload size does not match the session." },
+    };
+  }
+
+  return { body };
+}
+
+function renderMediaUploadForm(uploadId) {
+  const escapedUploadId = escapeHtml(uploadId);
+  const escapedUploadIdAttribute = escapeAttribute(uploadId);
+
+  return `<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lorenzo Zanna Media Upload</title>
+  <style>
+    :root { color-scheme: light; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: system-ui, sans-serif; background: #f7f6f2; color: #171717; }
+    main { width: min(92vw, 460px); border: 1px solid #d8d4ca; background: #fff; padding: 28px; }
+    h1 { margin: 0 0 12px; font-size: 24px; line-height: 1.15; }
+    p { margin: 0 0 16px; line-height: 1.5; }
+    code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
+    input { display: block; width: 100%; margin: 18px 0; font: inherit; }
+    button { width: 100%; min-height: 44px; border: 0; background: #171717; color: #fff; font: inherit; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: wait; }
+    output { display: block; min-height: 22px; margin-top: 14px; line-height: 1.45; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Lorenzo Zanna Media Upload</h1>
+    <p>Seleziona il file immagine richiesto nella chat. Questa pagina puo caricare solo la sessione <code>${escapedUploadId}</code>.</p>
+    <input id="file" type="file" accept="image/jpeg,image/png,image/webp,image/avif" />
+    <button id="upload" type="button">Carica immagine</button>
+    <output id="status" role="status"></output>
+  </main>
+  <script>
+    const uploadId = "${escapedUploadIdAttribute}";
+    const fileInput = document.getElementById("file");
+    const uploadButton = document.getElementById("upload");
+    const statusOutput = document.getElementById("status");
+
+    function uploadToken() {
+      const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+      const params = new URLSearchParams(hash);
+      return params.get("token") || hash;
+    }
+
+    function setStatus(message) {
+      statusOutput.textContent = message;
+    }
+
+    uploadButton.addEventListener("click", async () => {
+      const token = uploadToken();
+      const file = fileInput.files && fileInput.files[0];
+
+      if (!token) {
+        setStatus("Token upload mancante. Torna in chat e apri il link completo.");
+        return;
+      }
+
+      if (!file) {
+        setStatus("Scegli prima un file immagine.");
+        return;
+      }
+
+      uploadButton.disabled = true;
+      setStatus("Upload in corso...");
+
+      try {
+        const response = await fetch("/media/uploads/" + encodeURIComponent(uploadId), {
+          method: "PUT",
+          headers: {
+            authorization: "Bearer " + token,
+            "content-type": file.type || "application/octet-stream",
+          },
+          body: file,
+        });
+        const text = await response.text();
+        if (!response.ok) throw new Error(text || "HTTP " + response.status);
+        setStatus("Upload completato. Torna in chat e chiedi di confermare e collegare l'immagine.");
+      } catch (error) {
+        setStatus("Upload non riuscito: " + error.message);
+      } finally {
+        uploadButton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>`;
+}
 export async function listMediaAssets(env, input) {
   const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
   const status = normalizeStatus(input?.status ?? "ready");
@@ -1067,6 +1198,25 @@ function hasOwn(object, key) {
   return Object.prototype.hasOwnProperty.call(Object(object), key);
 }
 
+function buildMediaUploadPageUrl(env, uploadId, uploadToken) {
+  const path = `/media/uploads/${encodeURIComponent(uploadId)}/form#token=${encodeURIComponent(uploadToken)}`;
+  const rootDomain = String(env?.ROOT_DOMAIN ?? "").trim();
+  if (!rootDomain) return path;
+  return `https://api.${rootDomain}${path}`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value);
+}
 function safeJson(value) {
   if (value == null) return null;
   try {
@@ -1091,6 +1241,16 @@ async function timingSafeHashEqual(token, expectedHash) {
     diff |= actualHash.charCodeAt(index) ^ String(expectedHash).charCodeAt(index);
   }
   return diff === 0;
+}
+
+function html(payload, status = 200, options = {}) {
+  return new Response(options.head ? null : payload, {
+    status,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
 }
 
 function json(payload, status = 200) {
