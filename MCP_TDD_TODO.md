@@ -305,23 +305,38 @@ Le sezioni aggiunte da Lorenzo devono essere preimpostate da noi.
 
 ## 12. Media e immagini
 
-Da fare dopo testi/sezioni, perche aggiunge storage e sicurezza.
+Stato 2026-07-30: pipeline R2/media implementata e deployata. Manuale operativo in `MCP_MEDIA_PIPELINE.md`.
 
-- [ ] Decidere storage: R2 o Cloudflare Images.
-- [ ] Creare bucket R2 se necessario.
-- [ ] Definire tabella `media_assets`.
-- [ ] Tool `create_image_upload`.
-- [ ] Tool `confirm_image_upload`.
-- [ ] Tool `replace_image`.
-- [ ] Tool `attach_image_to_section`.
-- [ ] Tool `update_image_alt`.
-- [ ] Tool `set_image_focal_point`.
+- [x] Decidere storage: R2 puro per v1.
+- [x] Creare bucket R2 `lorenzozanna-media`.
+- [x] Configurare binding Worker `MEDIA_BUCKET`.
+- [x] Definire tabella `media_assets`.
+- [x] Definire tabella `media_uploads`.
+- [x] Definire tabella `media_usages`.
+- [x] Tool `create_image_upload`.
+- [x] Tool `confirm_image_upload`.
+- [x] Tool `list_media_assets`.
+- [x] Tool `replace_image`.
+- [x] Tool `attach_image_to_section`.
+- [x] Tool `update_image_alt`.
+- [x] Tool `set_image_focal_point`.
 - [ ] Tool `remove_image_from_section`.
-- [ ] Testare alt text obbligatorio.
-- [ ] Testare formati permessi.
-- [ ] Testare dimensione massima.
-- [ ] Testare rollback immagine.
-- [ ] Testare rendering responsive.
+- [x] Endpoint `PUT /media/uploads/:uploadId`.
+- [x] Endpoint browser fallback `GET/HEAD /media/uploads/:uploadId/form`.
+- [x] Endpoint pubblico `GET/HEAD /media/assets/:assetId/:filename`.
+- [x] Testare alt text obbligatorio.
+- [x] Testare formati permessi.
+- [x] Testare rifiuto SVG/HTML indiretto tramite allowlist MIME.
+- [x] Testare dimensione massima.
+- [x] Testare upload token non valido/scaduto.
+- [x] Testare conferma upload con oggetto R2 mancante o mismatched.
+- [x] Testare serving solo asset `ready` da R2.
+- [x] Testare rollback immagine.
+- [x] Testare rendering da metadata media.
+- [x] Testare focal point in rendering.
+- [ ] Testare strip EXIF/GPS quando implementato.
+- [ ] Testare trasformazioni/thumbnail quando implementate.
+- [ ] Testare asset archive/delete quando implementato.
 
 ## 13. Preview, publish e rollback
 

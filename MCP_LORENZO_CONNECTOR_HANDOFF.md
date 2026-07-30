@@ -70,6 +70,51 @@ password: .secrets/lorenzo-oauth-password.txt
 
 Non serve spiegare a Lorenzo guardrail tecnici, HTML o sicurezza dei campi: il server gia blocca HTML arbitrario e scritture fuori contratto. Lorenzo puo parlare in linguaggio naturale.
 
+## Flusso immagini/media
+
+Il connector espone i tool media:
+
+- `create_image_upload`;
+- `confirm_image_upload`;
+- `list_media_assets`;
+- `replace_image`;
+- `attach_image_to_section`;
+- `update_image_alt`;
+- `set_image_focal_point`.
+
+Flusso consigliato quando Lorenzo chiede di aggiungere una nuova immagine:
+
+1. Raccogliere filename, MIME, peso, dimensioni e alt text.
+2. Chiamare `create_image_upload`.
+3. Se il client non puo inviare direttamente i byte dell'immagine, mostrare a Lorenzo `upload.uploadPageUrl`.
+4. Lorenzo apre il link e carica il file dal browser.
+5. Quando Lorenzo conferma di aver caricato, chiamare `confirm_image_upload` con `upload.id`.
+6. Collegare l'asset pronto con `attach_image_to_section` oppure `replace_image`.
+7. Verificare la pagina con `get_page` o chiedere a Lorenzo di ricaricare il sito.
+
+Frase utile da usare nel client se il modello si blocca sul PUT binario:
+
+```text
+Chiama create_image_upload anche se non puoi caricare direttamente il file.
+Mostrami upload.uploadPageUrl.
+Dopo che carico l'immagine dal browser, chiama confirm_image_upload e poi attach_image_to_section.
+```
+
+Esempio reale verificato il 2026-07-30:
+
+```text
+assetId: asset_53b5b57f-8e17-499b-a36a-689855a00c4a
+publicUrl: media/assets/asset_53b5b57f-8e17-499b-a36a-689855a00c4a/favicon-1.png
+pagina: portfolio
+sectionId: gallery
+path: items[0].images
+posizione: items[0].images[4]
+alt: Logo con diaframma fotografico arancione su sfondo nero
+```
+
+Lo smoke remoto sul public URL ha risposto `200 image/png`, quindi le immagini R2 sono servite dal Worker e non da file locali/GitHub.
+
+Limite attuale: il Worker e' pronto a ricevere upload; se ChatGPT non espone i byte dell'allegato al tool MCP, bisogna usare `uploadPageUrl`. Se in futuro il client espone file/base64/URL temporaneo, si puo aggiungere un tool unico `upload_and_attach_image`.
 ## Messaggio semplice per Lorenzo
 
 ```text

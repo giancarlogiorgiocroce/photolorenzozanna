@@ -399,7 +399,9 @@ Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentr
 
 ## 7. Immagini e R2/media pipeline
 
-Obiettivo: gestire upload e sostituzione immagini senza modificare HTML.
+Obiettivo: gestire upload, catalogo e sostituzione immagini senza modificare HTML.
+
+Documento operativo aggiornato: `MCP_MEDIA_PIPELINE.md`.
 
 - [x] Decidere storage:
   - [x] R2 puro;
@@ -417,10 +419,18 @@ Obiettivo: gestire upload e sostituzione immagini senza modificare HTML.
   - Smoke remoto 2026-07-19: token editor temporaneo `codex-media-smoke`; `create_image_upload` -> upload R2 via `PUT /media/uploads/:uploadId` -> `confirm_image_upload` con asset `ready`; cleanup confermato con conteggi D1 a zero e oggetto R2 smoke rimosso dal bucket remoto.
 - [x] Tool `create_image_upload`.
   - Implementazione TDD 2026-07-15: crea asset bozza + sessione upload `pending`, valida MIME/dimensione/dimensioni/alt, genera `r2Key`, `uploadUrl` e `uploadToken` one-time salvato solo come hash.
+  - Compat ChatGPT 2026-07-30: il risultato include `upload.uploadPageUrl` e `nextAction`; la descrizione MCP dice al client di mostrare il link se non puo inviare byte direttamente. Deploy `df178c8c-305d-4a09-806c-0e941f0363a0`.
+- [x] Endpoint `GET/HEAD /media/uploads/:uploadId/form`.
+  - Implementazione TDD 2026-07-30: pagina browser minimale per completare il `PUT` binario quando ChatGPT vede l'allegato ma non puo inviarne i byte al tool. Il token e' nel fragment `#token=...`, non nell'HTML e non nella richiesta GET. Deploy `881bffdd-bcf3-45e4-bd50-63aefe835e8f`.
 - [x] Endpoint `PUT /media/uploads/:uploadId`.
   - Implementazione TDD 2026-07-15: riceve il binario con `uploadToken`, valida MIME, dimensione e scadenza dichiarati nella sessione, poi salva l'oggetto via binding `MEDIA_BUCKET.put`.
+  - Compat browser 2026-07-30: accetta anche upload senza header `content-length`, leggendo il body e verificando `byteLength` prima del salvataggio.
 - [x] Tool `confirm_image_upload`.
   - Implementazione TDD 2026-07-15: controlla l'oggetto via binding `MEDIA_BUCKET.head(r2Key)`, verifica size/MIME e promuove l'asset da `draft` a `ready`.
+- [x] Endpoint `GET/HEAD /media/assets/:assetId/:filename`.
+  - Implementazione TDD 2026-07-30: il Worker serve da R2 solo asset presenti in D1 con `status = ready` e `public_url` esatto; draft/pending non sono pubblici. Header: `Content-Type` immagine, `Cache-Control: public, max-age=31536000, immutable`, `Content-Disposition: inline`, `X-Content-Type-Options: nosniff`.
+  - Route Cloudflare 2026-07-30: aggiunta `ph.lorenzozanna.com/media/assets/*` a `edge/wrangler.toml`, cosi il dominio pubblico non risponde piu con HTML Pages su path media.
+  - Deploy 2026-07-30: Worker versione `f1cd4b54-4b60-4448-9937-5ee2d99f2d61`; smoke reale su `asset_53b5b57f-8e17-499b-a36a-689855a00c4a/favicon-1.png` -> `200 image/png`, `Content-Length: 957538`.
 - [x] Tool `list_media_assets`.
   - Implementazione TDD 2026-07-15: tool MCP read-only che espone asset filtrati per status, senza richiedere path manuali.
 - [x] Tool `replace_image`.
@@ -428,26 +438,40 @@ Obiettivo: gestire upload e sostituzione immagini senza modificare HTML.
 - [x] Tool `attach_image_to_section`.
   - Implementazione TDD 2026-07-19: aggiunge un asset media `ready` a una lista immagini prevista dal contratto (`items[].images` o `shots`), senza accettare `src` libero; valida alt/decorative e variante layout, registra `media_usages`, `section_revisions` e `change_log`.
   - Deploy 2026-07-19: Worker versione `1bc03b68-eb4f-4b28-8224-8bbb7cf6b3cf`; smoke remoto non mutativo `tools/list` conferma `attach_image_to_section` esposto con `path` string e variante `tall`.
+  - Prova reale 2026-07-30: ChatGPT ha caricato e allegato l'asset `asset_53b5b57f-8e17-499b-a36a-689855a00c4a` a `portfolio/gallery/items[0].images[4]`.
 - [x] Tool `update_image_alt`.
   - Implementazione TDD 2026-07-15: aggiorna l'alt text dell'asset media con validazione anti-HTML e log in `change_log`.
 - [x] Tool `set_image_focal_point`.
   - Implementazione TDD 2026-07-15: aggiorna `focalPoint {x,y}` solo su immagini previste dal contratto, accetta percentuali intere 0-100, registra revisione/log e il renderer le traduce in `object-position` sicuro.
 - [ ] Tool `remove_image_from_section`.
+- [ ] Asset manager completo:
+  - [x] lista asset con `list_media_assets`;
+  - [x] metadata base: alt, caption, dimensioni, MIME, status, public URL;
+  - [ ] titolo/nome editoriale distinto dal filename;
+  - [ ] tags/ricerca;
+  - [ ] archive/delete con controllo usi;
+  - [ ] thumbnail/preview dedicate.
 - [ ] Validare:
   - [x] formato file;
+  - [x] niente SVG;
   - [x] dimensione massima;
   - [x] alt text obbligatorio;
   - [x] ownership site;
+  - [x] pubblicazione solo asset `ready`;
+  - [ ] strip EXIF/GPS;
   - [ ] virus/security se applicabile.
 - [x] Renderizzare immagini da media metadata.
   - Implementazione TDD 2026-07-15: il renderer risolve `assetId` nei dati sezione usando `media_assets` e popola `src`, `alt`, `caption`, `width`, `height`.
+  - Verifica 2026-07-30: `/portfolio` contiene il path media dell'asset caricato e l'alt text `Logo con diaframma fotografico arancione su sfondo nero`.
 - [x] Rollback immagine.
   - Implementazione TDD 2026-07-15: test esplicito `replace_image` -> `rollback_change`; il rollback ripristina il JSON immagine precedente e risincronizza `media_usages` per evitare riferimenti asset obsoleti.
+- [ ] Upload automatico diretto da allegato ChatGPT.
+  - Stato 2026-07-30: non dipende dal Worker. Se il client MCP espone file/base64/URL temporaneo al tool, si puo aggiungere `upload_and_attach_image`; se espone solo testo/JSON e non i byte, resta necessario `uploadPageUrl`.
 
 Prompt per chat:
 
 ```text
-Leggi MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentrati solo sulla gestione immagini via MCP: R2, upload sicuro, alt text, focal point, replace_image e rollback.
+Leggi MCP_MEDIA_PIPELINE.md, MCP_REMOTE_ROADMAP.md, MCP_TDD_TODO.md e MCP_NEXT_PHASES_TODO.md. Concentrati solo sulla gestione immagini via MCP: R2, upload sicuro, pagina browser fallback, asset manager, alt text, focal point, replace_image, attach_image_to_section e rollback.
 ```
 
 ## 8. Rollback, preview e publish
