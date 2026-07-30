@@ -96,6 +96,12 @@ export async function createImageUpload(env, input) {
       expiresAt,
       maxSizeBytes: MAX_UPLOAD_SIZE_BYTES,
     },
+    nextAction: {
+      type: "user_browser_upload",
+      message: "If you cannot upload image bytes directly, show upload.uploadPageUrl to the user. After the user uploads the file in the browser, call confirm_image_upload with upload.id, then attach or replace the ready asset.",
+      confirmTool: "confirm_image_upload",
+      attachTools: ["attach_image_to_section", "replace_image"],
+    },
     asset: serializeAsset(asset),
   };
 }

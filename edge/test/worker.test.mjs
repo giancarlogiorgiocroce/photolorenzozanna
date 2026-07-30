@@ -579,6 +579,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.equal(attachImageToSection.inputSchema.properties.variant.enum.includes("tall"), true);
   assert.equal(setImageFocalPoint.inputSchema.properties.x.minimum, 0);
   assert.equal(setImageFocalPoint.inputSchema.properties.y.maximum, 100);
+  assert.match(createImageUpload.description, /upload\.uploadPageUrl/);
   assert.equal(createImageUpload.inputSchema.properties.mimeType.enum.includes("image/jpeg"), true);
 });
 
@@ -813,6 +814,10 @@ test("POST /mcp tools/call create_image_upload creates a pending media upload", 
     payload.result.structuredContent.upload.uploadPageUrl,
     /^https:\/\/api\.lorenzozanna\.com\/media\/uploads\/upload_[^/]+\/form#token=mu_/,
   );
+  assert.equal(payload.result.structuredContent.nextAction.type, "user_browser_upload");
+  assert.equal(payload.result.structuredContent.nextAction.confirmTool, "confirm_image_upload");
+  assert.equal(payload.result.structuredContent.nextAction.attachTools.includes("attach_image_to_section"), true);
+  assert.match(payload.result.content[0].text, /uploadPageUrl/);
   assert.equal(payload.result.structuredContent.asset.status, "draft");
   assert.equal(db.mediaUploads.length, 1);
   assert.equal(db.mediaAssets.find((asset) => asset.id === payload.result.structuredContent.asset.id).status, "draft");
