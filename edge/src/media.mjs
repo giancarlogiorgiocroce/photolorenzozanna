@@ -640,6 +640,229 @@ export async function attachImageToSection(env, input) {
   };
 }
 
+export async function removeImageFromSection(env, input) {
+  const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
+  const pageSlug = requiredPattern(input?.page, "page", SLUG_PATTERN);
+  const sectionKey = requiredPattern(input?.sectionId, "sectionId", SECTION_KEY_PATTERN);
+  const rawPath = requiredPattern(input?.path, "path", IMAGE_PATH_PATTERN);
+  const actor = requiredString(input?.actor || "mcp");
+  const path = normalizeImageObjectPath(rawPath);
+  const { arrayPath, itemIndex } = splitArrayItemPath(path);
+
+  const { site, page, section } = await loadSection(env, siteSlug, pageSlug, sectionKey);
+  const field = resolveEditableField(page.slug, section, arrayPath);
+  if (!field || field.kind !== "media_asset_list") {
+    throw new Error(`Field is not editable with remove_image_from_section: ${rawPath}`);
+  }
+
+  const before = serializeSection(section);
+  const data = cloneJsonObject(before.data);
+  const images = readArrayAtPath(data, arrayPath);
+  if (itemIndex >= images.length || !isObjectRecord(images[itemIndex])) {
+    throw new Error(`Path does not contain an image object: ${path}`);
+  }
+
+  const [removedImage] = images.splice(itemIndex, 1);
+  const revisionId = crypto.randomUUID();
+  const after = {
+    ...before,
+    data,
+  };
+
+  await env.DB.prepare(
+    `UPDATE page_sections
+     SET data = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+  )
+    .bind(JSON.stringify(data), section.id)
+    .run();
+
+  await syncSectionMediaUsages(env, page.id, section.id, data);
+
+  await env.DB.prepare(
+    `INSERT INTO section_revisions (
+       id, section_id, actor, action, before_json, after_json, created_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+  )
+    .bind(revisionId, section.id, actor, "remove_image_from_section", JSON.stringify(before), JSON.stringify(after))
+    .run();
+
+  await insertChangeLog(env, {
+    siteId: site.id,
+    actor,
+    action: "remove_image_from_section",
+    target: `pages/${page.slug}/sections/${section.section_key}/${path}`,
+    before,
+    after,
+  });
+
+  return {
+    site: site.slug,
+    page: page.slug,
+    sectionId: section.section_key,
+    path,
+    arrayPath,
+    itemIndex,
+    removedImage,
+    remainingCount: images.length,
+    revisionId,
+    published: true,
+    previewUrl: page.slug === "home" ? "/" : `/${page.slug}`,
+  };
+}
+
+export async function reorderImagesInSection(env, input) {
+  const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
+  const pageSlug = requiredPattern(input?.page, "page", SLUG_PATTERN);
+  const sectionKey = requiredPattern(input?.sectionId, "sectionId", SECTION_KEY_PATTERN);
+  const path = requiredPattern(input?.path, "path", IMAGE_PATH_PATTERN);
+  const actor = requiredString(input?.actor || "mcp");
+
+  const { site, page, section } = await loadSection(env, siteSlug, pageSlug, sectionKey);
+  const field = resolveEditableField(page.slug, section, path);
+  if (!field || field.kind !== "media_asset_list") {
+    throw new Error(`Field is not editable with reorder_images_in_section: ${path}`);
+  }
+
+  const before = serializeSection(section);
+  const data = cloneJsonObject(before.data);
+  const images = readArrayAtPath(data, path);
+  const order = normalizeImageOrder(input?.order, images.length);
+  if (order.every((itemIndex, index) => itemIndex === index)) {
+    throw new Error("Image order is unchanged.");
+  }
+
+  const reorderedImages = order.map((itemIndex) => images[itemIndex]);
+  images.splice(0, images.length, ...reorderedImages);
+  const revisionId = crypto.randomUUID();
+  const after = {
+    ...before,
+    data,
+  };
+
+  await env.DB.prepare(
+    `UPDATE page_sections
+     SET data = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+  )
+    .bind(JSON.stringify(data), section.id)
+    .run();
+
+  await syncSectionMediaUsages(env, page.id, section.id, data);
+
+  await env.DB.prepare(
+    `INSERT INTO section_revisions (
+       id, section_id, actor, action, before_json, after_json, created_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+  )
+    .bind(revisionId, section.id, actor, "reorder_images_in_section", JSON.stringify(before), JSON.stringify(after))
+    .run();
+
+  await insertChangeLog(env, {
+    siteId: site.id,
+    actor,
+    action: "reorder_images_in_section",
+    target: `pages/${page.slug}/sections/${section.section_key}/${path}`,
+    before,
+    after,
+  });
+
+  return {
+    site: site.slug,
+    page: page.slug,
+    sectionId: section.section_key,
+    path,
+    order,
+    count: images.length,
+    images,
+    revisionId,
+    published: true,
+    previewUrl: page.slug === "home" ? "/" : `/${page.slug}`,
+  };
+}
+
+export async function updateImageCaption(env, input) {
+  const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
+  const pageSlug = requiredPattern(input?.page, "page", SLUG_PATTERN);
+  const sectionKey = requiredPattern(input?.sectionId, "sectionId", SECTION_KEY_PATTERN);
+  const rawPath = requiredPattern(input?.path, "path", IMAGE_PATH_PATTERN);
+  const actor = requiredString(input?.actor || "mcp");
+  const path = normalizeCaptionImageObjectPath(rawPath);
+  const captionPath = `${path}.caption`;
+
+  if (!hasOwn(input, "caption") || typeof input.caption !== "string") {
+    throw new Error("Missing caption.");
+  }
+
+  const { site, page, section } = await loadSection(env, siteSlug, pageSlug, sectionKey);
+  const field = resolveEditableField(page.slug, section, captionPath);
+  if (!field || field.kind !== "plain_text") {
+    throw new Error(`Field is not editable with update_image_caption: ${rawPath}`);
+  }
+
+  const caption = normalizeOptionalText(input.caption, {
+    maxLength: field.maxLength ?? 120,
+    name: "caption",
+  });
+  const before = serializeSection(section);
+  const data = cloneJsonObject(before.data);
+  const currentImage = readObjectAtPath(data, path);
+  const nextImage = {
+    ...currentImage,
+  };
+
+  if (caption) nextImage.caption = caption;
+  else delete nextImage.caption;
+
+  setValueAtPath(data, path, nextImage);
+
+  const revisionId = crypto.randomUUID();
+  const after = {
+    ...before,
+    data,
+  };
+
+  await env.DB.prepare(
+    `UPDATE page_sections
+     SET data = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+  )
+    .bind(JSON.stringify(data), section.id)
+    .run();
+
+  await env.DB.prepare(
+    `INSERT INTO section_revisions (
+       id, section_id, actor, action, before_json, after_json, created_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+  )
+    .bind(revisionId, section.id, actor, "update_image_caption", JSON.stringify(before), JSON.stringify(after))
+    .run();
+
+  await insertChangeLog(env, {
+    siteId: site.id,
+    actor,
+    action: "update_image_caption",
+    target: `pages/${page.slug}/sections/${section.section_key}/${path}/caption`,
+    before,
+    after,
+  });
+
+  return {
+    site: site.slug,
+    page: page.slug,
+    sectionId: section.section_key,
+    path,
+    caption: caption || null,
+    image: nextImage,
+    revisionId,
+    published: true,
+    previewUrl: page.slug === "home" ? "/" : `/${page.slug}`,
+  };
+}
+
 export async function setImageFocalPoint(env, input) {
   const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
   const pageSlug = requiredPattern(input?.page, "page", SLUG_PATTERN);
@@ -1146,6 +1369,26 @@ function normalizeVisibilityImageObjectPath(path) {
   return normalizeImageObjectPath(path);
 }
 
+function normalizeCaptionImageObjectPath(path) {
+  if (path.endsWith(".caption")) return path.slice(0, -".caption".length);
+  return normalizeImageObjectPath(path);
+}
+
+function splitArrayItemPath(path) {
+  const separatorIndex = path.lastIndexOf(".");
+  const prefix = separatorIndex === -1 ? "" : `${path.slice(0, separatorIndex)}.`;
+  const finalPart = separatorIndex === -1 ? path : path.slice(separatorIndex + 1);
+  const match = /^([A-Za-z][A-Za-z0-9_]*)\[((?:0|[1-9]\d*))\]$/.exec(finalPart);
+  if (!match || isDangerousKey(match[1])) {
+    throw new Error(`Path is not an image array item: ${path}`);
+  }
+
+  return {
+    arrayPath: `${prefix}${match[1]}`,
+    itemIndex: Number(match[2]),
+  };
+}
+
 function normalizeImageAltForReplacement(input, asset) {
   if (hasOwn(input, "alt")) return normalizeAltText(input.alt);
   if (String(asset.alt ?? "").trim()) return normalizeAltText(asset.alt);
@@ -1163,6 +1406,23 @@ function normalizeImageVariant(input, page, section, imagePath) {
     throw new Error("Invalid image variant.");
   }
   return variant;
+}
+
+function normalizeImageOrder(value, imageCount) {
+  if (!Array.isArray(value) || value.length !== imageCount || imageCount < 1) {
+    throw new Error("Image order must include every current image index exactly once.");
+  }
+
+  const order = value.map((item) => Number(item));
+  const uniqueIndexes = new Set(order);
+  const isValid = order.every(
+    (itemIndex) => Number.isInteger(itemIndex) && itemIndex >= 0 && itemIndex < imageCount,
+  );
+  if (!isValid || uniqueIndexes.size !== imageCount) {
+    throw new Error("Image order must include every current image index exactly once.");
+  }
+
+  return order;
 }
 
 function normalizeFocalPercent(value, name) {
@@ -1292,6 +1552,54 @@ function setValueAtPath(data, path, value) {
 
     current = readSegmentValue(current, segment, path);
   }
+}
+
+async function syncSectionMediaUsages(env, pageId, sectionId, data) {
+  const usages = collectMediaAssetUsages(data);
+
+  await env.DB.prepare(
+    `DELETE FROM media_usages
+     WHERE page_id = ? AND section_id = ?`,
+  )
+    .bind(pageId, sectionId)
+    .run();
+
+  for (const usage of usages) {
+    await env.DB.prepare(
+      `INSERT INTO media_usages (
+         id, asset_id, page_id, section_id, path, created_at, updated_at
+       )
+       VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), usage.assetId, pageId, sectionId, usage.path)
+      .run();
+  }
+}
+
+function collectMediaAssetUsages(data) {
+  const usagesByPath = new Map();
+
+  function walk(value, path) {
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => {
+        if (path) walk(item, `${path}[${index}]`);
+      });
+      return;
+    }
+
+    if (!isObjectRecord(value)) return;
+
+    const assetId = typeof value.assetId === "string" ? value.assetId.trim() : "";
+    if (assetId && path) usagesByPath.set(path, assetId);
+
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "assetId" || !/^[A-Za-z][A-Za-z0-9_]*$/.test(key) || isDangerousKey(key)) continue;
+      walk(child, path ? `${path}.${key}` : key);
+    }
+  }
+
+  walk(data, "");
+  return [...usagesByPath.entries()].map(([path, assetId]) => ({ path, assetId }));
 }
 
 function parsePath(path) {

@@ -72,7 +72,7 @@ Non serve spiegare a Lorenzo guardrail tecnici, HTML o sicurezza dei campi: il s
 
 ## Flusso immagini/media
 
-Il connector espone i tool media:
+Il connector live espone i tool media:
 
 - `create_image_upload`;
 - `confirm_image_upload`;
@@ -80,7 +80,13 @@ Il connector espone i tool media:
 - `replace_image`;
 - `attach_image_to_section`;
 - `update_image_alt`;
-- `set_image_focal_point`.
+- `set_image_focal_point`;
+- `set_image_visibility`.
+
+Il sorgente locale aggiunge `remove_image_from_section`,
+`reorder_images_in_section` e `update_image_caption`: dopo il prossimo deploy il
+plugin potra rimuovere, riordinare e aggiornare la didascalia dei singoli usi
+gallery, con rollback completo e riallineamento di `media_usages`.
 
 Flusso consigliato quando Lorenzo chiede di aggiungere una nuova immagine:
 
@@ -91,6 +97,16 @@ Flusso consigliato quando Lorenzo chiede di aggiungere una nuova immagine:
 5. Quando Lorenzo conferma di aver caricato, chiamare `confirm_image_upload` con `upload.id`.
 6. Collegare l'asset pronto con `attach_image_to_section` oppure `replace_image`.
 7. Verificare la pagina con `get_page` o chiedere a Lorenzo di ricaricare il sito.
+8. Se Lorenzo vuole solo nascondere una fotografia senza perderla, usare
+   `set_image_visibility` con `enabled: false`; per mostrarla di nuovo usare
+   `enabled: true`.
+9. Dopo il deploy dei nuovi tool, se Lorenzo vuole togliere davvero la foto dalla
+   gallery ma conservarla nel catalogo, usare `remove_image_from_section` sul path
+   concreto e offrire `rollback_change` se cambia idea.
+10. Per riordinare un gruppo usare `reorder_images_in_section` con l'array `order`
+    che contiene tutti gli indici correnti una sola volta.
+11. Per cambiare o togliere la didascalia usare `update_image_caption`; una stringa
+    vuota rimuove la caption solo da quell'uso.
 
 Frase utile da usare nel client se il modello si blocca sul PUT binario:
 
@@ -114,7 +130,12 @@ alt: Logo con diaframma fotografico arancione su sfondo nero
 
 Lo smoke remoto sul public URL ha risposto `200 image/png`, quindi le immagini R2 sono servite dal Worker e non da file locali/GitHub.
 
-Limite attuale: il Worker e' pronto a ricevere upload; se ChatGPT non espone i byte dell'allegato al tool MCP, bisogna usare `uploadPageUrl`. Se in futuro il client espone file/base64/URL temporaneo, si puo aggiungere un tool unico `upload_and_attach_image`.
+Il flusso ChatGPT con `uploadPageUrl` e' stato verificato end-to-end fino a R2 e
+all'attach nel portfolio. Il limite residuo riguarda solo l'upload binario diretto:
+se il client non espone i byte dell'allegato al tool MCP, la pagina browser resta
+necessaria. Se in futuro il client espone file/base64/URL temporaneo, si puo
+aggiungere un tool unico `upload_and_attach_image`.
+
 ## Messaggio semplice per Lorenzo
 
 ```text

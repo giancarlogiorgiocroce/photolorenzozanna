@@ -26,7 +26,13 @@ const FIELD = {
   faqQuestion: { path: "items[].question", kind: "plain_text", maxLength: 160 },
   faqAnswer: { path: "items[].answer", kind: "rich_text", maxLength: 700, ...RICH_TEXT_TOOLS },
   galleryGroupTitle: { path: "items[].title", kind: "plain_text", maxLength: 90, tool: "update_text" },
-  galleryImageList: { path: "items[].images", kind: "media_asset_list", tool: "attach_image_to_section" },
+  galleryImageList: {
+    path: "items[].images",
+    kind: "media_asset_list",
+    tool: "attach_image_to_section",
+    removeTool: "remove_image_from_section",
+    reorderTool: "reorder_images_in_section",
+  },
   galleryImageAsset: { path: "items[].images[].assetId", kind: "media_asset", tool: "replace_image" },
   galleryImageFocalPoint: {
     path: "items[].images[].focalPoint",
@@ -38,7 +44,8 @@ const FIELD = {
     path: "items[].images[].caption",
     kind: "plain_text",
     maxLength: 120,
-    tool: "update_text",
+    tool: "update_image_caption",
+    fallbackTool: "update_text",
   },
   galleryImageEnabled: { path: "items[].images[].enabled", kind: "boolean", tool: "update_text" },
   galleryImageVariant: {

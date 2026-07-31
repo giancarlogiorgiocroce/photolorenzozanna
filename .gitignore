@@ -1,10 +1,11 @@
-﻿.codex-audit/
+.codex-audit/
 .secrets/
 
 
 .site-backups/
 
 NEXT_CHAT_RECAP.md
+!archive/docs/NEXT_CHAT_RECAP.md
 .wrangler/
 .dev.vars
 .deploy/

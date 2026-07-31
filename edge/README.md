@@ -1,33 +1,40 @@
 # Lorenzo Zanna Edge API
 
-Base minima per gestire molti siti su `*.lorenzozanna.com` con contenuti modificabili da API privata e, in futuro, da un assistente AI.
-
-Questa cartella non sostituisce ancora il sito statico nella root. Aggiunge il backend leggero che potra' diventare la sorgente dei contenuti.
+Cloudflare Worker del sito dinamico e dell'AI CMS di `ph.lorenzozanna.com`.
+Gestisce rendering HTML da D1, API, remote MCP, OAuth e pipeline immagini R2.
+Cloudflare Pages resta la sorgente degli asset statici; non e' la sorgente dell'HTML live.
 
 ## Cosa contiene
 
-- `src/index.mjs`: Cloudflare Worker senza dipendenze esterne.
-- `migrations/0001_init.sql`: schema D1 per siti, contenuti e log modifiche.
-- `migrations/0002_seed_ph.sql`: contenuti iniziali per `ph.lorenzozanna.com`.
-- `.dev.vars.example`: esempio dei segreti locali.
-- `wrangler.toml`: configurazione Cloudflare Worker con D1 e custom domain `api.lorenzozanna.com`.
+- `src/index.mjs`: routing Worker per sito, API, MCP, OAuth e media;
+- `src/rendering.mjs`: rendering HTML dinamico da sezioni D1 e asset media;
+- `src/mcp-http.mjs`: endpoint MCP remoto e superficie dei tool;
+- `src/page-contracts.mjs`: contratti dei campi modificabili;
+- `src/media.mjs`: upload, catalogo, usi e modifiche immagini;
+- `migrations/0001`-`0010`: schema, seed, auth/OAuth e tabelle media;
+- `test/`: suite `node:test` del Worker e dei tool;
+- `.dev.vars.example`: esempio dei segreti locali;
+- `wrangler.toml`: binding D1/R2, custom domain e route pubbliche.
 
 ## Stato attuale del deploy
 
-Aggiornato al 4 luglio 2026:
+Aggiornato al 31 luglio 2026:
 
 - registrar dominio: Aruba;
-- DNS autorevoli: Cloudflare, con `hans.ns.cloudflare.com` e `poppy.ns.cloudflare.com`;
-- zona Cloudflare `lorenzozanna.com`: active;
-- database D1: `lorenzozanna_content`;
-- Worker API: deployato su `https://api.lorenzozanna.com`;
+- DNS autorevoli e zona: Cloudflare;
+- database D1: `lorenzozanna_content`, migrazioni applicate fino a `0010`;
+- bucket R2 privato: `lorenzozanna-media`, binding Worker `MEDIA_BUCKET`;
+- Worker API/MCP/rendering: `https://api.lorenzozanna.com`;
+- endpoint MCP remoto: `https://api.lorenzozanna.com/mcp`;
 - health check API: `https://api.lorenzozanna.com/api/health`;
-- frontend statico: deployato su Cloudflare Pages, progetto `lorenzozanna-ph`;
-- URL Pages tecnico: `https://f23ff7f0.lorenzozanna-ph.pages.dev`;
-- dominio pubblico frontend: `https://ph.lorenzozanna.com`.
-- contenuti reali iniziali: caricati via API privata nel D1 con actor `codex-content-sync`;
-- immagini pubbliche: copie ottimizzate in `assets/images/portfolio/`, pubblicate su Pages;
-- immagini sorgente originali: archivio locale in `assets/portfolio/portfolio/`, non necessario al deploy Pages.
+- sito pubblico: `https://ph.lorenzozanna.com`;
+- HTML pubblico: renderizzato dal Worker usando D1/R2;
+- CSS, JavaScript e immagini statiche: serviti da Cloudflare Pages, progetto `lorenzozanna-ph`;
+- superficie MCP dell'ultimo deploy verificato: 25 tool;
+- superficie MCP nel sorgente locale: 28 tool, con rimozione, riordino e caption gallery in attesa di deploy;
+- suite locale documentata: `160/160` test verdi;
+- ultimo Worker media documentato: `22612c5c-79f6-4a5a-867d-83f6f2fc5526`;
+- immagini sorgente originali: archivio locale in `assets/portfolio/portfolio/`, non necessario al deploy.
 
 Record DNS principali:
 
@@ -51,15 +58,16 @@ R2: immagini/media caricati dal CMS MCP
 ```
 
 L'AI non modifica HTML, CSS o file di progetto. Chiama endpoint privati e puo' cambiare solo campi strutturati, per esempio titolo hero, bio, descrizione portfolio o contatti.
+
 ## Media pipeline
 
-Stato 2026-07-30: gli upload immagini via MCP sono attivi su R2.
+Stato 2026-07-31: upload, collegamento e visibilita immagini via MCP sono attivi su R2. Nel sorgente locale sono pronti anche rimozione, riordino e caption per singolo uso, ancora da deployare.
 
 Componenti:
 
 - D1: `media_assets`, `media_uploads`, `media_usages`;
 - R2: bucket privato `lorenzozanna-media` tramite binding `MEDIA_BUCKET`;
-- MCP: `create_image_upload`, `confirm_image_upload`, `list_media_assets`, `replace_image`, `attach_image_to_section`, `update_image_alt`, `set_image_focal_point`;
+- MCP nel sorgente: `create_image_upload`, `confirm_image_upload`, `list_media_assets`, `replace_image`, `attach_image_to_section`, `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`, `update_image_alt`, `set_image_focal_point`, `set_image_visibility`;
 - upload binario: `PUT /media/uploads/:uploadId` con upload token;
 - fallback browser: `GET /media/uploads/:uploadId/form`;
 - serving pubblico: `GET/HEAD /media/assets/:assetId/:filename`.
@@ -68,23 +76,28 @@ La route pubblica serve solo asset presenti in D1 con `status = ready`; R2 non e
 
 Manuale operativo completo: `../MCP_MEDIA_PIPELINE.md`.
 
+## Superficie MCP remota
+
+Il sorgente locale espone 28 tool; l'ultimo `tools/list` live verificato ne espone 25, senza i tre nuovi tool gallery finche' non viene eseguito il prossimo deploy:
+
+- lettura: `get_page`, `list_section_presets`, `list_changes`, `list_media_assets`;
+- sezioni: `disable_section`, `enable_section`, `add_section_from_preset`;
+- FAQ: `add_faq_section`, `add_faq_item`, `update_faq_item`, `remove_faq_item`, `reorder_faq_items`;
+- testo e link: `add_text_subsection`, `update_text`, `update_rich_text`, `update_cta`, `update_contact_channel`;
+- media: `create_image_upload`, `confirm_image_upload`, `update_image_alt`, `replace_image`, `attach_image_to_section`, `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`, `set_image_focal_point`, `set_image_visibility`;
+- revisioni: `rollback_change`.
+
+La checklist operativa e' `../TODO.md`; i contratti dei campi sono in
+`../MCP_SECTION_CONTRACTS.md`.
+
 ## Prima di lanciare comandi
 
 Non lanciare `npm run d1:create` se non hai ancora un account Cloudflare e Wrangler autenticato: quel comando parla con Cloudflare e crea una risorsa remota.
 
-Quello che esiste adesso e' solo locale:
-
-```text
-edge/
-  src/index.mjs
-  migrations/
-  wrangler.toml
-```
-
-Il codice e' pronto, ma non c'e' ancora nulla online.
-
-Nota storica: questa sezione descrive la procedura da zero. Nel progetto attuale D1,
-Worker, Pages e i domini `api`/`ph` sono gia' stati creati e deployati.
+La procedura seguente e' conservata come guida di bootstrap per un nuovo ambiente.
+Nel progetto corrente D1, R2, Worker, Pages, MCP e i domini `api`/`ph` sono gia'
+configurati e deployati. Non rieseguire comandi di creazione risorse sul progetto
+corrente senza aver prima verificato `wrangler.toml` e lo stato Cloudflare.
 
 ## Procedura passo passo
 
@@ -346,11 +359,14 @@ Per usare `xxx.lorenzozanna.com` senza creare un record per ogni sito:
 
 Cloudflare Pages non supporta wildcard custom domains per Pages, quindi la wildcard vera passa meglio da Worker o da VPS.
 
-## Prossimo passo nel progetto
+## Prossimi passi nel progetto
 
-Il passo successivo e' collegare le pagine statiche della root a questi contenuti. Si puo' fare in due modi:
+Il rendering dinamico e la pipeline R2 sono gia' in produzione. Le priorita media
+correnti sono:
 
-- fase semplice: script di build che legge l'API e genera HTML statico;
-- fase dinamica: Worker che serve direttamente HTML e contenuti per ogni sottodominio.
+1. deploy e smoke live dei nuovi tool rimozione, riordino e caption;
+2. metadata, ricerca e archive/delete asset con blocco quando l'asset e' ancora usato;
+3. strip EXIF/GPS, thumbnail e varianti responsive;
+4. upload diretto da allegato solo quando il client MCP espone realmente i byte.
 
-Per costi minimi, partirei dalla fase semplice.
+Lo stato completo e ordinato resta in `../TODO.md`.

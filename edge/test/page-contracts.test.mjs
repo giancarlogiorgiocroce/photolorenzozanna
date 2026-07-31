@@ -153,6 +153,8 @@ test("resolveEditableField matches concrete paths against section wildcard contr
   assert.equal(faqQuestion.kind, "plain_text");
   assert.equal(galleryCaption.path, "items[].images[].caption");
   assert.equal(galleryCaption.kind, "plain_text");
+  assert.equal(galleryCaption.tool, "update_image_caption");
+  assert.equal(galleryCaption.fallbackTool, "update_text");
   assert.equal(
     resolveEditableField(
       "portfolio",
@@ -220,6 +222,8 @@ test("resolveEditableField exposes image asset fields without allowing free src 
   assert.equal(homeHeroAsset.tool, "replace_image");
   assert.equal(galleryImages.kind, "media_asset_list");
   assert.equal(galleryImages.tool, "attach_image_to_section");
+  assert.equal(galleryImages.removeTool, "remove_image_from_section");
+  assert.equal(galleryImages.reorderTool, "reorder_images_in_section");
   assert.equal(galleryAsset.kind, "media_asset");
   assert.equal(galleryAsset.tool, "replace_image");
   assert.equal(galleryFocalPoint.kind, "focal_point");

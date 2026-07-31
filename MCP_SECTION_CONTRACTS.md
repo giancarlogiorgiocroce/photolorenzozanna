@@ -1,6 +1,6 @@
 # Contratti sezioni MCP
 
-Data: 2026-07-14
+Aggiornato: 2026-07-31
 
 Questo documento mappa il contratto contenutistico e visivo delle sezioni gia presenti nel sito. Serve come base per `get_page`, `update_text`, `update_cta`, `update_rich_text`, preset sezioni e validazione MCP.
 
@@ -121,21 +121,34 @@ Regole:
 
 ### `image`
 
+Immagine media gestita:
+
 ```json
 {
-  "src": "/assets/images/portfolio/ritratti/ritratto-riflesso.jpg",
+  "assetId": "asset_123",
   "alt": "Ritratto sovrapposto a riflessi di rami",
+  "caption": "Ritratto / riflesso",
   "width": 1600,
-  "height": 1071
+  "height": 1071,
+  "enabled": true,
+  "focalPoint": { "x": 50, "y": 45 }
 }
 ```
 
+Le immagini statiche storiche possono conservare `src`, ma il campo non e'
+editabile dall'AI. Le nuove immagini e le sostituzioni passano sempre da un
+`assetId` presente in D1 con stato `ready`; il renderer risolve `src`, MIME,
+dimensioni e metadata da `media_assets`.
+
 Regole:
 
-- `src`: per ora solo `/assets/...` o `assets/...`; R2/media pipeline futura aggiungera altri prefissi;
-- `alt`: obbligatorio quando l'immagine e informativa, vuoto solo se decorativa e dichiarata dal contratto;
-- `width` e `height`: interi positivi;
-- niente path esterni finche non esiste media pipeline.
+- nessun tool accetta `src` libero;
+- `assetId` deve appartenere allo stesso sito ed essere `ready`;
+- `alt` e' obbligatorio per immagini informative, vuoto solo se il contratto dichiara `decorative: true`;
+- `width` e `height` sono interi positivi verificati durante upload/confirm;
+- `focalPoint.x` e `focalPoint.y` accettano interi da 0 a 100;
+- `enabled: false` nasconde l'uso senza cancellare asset o dati;
+- MIME consentiti: JPEG, PNG, WebP e AVIF; SVG non consentito.
 
 ## Contratti comuni
 
@@ -301,9 +314,16 @@ Le tre card non duplicano immagini o titoli nella Home: sono contenuto derivato 
 `portfolio_shortcuts`, le chiavi selezionate e i tool da usare sulla sezione sorgente:
 
 - etichetta: `portfolio/gallery` -> `items[].title` con `update_text`;
-- copertina: prima immagine del gruppo, `items[].images[0].assetId`, con `replace_image`;
-- punto focale: `items[].images[0].focalPoint` con `set_image_focal_point`;
-- testo alternativo: `items[].images[0].alt` con `update_text`.
+- copertina: prima immagine abilitata del gruppo, modificabile con `replace_image`;
+- punto focale: `items[].images[].focalPoint` con `set_image_focal_point`;
+- testo alternativo: `items[].images[].alt` con `update_text`;
+- visibilita: `items[].images[].enabled` con `set_image_visibility`;
+- rimozione: singolo uso `items[].images[]` con `remove_image_from_section`, conservando l'asset media;
+- riordino: array `items[].images` con `reorder_images_in_section`;
+- didascalia: `items[].images[].caption` con `update_image_caption`.
+
+Se un'immagine viene nascosta, sia la gallery sia la Home derivata passano alla
+successiva immagine abilitata senza cancellare l'asset.
 
 Le chiavi `items[].key` restano identita strutturali non editabili e determinano gli
 anchor `/portfolio#ritratti`, `/portfolio#natura` e `/portfolio#strada`.
@@ -566,11 +586,11 @@ Fonte contenuto:
 - `content_entries.pages/portfolio.blocks`;
 - ora renderizzato come sezione `text_2`.
 
-Fonte CSS target:
+Fonte CSS/HTML:
 
-- attualmente renderer: `section`;
-- statico portfolio usa gallery per serie, non questo blocco testuale;
-- contratto accettato in transizione: `editorial-section` o `section`.
+- renderer live: `editorial-section`;
+- classi: `editorial-section`, `editorial-section__item`;
+- gli HTML statici in root restano reference visuale/SEO.
 
 Campi:
 
@@ -626,11 +646,11 @@ Campi:
 Editable:
 
 - `items[].title`: `plain_text` con `update_text`;
-- `items[].images`: lista media con `attach_image_to_section`;
+- `items[].images`: lista media con `tool: attach_image_to_section`, `removeTool: remove_image_from_section` e `reorderTool: reorder_images_in_section`;
 - `items[].images[].assetId`: asset media con `replace_image`;
 - `items[].images[].focalPoint`: punto focale con `set_image_focal_point`;
 - `items[].images[].alt`: `plain_text` con `update_text`;
-- `items[].images[].caption`: `plain_text` con `update_text`;
+- `items[].images[].caption`: `plain_text` con `update_image_caption` e fallback `update_text`;
 - `items[].images[].enabled`: `boolean` con `set_image_visibility` oppure `update_text`, per nascondere/mostrare una singola immagine senza cancellarla;
 - `items[].images[].variant`: enum `standard`, `wide`, `tall` con `update_text`.
 

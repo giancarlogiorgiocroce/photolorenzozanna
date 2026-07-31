@@ -6,10 +6,13 @@ import {
   confirmImageUpload,
   createImageUpload,
   listMediaAssets,
+  removeImageFromSection,
+  reorderImagesInSection,
   replaceImage,
   setImageFocalPoint,
   setImageVisibility,
   updateImageAlt,
+  updateImageCaption,
 } from "../src/media.mjs";
 
 test("createImageUpload creates a pending upload session and draft media asset", async () => {
@@ -439,6 +442,292 @@ test("attachImageToSection rejects non-array paths, non-ready assets, and unsupp
         },
       ),
     /Invalid image variant/,
+  );
+});
+
+test("removeImageFromSection removes one use, reindexes media usages, and records history", async () => {
+  const db = createMediaDb();
+  const section = db.pageSections.find((item) => item.section_key === "gallery");
+  const data = JSON.parse(section.data);
+  data.items[0].images = [
+    {
+      assetId: "asset_ready_portrait",
+      src: "assets/images/media/portrait.jpg",
+      alt: "Primo ritratto",
+      width: 1600,
+      height: 1200,
+    },
+    {
+      assetId: "asset_empty_alt",
+      src: "assets/images/media/no-alt.jpg",
+      alt: "Secondo ritratto",
+      width: 1600,
+      height: 1200,
+    },
+    {
+      src: "assets/images/static.jpg",
+      alt: "Immagine statica",
+      width: 800,
+      height: 600,
+    },
+  ];
+  section.data = JSON.stringify(data);
+  db.mediaUsages.push(
+    {
+      id: "usage_ready",
+      asset_id: "asset_ready_portrait",
+      page_id: "page_portfolio",
+      section_id: "section_portfolio_gallery",
+      path: "items[0].images[0]",
+    },
+    {
+      id: "usage_empty",
+      asset_id: "asset_empty_alt",
+      page_id: "page_portfolio",
+      section_id: "section_portfolio_gallery",
+      path: "items[0].images[1]",
+    },
+  );
+
+  const result = await removeImageFromSection(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      sectionId: "gallery",
+      path: "items[0].images[0]",
+      actor: "tdd-suite",
+    },
+  );
+
+  const images = JSON.parse(section.data).items[0].images;
+  assert.equal(result.path, "items[0].images[0]");
+  assert.equal(result.arrayPath, "items[0].images");
+  assert.equal(result.itemIndex, 0);
+  assert.equal(result.removedImage.assetId, "asset_ready_portrait");
+  assert.equal(result.remainingCount, 2);
+  assert.equal(images[0].assetId, "asset_empty_alt");
+  assert.equal(images[1].src, "assets/images/static.jpg");
+
+  assert.equal(db.mediaUsages.length, 1);
+  assert.equal(db.mediaUsages[0].asset_id, "asset_empty_alt");
+  assert.equal(db.mediaUsages[0].path, "items[0].images[0]");
+  assert.equal(db.sectionRevisions[0].action, "remove_image_from_section");
+  assert.equal(db.changeLog[0].action, "remove_image_from_section");
+  assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[0]");
+});
+
+test("removeImageFromSection rejects array paths and missing image indexes", async () => {
+  await assert.rejects(
+    () =>
+      removeImageFromSection(
+        { DB: createMediaDb() },
+        {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images",
+          actor: "tdd-suite",
+        },
+      ),
+    /Path is not an image array item/,
+  );
+
+  await assert.rejects(
+    () =>
+      removeImageFromSection(
+        { DB: createMediaDb() },
+        {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images[9]",
+          actor: "tdd-suite",
+        },
+      ),
+    /Path does not contain an image object/,
+  );
+});
+
+test("reorderImagesInSection reorders a contracted array and reindexes media usages", async () => {
+  const db = createMediaDb();
+  const section = db.pageSections.find((item) => item.section_key === "gallery");
+  const data = JSON.parse(section.data);
+  data.items[0].images = [
+    {
+      assetId: "asset_ready_portrait",
+      src: "assets/images/media/portrait.jpg",
+      alt: "Prima",
+      width: 1600,
+      height: 1200,
+    },
+    {
+      assetId: "asset_empty_alt",
+      src: "assets/images/media/no-alt.jpg",
+      alt: "Seconda",
+      width: 1600,
+      height: 1200,
+    },
+    {
+      src: "assets/images/static.jpg",
+      alt: "Statica",
+      width: 800,
+      height: 600,
+    },
+  ];
+  section.data = JSON.stringify(data);
+  db.mediaUsages.push(
+    {
+      id: "usage_ready",
+      asset_id: "asset_ready_portrait",
+      page_id: "page_portfolio",
+      section_id: "section_portfolio_gallery",
+      path: "items[0].images[0]",
+    },
+    {
+      id: "usage_empty",
+      asset_id: "asset_empty_alt",
+      page_id: "page_portfolio",
+      section_id: "section_portfolio_gallery",
+      path: "items[0].images[1]",
+    },
+  );
+
+  const result = await reorderImagesInSection(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      sectionId: "gallery",
+      path: "items[0].images",
+      order: [2, 0, 1],
+      actor: "tdd-suite",
+    },
+  );
+
+  const images = JSON.parse(section.data).items[0].images;
+  assert.deepEqual(result.order, [2, 0, 1]);
+  assert.equal(result.count, 3);
+  assert.equal(images[0].src, "assets/images/static.jpg");
+  assert.equal(images[1].assetId, "asset_ready_portrait");
+  assert.equal(images[2].assetId, "asset_empty_alt");
+  assert.deepEqual(
+    db.mediaUsages.map((usage) => [usage.asset_id, usage.path]),
+    [
+      ["asset_ready_portrait", "items[0].images[1]"],
+      ["asset_empty_alt", "items[0].images[2]"],
+    ],
+  );
+  assert.equal(db.sectionRevisions[0].action, "reorder_images_in_section");
+  assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images");
+});
+
+test("reorderImagesInSection rejects incomplete, duplicate, and unchanged orders", async () => {
+  await assert.rejects(
+    () =>
+      reorderImagesInSection(
+        { DB: createMediaDb() },
+        {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images",
+          order: [0, 0],
+          actor: "tdd-suite",
+        },
+      ),
+    /every current image index exactly once/,
+  );
+
+  await assert.rejects(
+    () =>
+      reorderImagesInSection(
+        { DB: createMediaDb() },
+        {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images",
+          order: [0],
+          actor: "tdd-suite",
+        },
+      ),
+    /Image order is unchanged/,
+  );
+});
+
+test("updateImageCaption updates and clears one image-use caption", async () => {
+  const db = createMediaDb();
+
+  const result = await updateImageCaption(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      sectionId: "gallery",
+      path: "items[0].images[0]",
+      caption: "Didascalia aggiornata",
+      actor: "tdd-suite",
+    },
+  );
+
+  let section = db.pageSections.find((item) => item.section_key === "gallery");
+  let image = JSON.parse(section.data).items[0].images[0];
+  assert.equal(result.caption, "Didascalia aggiornata");
+  assert.equal(image.caption, "Didascalia aggiornata");
+  assert.equal(db.sectionRevisions[0].action, "update_image_caption");
+  assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[0]/caption");
+
+  const cleared = await updateImageCaption(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      sectionId: "gallery",
+      path: "items[0].images[0].caption",
+      caption: "",
+      actor: "tdd-suite",
+    },
+  );
+
+  section = db.pageSections.find((item) => item.section_key === "gallery");
+  image = JSON.parse(section.data).items[0].images[0];
+  assert.equal(cleared.caption, null);
+  assert.equal(Object.hasOwn(image, "caption"), false);
+  assert.equal(db.sectionRevisions[1].action, "update_image_caption");
+});
+
+test("updateImageCaption rejects unsupported paths and HTML", async () => {
+  await assert.rejects(
+    () =>
+      updateImageCaption(
+        { DB: createMediaDb() },
+        {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].title",
+          caption: "Path non valido",
+          actor: "tdd-suite",
+        },
+      ),
+    /Field is not editable with update_image_caption/,
+  );
+
+  await assert.rejects(
+    () =>
+      updateImageCaption(
+        { DB: createMediaDb() },
+        {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images[0]",
+          caption: "<strong>Non sicura</strong>",
+          actor: "tdd-suite",
+        },
+      ),
+    /HTML is not allowed/,
   );
 });
 
@@ -905,6 +1194,14 @@ class FakeMediaD1Database {
       const section = this.pageSections.find((item) => item.id === sectionId);
       section.data = data;
       section.updated_at = "2026-07-15 00:00:01";
+      return { success: true };
+    }
+
+    if (query.includes("DELETE FROM media_usages")) {
+      const [pageId, sectionId] = params;
+      this.mediaUsages = this.mediaUsages.filter(
+        (usage) => usage.page_id !== pageId || usage.section_id !== sectionId,
+      );
       return { success: true };
     }
 

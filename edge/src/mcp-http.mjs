@@ -11,10 +11,13 @@ import {
   confirmImageUpload,
   createImageUpload,
   listMediaAssets,
+  removeImageFromSection,
+  reorderImagesInSection,
   replaceImage,
   setImageFocalPoint,
   setImageVisibility,
   updateImageAlt,
+  updateImageCaption,
 } from "./media.mjs";
 import {
   addFaqItem,
@@ -418,6 +421,62 @@ const TOOLS = [
         decorative: { type: "boolean", description: "Set true only for decorative images that should render with empty alt." },
       },
       required: ["site", "page", "sectionId", "path", "assetId"],
+    },
+  },
+  {
+    name: "remove_image_from_section",
+    title: "Remove Image From Section",
+    description: "Remove one image use from a contracted image array without deleting the media asset. The change is revisioned and can be rolled back.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, for example portfolio." },
+        sectionId: { type: "string", description: "Section identifier, for example gallery." },
+        path: { type: "string", description: "Concrete image object path, for example items[0].images[1]." },
+      },
+      required: ["site", "page", "sectionId", "path"],
+    },
+  },
+  {
+    name: "reorder_images_in_section",
+    title: "Reorder Images In Section",
+    description: "Reorder every image in one contracted image array. Order contains each current zero-based index exactly once; media usage paths and rollback history are updated.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, for example portfolio." },
+        sectionId: { type: "string", description: "Section identifier, for example gallery." },
+        path: { type: "string", description: "Concrete image array path, for example items[0].images." },
+        order: {
+          type: "array",
+          minItems: 1,
+          uniqueItems: true,
+          items: { type: "integer", minimum: 0 },
+          description: "Every current zero-based image index in the desired new order, for example [2, 0, 1].",
+        },
+      },
+      required: ["site", "page", "sectionId", "path", "order"],
+    },
+  },
+  {
+    name: "update_image_caption",
+    title: "Update Image Caption",
+    description: "Update or clear the caption of one contracted image use without changing the media asset metadata. Pass an empty string to clear the caption.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, for example portfolio." },
+        sectionId: { type: "string", description: "Section identifier, for example gallery." },
+        path: { type: "string", description: "Concrete image object or caption path, for example items[0].images[1]." },
+        caption: { type: "string", maxLength: 120, description: "New caption, or an empty string to remove it." },
+      },
+      required: ["site", "page", "sectionId", "path", "caption"],
     },
   },
   {
@@ -959,6 +1018,62 @@ async function handleMcpMethod(method, params, env, auth) {
       copyOptionalArg(input, args, "decorative");
 
       const result = await attachImageToSection(env, input);
+      return toolResult(result);
+    }
+
+    if (name === "remove_image_from_section") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await removeImageFromSection(env, {
+        site: args.site,
+        page: args.page,
+        sectionId: args.sectionId,
+        path: args.path,
+        actor: auth.actor,
+      });
+      return toolResult(result);
+    }
+
+    if (name === "reorder_images_in_section") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await reorderImagesInSection(env, {
+        site: args.site,
+        page: args.page,
+        sectionId: args.sectionId,
+        path: args.path,
+        order: args.order,
+        actor: auth.actor,
+      });
+      return toolResult(result);
+    }
+
+    if (name === "update_image_caption") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await updateImageCaption(env, {
+        site: args.site,
+        page: args.page,
+        sectionId: args.sectionId,
+        path: args.path,
+        caption: args.caption,
+        actor: auth.actor,
+      });
       return toolResult(result);
     }
 

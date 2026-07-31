@@ -206,6 +206,29 @@ Configurazione minima:
 
 Il token deve vivere nel secret store del client, non nel testo della conversazione.
 
+## Operazioni media nel connector
+
+I token `editor` e gli access token OAuth con `content:write` possono usare i tool
+media senza ricevere accesso diretto a R2 o a path arbitrari:
+
+- upload: `create_image_upload`, `confirm_image_upload`;
+- catalogo: `list_media_assets`;
+- collegamento: `attach_image_to_section`, `replace_image`;
+- ciclo gallery nel sorgente locale, dopo il prossimo deploy: `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`;
+- metadata/layout: `update_image_alt`, `set_image_focal_point`;
+- visibilita reversibile: `set_image_visibility`.
+
+Se il client non espone i byte dell'allegato, deve mostrare
+`upload.uploadPageUrl`. Lorenzo completa l'upload nel browser, poi il connector
+chiama `confirm_image_upload` e collega l'asset. Questo flusso e' stato verificato
+end-to-end. L'upload diretto senza pagina browser resta dipendente dalle capacita
+del client.
+
+Nascondere una fotografia con `set_image_visibility` non elimina l'asset e non
+richiede un nuovo upload. I nuovi tool gallery rimuovono l'uso, riordinano l'array
+o cambiano la caption senza cancellare l'asset; sono implementati e testati
+localmente, in attesa di deploy. Archive/delete degli asset non e' ancora esposto.
+
 ## Cosa Lorenzo non deve fare
 
 - Non incollare il token in una chat.

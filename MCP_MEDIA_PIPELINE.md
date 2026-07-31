@@ -4,7 +4,7 @@ Data: 2026-07-31
 Branch operativo: `codex/realign-media`
 Worker corrente deployato: `22612c5c-79f6-4a5a-867d-83f6f2fc5526`
 
-Questo documento descrive la pipeline immagini/media del CMS MCP Cloudflare per `ph.lorenzozanna.com`.
+Questo documento descrive la pipeline immagini/media del CMS MCP Cloudflare per `ph.lorenzozanna.com`. La checklist unica delle attivita completate e aperte resta `TODO.md`.
 
 ## Stato attuale
 
@@ -21,6 +21,7 @@ Cosa funziona oggi:
 - modifica alt text con `update_image_alt`;
 - modifica focal point con `set_image_focal_point`;
 - nascondere/mostrare una singola immagine gia collegata con `set_image_visibility`;
+- nel sorgente locale, rimozione, riordino e caption del singolo uso con `remove_image_from_section`, `reorder_images_in_section` e `update_image_caption`, con rollback;
 - rendering delle immagini da metadata D1;
 - servizio pubblico degli asset da R2 tramite `/media/assets/:assetId/:filename`;
 - rollback delle sostituzioni immagine tramite `rollback_change`.
@@ -31,7 +32,7 @@ Cosa non e' ancora completo:
 - non esiste ancora un tool unico `upload_and_attach_image` con file diretto;
 - non esiste una UI asset manager tradizionale;
 - non ci sono ancora titolo/tags/search avanzata sugli asset;
-- non c'e' ancora `remove_image_from_section`;
+- i tre nuovi tool gallery sono implementati e testati in locale, ma non sono ancora deployati e verificati dal connector live;
 - non c'e' ancora delete/archive asset con controllo degli usi;
 - non facciamo ancora strip EXIF/GPS lato server;
 - non facciamo ancora trasformazioni responsive o thumbnail generate;
@@ -145,7 +146,12 @@ Tool di upload:
 Tool di collegamento:
 
 - `replace_image`: sostituisce un'immagine prevista dal contratto con un asset ready;
-- `attach_image_to_section`: aggiunge un asset ready a un array immagini previsto dal contratto.
+- `attach_image_to_section`: aggiunge un asset ready a un array immagini previsto dal contratto;
+- `remove_image_from_section`: rimuove un singolo uso da un array contrattualizzato, conserva l'asset nel catalogo e riallinea `media_usages`;
+- `reorder_images_in_section`: applica una permutazione completa degli indici correnti e riallinea `media_usages`;
+- `update_image_caption`: aggiorna o rimuove la caption del singolo uso senza cambiare i metadata globali dell'asset.
+
+I tre tool sono nel sorgente locale, con revisioni e `rollback_change`, in attesa di deploy.
 
 Tool metadata:
 
@@ -156,7 +162,6 @@ Tool metadata:
 
 Tool non ancora implementati:
 
-- `remove_image_from_section`;
 - `archive_media_asset` oppure `delete_media_asset`;
 - `update_media_asset` con titolo/tags/nome leggibile;
 - `upload_and_attach_image` se il client puo passare file/base64/URL.
@@ -260,6 +265,54 @@ Uso consigliato per il plugin:
 
 `set_image_visibility` e' il tool preferito per nascondere/mostrare immagini. `update_text` su `items[...].images[...].enabled` resta disponibile solo come fallback per client conservativi. Se una chat plugin continua a non vedere il tool dopo un deploy, aprire una nuova chat o riconnettere il connector per svuotare la cache degli strumenti.
 
+Rimozione singolo uso, disponibile nel sorgente locale e da usare nel plugin dopo il deploy:
+
+```json
+{
+  "name": "remove_image_from_section",
+  "arguments": {
+    "site": "ph",
+    "page": "portfolio",
+    "sectionId": "gallery",
+    "path": "items[0].images[4]"
+  }
+}
+```
+
+La rimozione non archivia ne cancella l'asset. Gli elementi successivi vengono reindicizzati in `media_usages`; `rollback_change` ripristina sia la gallery sia l'indice degli usi.
+
+Riordino completo del gruppo:
+
+```json
+{
+  "name": "reorder_images_in_section",
+  "arguments": {
+    "site": "ph",
+    "page": "portfolio",
+    "sectionId": "gallery",
+    "path": "items[0].images",
+    "order": [2, 0, 1]
+  }
+}
+```
+
+Aggiornamento o rimozione didascalia:
+
+```json
+{
+  "name": "update_image_caption",
+  "arguments": {
+    "site": "ph",
+    "page": "portfolio",
+    "sectionId": "gallery",
+    "path": "items[0].images[1]",
+    "caption": "Ritratto / riflesso"
+  }
+}
+```
+
+Un valore `caption: ""` rimuove la didascalia del singolo uso. La suite locale dopo il completamento del ciclo gallery e' `160/160`.
+
 ## Comandi utili
 
 
@@ -291,8 +344,8 @@ Smoke tool list:
 
 ## Prossimi passi consigliati
 
-1. Aggiungere metadata asset manager: titolo leggibile, tags, note, autore/data, ricerca.
-2. Aggiungere `remove_image_from_section` con rollback e aggiornamento `media_usages`.
+1. Deployare i tre nuovi tool gallery, verificarli in `tools/list` e fare smoke rimozione/riordino/caption con rollback live.
+2. Aggiungere metadata asset manager: titolo leggibile, tag, note, autore/data e ricerca.
 3. Aggiungere archive/delete asset con blocco se l'asset e' ancora usato.
-4. Aggiungere strip EXIF/GPS e thumbnail server-side.
+4. Aggiungere strip EXIF/GPS, thumbnail e varianti responsive.
 5. Valutare `upload_and_attach_image` solo se il client MCP puo passare file/base64/URL temporaneo in modo affidabile.

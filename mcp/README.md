@@ -1,66 +1,96 @@
 # Lorenzo Zanna MCP
 
-MCP locale per modificare i contenuti di `ph.lorenzozanna.com` passando dalla API privata gia' deployata su Cloudflare.
+Il progetto espone due superfici MCP distinte:
 
-Il server parla stdio MCP e non usa dipendenze esterne. Legge `AI_API_TOKEN` da:
+1. remote MCP di produzione nel Cloudflare Worker, usato dai connector AI;
+2. MCP locale `stdio`, mantenuto per compatibilita e import storici.
+
+## Remote MCP di produzione
+
+Endpoint:
+
+```text
+https://api.lorenzozanna.com/mcp
+```
+
+Il sito live `https://ph.lorenzozanna.com` e' dinamico: il Worker renderizza l'HTML
+da D1 e risolve gli asset media da R2. Cloudflare Pages serve CSS, JavaScript e
+immagini statiche, ma non e' la sorgente dell'HTML live.
+
+Autenticazione supportata:
+
+- bearer token personale scoped per client MCP generici;
+- OAuth authorization-code + PKCE per ChatGPT e client compatibili;
+- `AI_API_TOKEN` solo per lettura/smoke sul canale MCP.
+
+L'ultimo deploy remoto verificato espone 25 tool. Il sorgente locale ne espone 28,
+aggiungendo rimozione, riordino e caption per le gallery, che restano da deployare.
+L'elenco corrente e' documentato in `../edge/README.md`; i contratti dei campi sono in
+`../MCP_SECTION_CONTRACTS.md`.
+
+### Media
+
+La pipeline R2 espone:
+
+- `create_image_upload`;
+- `confirm_image_upload`;
+- `list_media_assets`;
+- `replace_image`;
+- `attach_image_to_section`;
+- `remove_image_from_section` (nel sorgente locale, in attesa di deploy);
+- `reorder_images_in_section` (nel sorgente locale, in attesa di deploy);
+- `update_image_caption` (nel sorgente locale, in attesa di deploy);
+- `update_image_alt`;
+- `set_image_focal_point`;
+- `set_image_visibility`.
+
+Quando un client non puo inviare i byte dell'allegato, deve mostrare
+`upload.uploadPageUrl`; dopo l'upload browser chiama `confirm_image_upload` e poi
+`attach_image_to_section` o `replace_image`.
+
+Manuale operativo: `../MCP_MEDIA_PIPELINE.md`.
+
+## MCP locale `stdio`
+
+Il server locale non usa dipendenze esterne e legge `AI_API_TOKEN` da:
 
 1. variabile ambiente `AI_API_TOKEN`;
 2. fallback locale `edge/.dev.vars`.
 
-## Server
+Avvio:
 
 ```powershell
 node mcp/lorenzozanna-server.mjs
 ```
 
-Tool esposti:
+Tool locali legacy:
 
-- `get_public_content`
-- `upsert_content`
-- `list_changes`
-- `sync_content_markdown`
+- `get_public_content`;
+- `upsert_content`;
+- `list_changes`;
+- `sync_content_markdown`.
 
-## Test locale
-
-Il client `call-tool.mjs` invoca il server via MCP stdio, quindi non chiama direttamente l'API.
+Test tramite client locale:
 
 ```powershell
 node mcp/call-tool.mjs get_public_content "{""site"":""ph""}"
 ```
 
-Import da `content.md`:
+Import storico da `content.md`:
 
 ```powershell
 node mcp/call-tool.mjs sync_content_markdown "{""path"":""content.md"",""site"":""ph"",""publish"":true,""updateVisibleContent"":true}"
 ```
 
-Questo salva solo le pagine del sito attuale come pubblicate nella collection `pages`:
+Il sync locale conserva le pagine pubbliche e i draft editoriali nel modello
+storico `content_entries`. Non e' il flusso consigliato per modificare il sito
+live: l'editing ordinario deve usare i tool del remote MCP su `page_sections` e
+`media_assets`, con revisioni e rollback.
 
-- `pages/home`
-- `pages/chi-sono`
-- `pages/portfolio`
-- `pages/contatti`
+## Fonti operative
 
-Le pagine editoriali future vengono mantenute in `draft`:
-
-- `pages/servizi`
-- `pages/servizi-ritratti`
-- `pages/servizi-fotografia-commerciale`
-- `pages/stampe-analogiche`
-- `pages/metodo`
-- `pages/faq`
-
-`Piano SEO` non e' una pagina del sito: viene salvato come documento interno in `internal/piano-seo`, e l'eventuale vecchia entry `pages/piano-seo` viene forzata in `draft`.
-
-Il sync aggiorna anche le entry visibili principali:
-
-- `home/hero`
-- `home/faq`
-- `about/hero`
-- `about/faq`
-- `portfolio/series`
-- `portfolio/faq`
-- `contact/details`
-- `contact/faq`
-
-Nota: il sito Pages attuale resta statico. Il D1 viene aggiornato via MCP/API, ma per vedere quei testi nel sito bisogna collegare il frontend alla API o rigenerare gli HTML e redeployare Pages.
+- checklist unica: `../TODO.md`;
+- Worker e tool remoti: `../edge/README.md`;
+- media/R2: `../MCP_MEDIA_PIPELINE.md`;
+- auth: `../MCP_AUTH_ONBOARDING.md`;
+- onboarding Lorenzo: `../MCP_LORENZO_CONNECTOR_HANDOFF.md`.

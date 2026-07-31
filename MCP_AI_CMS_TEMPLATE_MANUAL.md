@@ -1,12 +1,11 @@
 # Manuale per un AI CMS via MCP su Cloudflare
 
-Data: 2026-07-15
+Aggiornato: 2026-07-31
 
-> Nota di stato 2026-07-19: questo e' un manuale/template, non un registro
-> operativo. Lo stato corrente e l'unica checklist del progetto sono in
-> `TODO.md`. Le sezioni che descrivono la gestione immagini come "prossimo
-> step" fotografano lo stato del 15 luglio e vanno aggiornate alla pipeline
-> R2/media ora implementata.
+> Questo e' un manuale/template riusabile, non un registro operativo. Lo stato
+> corrente e l'unica checklist del progetto sono in `TODO.md`. La pipeline R2,
+> il fallback browser e i tool media descritti qui sono implementati; le
+> funzionalita ancora aperte sono indicate esplicitamente come evoluzioni.
 
 Questo documento descrive come abbiamo costruito il backend MCP per `ph.lorenzozanna.com` e come riapplicare la stessa architettura a un nuovo sito.
 
@@ -44,6 +43,7 @@ Servono:
 - dominio o sottodominio gestito da Cloudflare DNS;
 - permesso per creare Worker;
 - permesso per creare D1;
+- permesso per creare e usare R2;
 - permesso per creare Pages;
 - permesso per configurare route/custom domain;
 - Wrangler autenticato in locale.
@@ -54,6 +54,7 @@ Comandi base:
 npx wrangler login
 npx wrangler d1 create <database_name>
 npx wrangler d1 migrations apply <database_name> --remote
+npx wrangler r2 bucket create <bucket_name>
 npx wrangler pages deploy .deploy\ph --project-name <pages_project>
 npx wrangler deploy
 ```
@@ -139,7 +140,9 @@ Struttura usata qui:
       oauth-metadata.mjs
       pages.mjs
       sections.mjs
+      text-sections.mjs
       faq-sections.mjs
+      media.mjs
       rollback.mjs
       changes.mjs
       page-contracts.mjs
@@ -153,6 +156,8 @@ Struttura usata qui:
       0006_auth_tokens.sql
       0007_oauth_mvp.sql
       0008_seed_contact_band.sql
+      0009_media_assets.sql
+      0010_media_uploads.sql
     test/
     wrangler.toml
 ```
@@ -167,6 +172,8 @@ Ruoli dei file principali:
 - `edge/src/page-contracts.mjs`: contratti dei blocchi e campi editabili.
 - `edge/src/sections.mjs`: update generici di testo, link, rich text, contatti.
 - `edge/src/faq-sections.mjs`: tool specializzati per FAQ.
+- `edge/src/text-sections.mjs`: operazioni itemizzate sui blocchi editoriali.
+- `edge/src/media.mjs`: upload R2, catalogo, usi, metadata e mutazioni immagini.
 - `edge/src/rollback.mjs`: rollback sicuro da snapshot.
 - `edge/src/section-presets.mjs`: preset dichiarati per sezioni aggiungibili.
 - `edge/migrations/*.sql`: schema e seed D1.
@@ -188,10 +195,11 @@ Cloudflare DNS
 
 Perche questa divisione:
 
-- Pages serve asset, immagini, CSS e JS;
-- Worker serve HTML dinamico e API/MCP;
-- D1 salva contenuti strutturati;
-- in futuro R2 puo salvare immagini/media originali o derivate.
+- Pages serve asset statici, CSS e JavaScript;
+- Worker serve HTML dinamico, API, MCP, OAuth e asset R2 pubblici;
+- D1 salva contenuti strutturati, revisioni e metadata media;
+- R2 salva i file immagine in un bucket privato;
+- il Worker serve pubblicamente solo asset D1 con stato `ready`.
 
 Nel `wrangler.toml`:
 
@@ -280,6 +288,32 @@ auth_tokens
 
 oauth_authorization_codes
 oauth_access_tokens
+
+media_assets
+  id
+  site_id
+  r2_key
+  public_url
+  mime_type
+  width
+  height
+  size_bytes
+  alt
+  caption
+  status
+
+media_uploads
+  id
+  asset_id
+  upload_token_hash
+  status
+  expires_at
+
+media_usages
+  asset_id
+  page_id
+  section_id
+  path
 ```
 
 ### Concetti chiave
@@ -302,7 +336,13 @@ oauth_access_tokens
 `styleContract`
 : Contratto reale di rendering/editing. Esempi: `home.hero`, `portfolio.series_text`, `contact.band`.
 
-La lezione piu importante: `type` non basta. Una `hero` in home non ha lo stesso HTML di una `hero` in portfolio. Il renderer deve risolvere lo `styleContract`.
+`media_asset`
+: Catalogo D1 di un file immagine R2. Solo gli asset `ready` possono essere collegati e serviti pubblicamente.
+
+`media_usage`
+: Riferimento tra asset e path di una sezione. Serve per rollback e per bloccare archive/delete quando un asset e' ancora usato.
+
+La lezione piu importante: `type` non basta. Una `hero` in home non ha lo stesso HTML di una `hero` in portfolio. Il renderer deve risolvere lo `styleContract`. Allo stesso modo, un'immagine non e' un `src` libero: e' un `assetId` validato e risolto dal backend.
 
 ## MCP: endpoint e protocollo
 
@@ -586,7 +626,7 @@ Usato per scelte vincolate.
 Esempio:
 
 ```json
-{ "path": "shots[].variant", "kind": "enum", "values": ["standard", "wide"] }
+{ "path": "items[].images[].variant", "kind": "enum", "values": ["standard", "wide", "tall"] }
 ```
 
 ## Catalogo blocchi attuale
@@ -653,35 +693,38 @@ type: text
 styleContract: home.selected_work
 ```
 
-Shape:
+Shape locale:
 
 ```json
 {
   "kicker": "Selezione",
   "title": "Ritratti, natura, strada",
-  "intro": "Breve testo",
-  "shots": [
-    {
-      "caption": "Ritratti",
-      "src": "assets/images/...",
-      "alt": "Descrizione immagine",
-      "width": 1600,
-      "height": 1071,
-      "variant": "wide"
-    }
-  ]
+  "intro": "Breve testo"
 }
 ```
 
-Editable:
+Editable locale:
 
 ```text
 kicker
 title
 intro
-shots[].caption
-shots[].alt
-shots[].variant = standard|wide
+```
+
+Le card non duplicano immagini o caption nella Home: sono derivate da
+`portfolio/gallery`. `get_page(home)` espone `contentDependencies` con la
+sezione sorgente e i tool corretti. La copertina di ogni serie e' la prima
+immagine abilitata del gruppo; se viene nascosta con `set_image_visibility`, la
+Home usa automaticamente la successiva.
+
+Per modificare le card:
+
+```text
+etichetta -> portfolio/gallery items[].title con update_text
+immagine  -> portfolio/gallery items[].images[].assetId con replace_image
+alt       -> portfolio/gallery items[].images[].alt con update_text
+focal     -> portfolio/gallery items[].images[].focalPoint con set_image_focal_point
+visibilita -> portfolio/gallery items[].images[].enabled con set_image_visibility
 ```
 
 ### `home.split_section`
@@ -1046,15 +1089,16 @@ Shape attuale:
 {
   "items": [
     {
-      "id": "ritratti",
+      "key": "ritratti",
       "title": "Ritratti",
       "images": [
         {
-          "src": "assets/images/portfolio/ritratti/ritratto-riflesso.jpg",
+          "assetId": "asset_123",
           "alt": "Ritratto sovrapposto a riflessi di rami",
           "caption": "Ritratto",
-          "width": 1600,
-          "height": 1071
+          "variant": "wide",
+          "enabled": true,
+          "focalPoint": { "x": 50, "y": 45 }
         }
       ]
     }
@@ -1062,25 +1106,30 @@ Shape attuale:
 }
 ```
 
-Editable attuale:
+Campi e tool:
 
 ```text
-items[].title
-items[].images[].alt
-items[].images[].caption
+items[].title                    -> update_text
+items[].images                   -> attach_image_to_section / remove_image_from_section / reorder_images_in_section
+items[].images[].assetId         -> replace_image
+items[].images[].alt             -> update_text oppure update_image_alt sull'asset
+items[].images[].caption         -> update_image_caption, fallback update_text
+items[].images[].variant         -> update_text, enum standard|wide|tall
+items[].images[].focalPoint      -> set_image_focal_point
+items[].images[].enabled         -> set_image_visibility
 ```
 
-Non ancora completo:
+`src`, MIME, width e height vengono risolti da `media_assets` e non sono
+editabili direttamente. Le immagini con `enabled: false` restano nella sezione e
+nel catalogo, ma non vengono renderizzate. `items[].key` e' identita strutturale
+e resta non editabile.
 
-- upload immagini;
-- sostituzione `src`;
-- reorder immagini;
-- delete immagini;
-- generazione varianti;
-- gestione alt obbligatorio;
-- R2/media table.
+Funzionalita ancora aperte:
 
-Questo e' il prossimo grande step.
+- deploy e smoke plugin dei tool rimozione, riordino e caption;
+- archive/delete asset con controllo `media_usages`;
+- thumbnail e varianti responsive;
+- strip EXIF/GPS.
 
 Problema risolto: le immagini `forme e ombre` erano quadrate/in colonna perche mancava una strategia layout. Abbiamo introdotto pattern curati (`standard`, `wide`, `tall`) nel renderer.
 
@@ -1312,9 +1361,17 @@ image.position = left|right
 cta
 ```
 
-Non permettere subito `image.src` libero via AI. Quando esiste media management, l'AI deve scegliere `assetId` da una libreria o caricare con tool dedicati.
+Non permettere `image.src` libero via AI. L'AI deve scegliere un `assetId` da `list_media_assets` oppure creare un upload con i tool media dedicati.
 
 ## Tool MCP disponibili
+
+Il sorgente locale espone 28 tool; l'ultimo deploy live verificato ne espone 25 finche' i tre nuovi tool gallery non vengono deployati. Le categorie sono:
+
+- lettura: pagina, preset, change log e catalogo media;
+- contenuti: testo, rich text, CTA, contatti e sottosezioni;
+- sezioni e FAQ: aggiunta controllata, visibilita e operazioni itemizzate;
+- media: upload, attach, remove, reorder, caption, replace, alt, focal point e visibilita;
+- revisioni: rollback con protezione stale.
 
 ### `get_page`
 
@@ -1550,6 +1607,60 @@ Oppure ultimo cambio su pagina/sezione:
 ```
 
 Protezione importante: se lo stato corrente non coincide con lo snapshot `after` della modifica da annullare, il rollback viene bloccato. Questo evita di sovrascrivere modifiche successive.
+
+### Tool media
+
+Catalogo e upload:
+
+```text
+list_media_assets
+create_image_upload
+confirm_image_upload
+```
+
+Modifica e collegamento:
+
+```text
+attach_image_to_section
+remove_image_from_section
+reorder_images_in_section
+update_image_caption
+replace_image
+update_image_alt
+set_image_focal_point
+set_image_visibility
+```
+
+Flusso standard:
+
+1. chiamare `create_image_upload` con filename, MIME, peso, dimensioni e alt;
+2. inviare i byte con `PUT /media/uploads/:uploadId` oppure mostrare
+   `upload.uploadPageUrl`;
+3. chiamare `confirm_image_upload`;
+4. collegare l'asset `ready` con `attach_image_to_section` o `replace_image`;
+5. verificare con `get_page` e con il rendering pubblico.
+
+Esempio visibilita reversibile:
+
+```json
+{
+  "name": "set_image_visibility",
+  "arguments": {
+    "site": "ph",
+    "page": "portfolio",
+    "sectionId": "gallery",
+    "path": "items[0].images[4]",
+    "enabled": false
+  }
+}
+```
+
+Questo nasconde l'uso senza cancellare l'asset. Nel sorgente locale
+`remove_image_from_section` toglie l'uso conservando l'asset,
+`reorder_images_in_section` applica una permutazione completa e
+`update_image_caption` cambia o rimuove la didascalia del singolo uso. Rimozione
+e riordino riallineano `media_usages`; tutte le mutazioni sono revisionate e
+reversibili. Archive/delete resta un'evoluzione aperta.
 
 ## Renderer dinamico
 
@@ -1880,95 +1991,96 @@ add_image_text_section
 update_image_text_image
 ```
 
-Non usare subito `update_text path=image.src`: meglio un tool media-aware.
+Non usare `update_text path=image.src`: usare sempre un tool media-aware basato su `assetId`.
 
-## Prossimo step: gestione immagini
+## Gestione immagini attuale ed evoluzioni
 
-Obiettivo: rendere le immagini gestibili come contenuto strutturato, non come stringhe `src` libere.
-
-Consiglio architetturale:
+La pipeline media non usa stringhe `src` fornite dall'AI. I file vivono nel
+bucket R2 privato; D1 conserva catalogo, sessioni di upload e usi:
 
 ```text
-R2 bucket
-  originali
-  varianti web
-  thumbnail
+R2 lorenzozanna-media
+  ph/uploads/<assetId>/<filename>
 
 D1 media_assets
-  id
-  site_id
-  r2_key
-  public_url
-  alt
-  caption
-  width
-  height
-  mime_type
-  size
-  status
+  asset, r2_key, public_url, MIME, dimensioni, alt, caption, status
+
+D1 media_uploads
+  sessione temporanea, token hashato, scadenza, stato
 
 D1 media_usages
-  asset_id
-  page_id
-  section_id
-  path
+  asset, pagina, sezione, path
 ```
 
-Tool futuri:
+Il Worker serve `GET/HEAD /media/assets/:assetId/:filename` solo quando l'asset
+esiste in D1, ha stato `ready` e l'oggetto esiste in R2.
 
-```text
-list_media_assets
-upload_media_asset
-update_media_metadata
-attach_image_to_section
-replace_gallery_image
-add_gallery_image
-remove_gallery_image
-reorder_gallery_images
-```
-Stato implementato nel progetto Lorenzo al 2026-07-31:
+Tool implementati:
 
 ```text
 list_media_assets
 create_image_upload
 confirm_image_upload
 attach_image_to_section
+remove_image_from_section
+reorder_images_in_section
+update_image_caption
 replace_image
 update_image_alt
 set_image_focal_point
 set_image_visibility
 ```
 
-Nota pratica: per nascondere una singola immagine gia collegata usare `set_image_visibility` con `enabled: false`. Non cancellare l'asset e non modificare `src` libero. Il campo `items[].images[].enabled` rimane anche nel contratto come fallback via `update_text`, ma il tool esplicito e' preferibile per i client AI perche appare chiaramente in `tools/list`.
+Il fallback `uploadPageUrl` consente a ChatGPT e ad altri client che non
+espongono i byte di completare l'upload dal browser. Il token resta nel fragment
+URL, scade dopo 15 minuti ed e' salvato nel database solo come hash. Questo
+flusso e' stato verificato end-to-end fino a R2 e all'attach nel portfolio.
 
 Regole:
 
-- AI non deve scrivere `src` arbitrari;
-- deve scegliere asset da libreria o caricare via tool;
-- `alt` obbligatorio se immagine non decorativa;
-- varianti generate lato backend;
-- gallery usa `assetId`, non solo path.
+- l'AI non scrive mai `src` arbitrari;
+- un collegamento accetta solo `assetId` dello stesso sito con stato `ready`;
+- alt obbligatorio per immagini informative;
+- MIME consentiti: JPEG, PNG, WebP e AVIF; SVG vietato;
+- limite upload: 12 MB;
+- `set_image_visibility` nasconde un uso senza cancellare dati o asset;
+- `remove_image_from_section` rimuove un uso, conserva l'asset e riallinea tutti i path `media_usages`;
+- `reorder_images_in_section` richiede una permutazione completa e riallinea i path degli usi;
+- `update_image_caption` modifica o cancella la caption del singolo uso senza cambiare l'asset globale;
+- gallery e Home derivata ignorano immagini con `enabled: false`;
+- revisioni, change log e `media_usages` accompagnano le mutazioni contenuto.
 
-Shape futura gallery:
+Shape gallery corrente:
 
 ```json
 {
   "items": [
     {
-      "id": "ritratti",
+      "key": "ritratti",
       "title": "Ritratti",
       "images": [
         {
           "assetId": "asset_123",
           "alt": "Ritratto sovrapposto a riflessi",
           "caption": "Ritratto",
-          "variant": "wide"
+          "variant": "wide",
+          "enabled": true,
+          "focalPoint": { "x": 50, "y": 45 }
         }
       ]
     }
   ]
 }
 ```
+
+Evoluzioni ancora aperte:
+
+- deploy e smoke plugin di `remove_image_from_section`, `reorder_images_in_section` e `update_image_caption`;
+- titolo editoriale, tag, note e ricerca nel catalogo;
+- archive/delete con blocco per asset ancora usati;
+- strip EXIF/GPS;
+- thumbnail e varianti responsive AVIF/WebP/JPG;
+- upload diretto da allegato solo quando il client espone file/base64/URL.
 
 ## Sequenza template per il prossimo sito
 
@@ -1981,6 +2093,7 @@ corrente.
 - dominio su Cloudflare DNS
 - Worker creato
 - D1 creato
+- bucket R2 creato e binding configurato
 - Pages creato
 - wrangler.toml configurato
 - secrets configurati
@@ -1997,6 +2110,9 @@ corrente.
 - change_log
 - auth_tokens
 - oauth tables se serve
+- media_assets
+- media_uploads
+- media_usages
 ```
 
 ### Fase 3: blocchi
@@ -2026,6 +2142,10 @@ corrente.
 - list_changes
 - rollback_change
 - tool specializzati per blocchi itemizzati
+- list_media_assets
+- create_image_upload / confirm_image_upload
+- attach_image_to_section / remove_image_from_section / reorder_images_in_section / replace_image
+- update_image_caption / update_image_alt / set_image_focal_point / set_image_visibility
 ```
 
 ### Fase 5: auth
@@ -2051,6 +2171,8 @@ corrente.
 - smoke MCP get_page
 - smoke modifica reversibile
 - smoke rollback
+- smoke create/upload/confirm con cleanup R2 e D1
+- smoke asset pubblico e rendering media
 ```
 
 ## Prompt operativo da dare a una AI per il prossimo sito

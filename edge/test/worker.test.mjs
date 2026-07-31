@@ -534,6 +534,9 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   const updateContactChannel = payload.result.tools.find((tool) => tool.name === "update_contact_channel");
   const replaceImage = payload.result.tools.find((tool) => tool.name === "replace_image");
   const attachImageToSection = payload.result.tools.find((tool) => tool.name === "attach_image_to_section");
+  const removeImageFromSection = payload.result.tools.find((tool) => tool.name === "remove_image_from_section");
+  const reorderImagesInSection = payload.result.tools.find((tool) => tool.name === "reorder_images_in_section");
+  const updateImageCaption = payload.result.tools.find((tool) => tool.name === "update_image_caption");
   const setImageFocalPoint = payload.result.tools.find((tool) => tool.name === "set_image_focal_point");
   const setImageVisibility = payload.result.tools.find((tool) => tool.name === "set_image_visibility");
 
@@ -561,6 +564,9 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
     "update_image_alt",
     "replace_image",
     "attach_image_to_section",
+    "remove_image_from_section",
+    "reorder_images_in_section",
+    "update_image_caption",
     "set_image_focal_point",
     "set_image_visibility",
     "update_rich_text",
@@ -573,6 +579,9 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.deepEqual(createImageUpload.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(replaceImage.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(attachImageToSection.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
+  assert.deepEqual(removeImageFromSection.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
+  assert.deepEqual(reorderImagesInSection.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
+  assert.deepEqual(updateImageCaption.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(setImageFocalPoint.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(setImageVisibility.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(updateContactChannel.inputSchema.properties.channel.enum, ["email", "instagram", "telefono"]);
@@ -580,6 +589,9 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.equal(replaceImage.inputSchema.properties.assetId.type, "string");
   assert.equal(attachImageToSection.inputSchema.properties.path.type, "string");
   assert.equal(attachImageToSection.inputSchema.properties.variant.enum.includes("tall"), true);
+  assert.equal(removeImageFromSection.inputSchema.required.includes("path"), true);
+  assert.equal(reorderImagesInSection.inputSchema.properties.order.uniqueItems, true);
+  assert.equal(updateImageCaption.inputSchema.properties.caption.maxLength, 120);
   assert.equal(setImageFocalPoint.inputSchema.properties.x.minimum, 0);
   assert.equal(setImageFocalPoint.inputSchema.properties.y.maximum, 100);
   assert.equal(setImageVisibility.inputSchema.properties.enabled.type, "boolean");
@@ -679,6 +691,18 @@ test("POST /mcp tools/call get_page returns sections with style contracts and ed
   );
   assert.equal(hero.editableFields.find((field) => field.path === "intro").kind, "rich_text");
   assert.equal(gallery.styleContract, "portfolio.gallery");
+  assert.equal(
+    gallery.editableFields.find((field) => field.path === "items[].images").removeTool,
+    "remove_image_from_section",
+  );
+  assert.equal(
+    gallery.editableFields.find((field) => field.path === "items[].images").reorderTool,
+    "reorder_images_in_section",
+  );
+  assert.equal(
+    gallery.editableFields.find((field) => field.path === "items[].images[].caption").tool,
+    "update_image_caption",
+  );
   assert.deepEqual(
     gallery.editableFields
       .filter((field) => field.path === "items[].images[].enabled")
@@ -1481,6 +1505,322 @@ test("POST /mcp tools/call attach_image_to_section appends a media asset to a ga
   assert.equal(db.mediaUsages[0].path, "items[0].images[1]");
   assert.equal(db.sectionRevisions[0].action, "attach_image_to_section");
   assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[1]");
+});
+
+test("POST /mcp tools/call remove_image_from_section removes an image use and rollback restores it", async () => {
+  const db = await createEditorDb({
+    mediaAssets: [
+      mediaAsset({
+        id: "asset_first",
+        public_url: "media/assets/asset_first/first.jpg",
+        alt: "Prima immagine",
+        status: "ready",
+      }),
+      mediaAsset({
+        id: "asset_second",
+        public_url: "media/assets/asset_second/second.jpg",
+        alt: "Seconda immagine",
+        status: "ready",
+      }),
+    ],
+    mediaUsages: [
+      {
+        id: "usage_first",
+        asset_id: "asset_first",
+        page_id: "page_portfolio",
+        section_id: "section_portfolio_gallery",
+        path: "items[0].images[0]",
+      },
+      {
+        id: "usage_second",
+        asset_id: "asset_second",
+        page_id: "page_portfolio",
+        section_id: "section_portfolio_gallery",
+        path: "items[0].images[1]",
+      },
+    ],
+  });
+  db.pageSections.push(
+    pageSection("page_portfolio", "section_portfolio_gallery", "gallery", "gallery", 25, true, {
+      items: [
+        {
+          key: "ritratti",
+          title: "Ritratti",
+          images: [
+            {
+              assetId: "asset_first",
+              src: "media/assets/asset_first/first.jpg",
+              alt: "Prima immagine",
+              width: 1600,
+              height: 1200,
+            },
+            {
+              assetId: "asset_second",
+              src: "media/assets/asset_second/second.jpg",
+              alt: "Seconda immagine",
+              width: 1600,
+              height: 1200,
+            },
+          ],
+        },
+      ],
+    }),
+  );
+
+  const removeResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "remove_image_from_section",
+        arguments: {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images[0]",
+        },
+      },
+    },
+  });
+  const removePayload = await removeResponse.json();
+  let gallery = db.pageSections.find((section) => section.section_key === "gallery");
+  let images = JSON.parse(gallery.data).items[0].images;
+
+  assert.equal(removeResponse.status, 200);
+  assert.equal(removePayload.result.structuredContent.removedImage.assetId, "asset_first");
+  assert.equal(removePayload.result.structuredContent.remainingCount, 1);
+  assert.equal(images.length, 1);
+  assert.equal(images[0].assetId, "asset_second");
+  assert.equal(db.mediaUsages.length, 1);
+  assert.equal(db.mediaUsages[0].asset_id, "asset_second");
+  assert.equal(db.mediaUsages[0].path, "items[0].images[0]");
+  assert.equal(db.sectionRevisions[0].action, "remove_image_from_section");
+  assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[0]");
+
+  const rollbackResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "rollback_change",
+        arguments: {
+          site: "ph",
+          changeId: db.changeLog[0].id,
+        },
+      },
+    },
+  });
+  const rollbackPayload = await rollbackResponse.json();
+  gallery = db.pageSections.find((section) => section.section_key === "gallery");
+  images = JSON.parse(gallery.data).items[0].images;
+
+  assert.equal(rollbackResponse.status, 200);
+  assert.equal(rollbackPayload.result.structuredContent.rolledBackAction, "remove_image_from_section");
+  assert.deepEqual(images.map((image) => image.assetId), ["asset_first", "asset_second"]);
+  assert.deepEqual(
+    db.mediaUsages.map((usage) => [usage.asset_id, usage.path]),
+    [
+      ["asset_first", "items[0].images[0]"],
+      ["asset_second", "items[0].images[1]"],
+    ],
+  );
+  assert.equal(db.sectionRevisions[1].action, "rollback_change");
+  assert.equal(db.changeLog[1].action, "rollback_change");
+});
+
+test("POST /mcp tools/call reorder_images_in_section reorders usages and rollback restores them", async () => {
+  const db = await createEditorDb({
+    mediaAssets: [
+      mediaAsset({
+        id: "asset_first",
+        public_url: "media/assets/asset_first/first.jpg",
+        alt: "Prima immagine",
+        status: "ready",
+      }),
+      mediaAsset({
+        id: "asset_second",
+        public_url: "media/assets/asset_second/second.jpg",
+        alt: "Seconda immagine",
+        status: "ready",
+      }),
+    ],
+    mediaUsages: [
+      {
+        id: "usage_first",
+        asset_id: "asset_first",
+        page_id: "page_portfolio",
+        section_id: "section_portfolio_gallery",
+        path: "items[0].images[0]",
+      },
+      {
+        id: "usage_second",
+        asset_id: "asset_second",
+        page_id: "page_portfolio",
+        section_id: "section_portfolio_gallery",
+        path: "items[0].images[1]",
+      },
+    ],
+  });
+  db.pageSections.push(
+    pageSection("page_portfolio", "section_portfolio_gallery", "gallery", "gallery", 25, true, {
+      items: [
+        {
+          key: "ritratti",
+          title: "Ritratti",
+          images: [
+            {
+              assetId: "asset_first",
+              src: "media/assets/asset_first/first.jpg",
+              alt: "Prima immagine",
+              width: 1600,
+              height: 1200,
+            },
+            {
+              assetId: "asset_second",
+              src: "media/assets/asset_second/second.jpg",
+              alt: "Seconda immagine",
+              width: 1600,
+              height: 1200,
+            },
+          ],
+        },
+      ],
+    }),
+  );
+
+  const reorderResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "reorder_images_in_section",
+        arguments: {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images",
+          order: [1, 0],
+        },
+      },
+    },
+  });
+  const reorderPayload = await reorderResponse.json();
+  let gallery = db.pageSections.find((section) => section.section_key === "gallery");
+  let images = JSON.parse(gallery.data).items[0].images;
+
+  assert.equal(reorderResponse.status, 200);
+  assert.deepEqual(reorderPayload.result.structuredContent.order, [1, 0]);
+  assert.deepEqual(images.map((image) => image.assetId), ["asset_second", "asset_first"]);
+  assert.deepEqual(
+    db.mediaUsages.map((usage) => [usage.asset_id, usage.path]),
+    [
+      ["asset_second", "items[0].images[0]"],
+      ["asset_first", "items[0].images[1]"],
+    ],
+  );
+  assert.equal(db.sectionRevisions[0].action, "reorder_images_in_section");
+
+  const rollbackResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "rollback_change",
+        arguments: {
+          site: "ph",
+          changeId: db.changeLog[0].id,
+        },
+      },
+    },
+  });
+  const rollbackPayload = await rollbackResponse.json();
+  gallery = db.pageSections.find((section) => section.section_key === "gallery");
+  images = JSON.parse(gallery.data).items[0].images;
+
+  assert.equal(rollbackResponse.status, 200);
+  assert.equal(rollbackPayload.result.structuredContent.rolledBackAction, "reorder_images_in_section");
+  assert.deepEqual(images.map((image) => image.assetId), ["asset_first", "asset_second"]);
+  assert.deepEqual(
+    db.mediaUsages.map((usage) => [usage.asset_id, usage.path]),
+    [
+      ["asset_first", "items[0].images[0]"],
+      ["asset_second", "items[0].images[1]"],
+    ],
+  );
+});
+
+test("POST /mcp tools/call update_image_caption updates one gallery use", async () => {
+  const db = await createEditorDb();
+  db.pageSections.push(
+    pageSection("page_portfolio", "section_portfolio_gallery", "gallery", "gallery", 25, true, {
+      items: [
+        {
+          key: "ritratti",
+          title: "Ritratti",
+          images: [
+            {
+              src: "assets/images/old.jpg",
+              alt: "Vecchio alt",
+              caption: "Vecchia didascalia",
+              width: 800,
+              height: 600,
+            },
+          ],
+        },
+      ],
+    }),
+  );
+
+  const response = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "update_image_caption",
+        arguments: {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images[0]",
+          caption: "Nuova didascalia editoriale",
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+  const gallery = db.pageSections.find((section) => section.section_key === "gallery");
+  const image = JSON.parse(gallery.data).items[0].images[0];
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.result.structuredContent.caption, "Nuova didascalia editoriale");
+  assert.equal(image.caption, "Nuova didascalia editoriale");
+  assert.equal(db.sectionRevisions[0].action, "update_image_caption");
+  assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[0]/caption");
 });
 
 test("POST /mcp tools/call set_image_focal_point updates a contracted image", async () => {

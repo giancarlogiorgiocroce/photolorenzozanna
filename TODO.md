@@ -1,8 +1,8 @@
 # TODO unico del progetto
 
-Aggiornato: 2026-07-19
+Aggiornato: 2026-07-31
 
-Questo e' l'unico registro operativo dei TODO di `ph.lorenzozanna.com` e del relativo AI CMS via MCP. Sostituisce i precedenti `MCP_TDD_TODO.md`, `MCP_NEXT_PHASES_TODO.md` e la copia `concept-classic/TODO.md`.
+Questo e' l'unico registro operativo dei TODO di `ph.lorenzozanna.com` e del relativo AI CMS via MCP. I precedenti registri e roadmap sono conservati in `archive/docs/` solo come cronologia.
 
 Legenda:
 
@@ -10,21 +10,31 @@ Legenda:
 - `[ ]` ancora da fare o da verificare esplicitamente;
 - le alternative scartate non restano come falsi TODO aperti: la decisione adottata e' registrata come completata.
 
-Fonti confrontate: tutti i 20 file Markdown del progetto, tutte le 9 task Codex precedenti associate a questa cartella, codice e test locali, cronologia Git e smoke test live non mutativi. Le copie dentro `.site-backups/` sono snapshot storici e non sono fonti operative.
+Fonti confrontate: documentazione attiva e storica del progetto, task Codex precedenti associate alla cartella, codice e test locali, cronologia Git e smoke test documentati. Le copie dentro `.site-backups/`, `.codex-audit/` e `archive/` sono fonti storiche, non registri operativi.
+
+## Ordine corrente delle priorita
+
+Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine consigliato per il lavoro nuovo, senza duplicare le spunte:
+
+1. deployare e verificare live rimozione, riordino e caption per le gallery;
+2. completare l'asset manager con metadata, ricerca e archive/delete sicuro;
+3. introdurre strip EXIF/GPS, thumbnail e varianti responsive;
+4. chiudere test MCP/client ancora aperti e hardening sicurezza;
+5. completare performance, accessibilita e SEO strutturata del frontend.
 
 ## 1. Centralizzazione e stato
 
 - [x] Leggere tutti i file Markdown del progetto, inclusi audit, recap, roadmap, contratti e README.
 - [x] Leggere tutte le task Codex precedenti associate alla cartella `lorenzozanna`.
 - [x] Confrontare le spunte storiche con il codice effettivamente mantenuto.
-- [x] Confrontare le spunte storiche con la suite locale completa: `139/139` test verdi.
+- [x] Confrontare le spunte storiche con la suite locale completa: `160/160` test verdi al 2026-07-31.
 - [x] Verificare live le quattro route pubbliche principali: `/`, `/portfolio`, `/about`, `/contact` rispondono `200`.
 - [x] Verificare live `robots.txt`, `sitemap.xml` e redirect canonico di `/index.html`.
-- [x] Verificare live `tools/list`: 24 tool MCP esposti.
-- [x] Rimuovere i registri TODO operativi duplicati e mantenere solo questo file.
+- [x] Verificare live `tools/list`: 25 tool MCP esposti, incluso `set_image_visibility`.
+- [x] Archiviare i registri TODO e le roadmap duplicate in `archive/docs/`, mantenendo solo questo file come checklist attiva.
 - [x] Mantenere gli snapshot in `.site-backups/` come archivio non operativo.
-- [ ] Aggiornare integralmente `MCP_AI_CMS_TEMPLATE_MANUAL.md` allo stato media/R2 attuale.
-- [ ] Decidere se versionare `MCP_AI_CMS_TEMPLATE_MANUAL.md`, che e' ancora non tracciato.
+- [x] Aggiornare `MCP_AI_CMS_TEMPLATE_MANUAL.md` allo stato media/R2 attuale.
+- [x] Versionare `MCP_AI_CMS_TEMPLATE_MANUAL.md` insieme alla documentazione tecnica.
 
 ## 2. Sito pubblico e contenuti
 
@@ -244,6 +254,11 @@ Fonti confrontate: tutti i 20 file Markdown del progetto, tutte le 9 task Codex 
 - [x] Implementare `attach_image_to_section` per array contrattualizzati.
 - [x] Implementare `update_image_alt`.
 - [x] Implementare `set_image_focal_point`.
+- [x] Implementare `set_image_visibility` per nascondere/mostrare una singola immagine senza cancellarla.
+- [x] Esporre `items[].images[].enabled` nel contratto `portfolio.gallery` come fallback controllato.
+- [x] Escludere dal renderer e dalle cover Home derivate le immagini con `enabled: false`.
+- [x] Implementare il fallback browser `GET/HEAD /media/uploads/:uploadId/form` tramite `uploadPageUrl`.
+- [x] Servire pubblicamente solo asset `ready` tramite `GET/HEAD /media/assets/:assetId/:filename`.
 - [x] Validare MIME/formato immagine.
 - [x] Validare dimensione massima del file.
 - [x] Validare width e height dichiarate.
@@ -254,14 +269,21 @@ Fonti confrontate: tutti i 20 file Markdown del progetto, tutte le 9 task Codex 
 - [x] Testare rollback di `replace_image` e riallineamento `media_usages`.
 - [x] Eseguire smoke remoto create/upload/confirm con cleanup D1 e R2.
 - [x] Deployare `attach_image_to_section` e verificarlo in `tools/list` live.
-- [ ] Implementare `remove_image_from_section`.
-- [ ] Implementare riordino immagini nelle gallery.
-- [ ] Implementare aggiornamento didascalia per singolo uso immagine.
-- [ ] Implementare archiviazione/eliminazione controllata degli asset non usati.
+- [x] Verificare in produzione `set_image_visibility` tramite `tools/list` e rendering.
+- [x] Completare un flusso reale ChatGPT -> `uploadPageUrl` -> R2 -> confirm -> attach.
+- [x] Implementare `remove_image_from_section` con revisione, audit e riallineamento completo di `media_usages`.
+- [ ] Deployare `remove_image_from_section`, `reorder_images_in_section` e `update_image_caption`; verificarli in `tools/list` e con smoke live.
+- [x] Implementare `reorder_images_in_section` con permutazione completa, audit, rollback e riallineamento `media_usages`.
+- [x] Implementare `update_image_caption` per aggiornare o rimuovere la didascalia del singolo uso.
+- [ ] Aggiungere titolo editoriale, tag, note e ricerca al catalogo asset.
+- [ ] Implementare thumbnail/preview dedicate per l'asset manager.
+- [ ] Implementare archiviazione/eliminazione controllata con blocco per asset ancora usati.
+- [ ] Implementare strip EXIF/GPS prima della pubblicazione.
 - [ ] Decidere e implementare scansione antivirus/security se applicabile.
 - [ ] Testare rollback esplicito di `attach_image_to_section`.
-- [ ] Testare rollback esplicito di rimozione e riordino immagini.
-- [ ] Testare da ChatGPT il caricamento binario reale di un allegato fino a R2.
+- [x] Testare rollback esplicito di `remove_image_from_section`, incluso il ripristino degli indici `media_usages`.
+- [x] Testare rollback esplicito di `reorder_images_in_section`, incluso il ripristino degli indici `media_usages`.
+- [ ] Testare upload binario diretto da allegato ChatGPT senza `uploadPageUrl`, quando il client espone file/base64/URL temporaneo.
 
 ## 11. Preview, publish, revisioni e audit
 
@@ -297,9 +319,10 @@ Fonti confrontate: tutti i 20 file Markdown del progetto, tutte le 9 task Codex 
 - [x] Documentare onboarding per Claude.
 - [x] Documentare prompt naturali e rollback per Lorenzo.
 - [x] Documentare che i segreti non vanno incollati in chat.
+- [x] Testare il flusso immagini con un connector ChatGPT reale usando `uploadPageUrl`.
 - [ ] Testare esplicitamente con MCP Inspector CLI, non solo con client equivalente.
 - [ ] Testare un Claude custom connector reale.
-- [ ] Completare il test immagini end-to-end con ChatGPT connector.
+- [ ] Testare upload diretto dell'allegato da ChatGPT se la superficie client lo rende disponibile al tool MCP.
 - [ ] Verificare e documentare i requisiti correnti dei client prima del rilascio pubblico.
 - [ ] Documentare i limiti correnti dei piani Free/Pro dove incidono sul connector.
 
@@ -321,6 +344,14 @@ Fonti confrontate: tutti i 20 file Markdown del progetto, tutte le 9 task Codex 
 - [ ] Creare backup/export periodico D1.
 - [ ] Definire retention e cleanup di authorization code, access token e upload session scaduti.
 
+### Protezione contenuti pubblici e traffico
+
+- [ ] Configurare un rate limiting conservativo per `GET/HEAD /media/assets/*`, con soglie distinte dal rate limit MCP e verifica che portfolio, lightbox e crawler legittimi non vengano bloccati.
+- [ ] Configurare regole WAF mirate per host e percorsi sensibili, includendo eccezioni esplicite per i flussi legittimi MCP, OAuth e upload.
+- [ ] Configurare bot detection e AI bot policy: consentire i crawler Search, valutare separatamente gli Agent e bloccare i bot usati per AI Training.
+- [ ] Eseguire smoke test completi dopo l'attivazione di rate limit, WAF e AI bot policy e controllare i Security Events per falsi positivi.
+- [ ] Documentare soglie, regole, eccezioni e procedura di rollback della configurazione Cloudflare.
+
 ## 14. Immagini responsive e performance frontend
 
 - [x] Dichiarare `width` e `height` sulle immagini statiche correnti.
@@ -337,6 +368,18 @@ Fonti confrontate: tutti i 20 file Markdown del progetto, tutte le 9 task Codex 
 - [ ] Impostare cache header lunghi per asset fingerprinted.
 - [ ] Misurare Lighthouse mobile sul sito live.
 - [ ] Definire budget di peso per pagina e immagini.
+
+### Deterrenti frontend al download casuale
+
+- [ ] Documentare che i controlli HTML/CSS/JavaScript sono deterrenti contro il download casuale e non possono proteggere in modo assoluto un'immagine pubblicamente visibile.
+- [ ] Servire nel sito pubblico soltanto varianti web ottimizzate, mai gli originali ad alta risoluzione caricati nel media store.
+- [ ] Impostare `draggable="false"` su tutte le immagini editoriali, incluse gallery, cover, hero e lightbox.
+- [ ] Applicare alle immagini protette CSS coerente con `user-select: none`, `-webkit-user-drag: none` e `-webkit-touch-callout: none`.
+- [ ] Intercettare centralmente `dragstart` e `contextmenu` soltanto sulle immagini protette, senza handler inline e senza bloccare il menu contestuale nel resto del sito.
+- [ ] Evitare link diretti al file, attributi `download` e controlli del lightbox che espongano volontariamente l'URL dell'asset originale.
+- [ ] Valutare un wrapper o overlay trasparente per impedire l'interazione diretta mouse/touch con l'elemento immagine, preservando click del lightbox, tastiera e screen reader.
+- [ ] Verificare che i deterrenti non rompano alt text, indicizzazione, zoom, navigazione da tastiera, gesture touch e `prefers-reduced-motion`.
+- [ ] Aggiungere test renderer/browser per attributi anti-drag, blocco contestuale circoscritto e assenza di URL originali nell'HTML pubblico.
 
 ## 15. Accessibilita', SEO e sicurezza web
 
@@ -384,7 +427,8 @@ Fonti confrontate: tutti i 20 file Markdown del progetto, tutte le 9 task Codex 
 - [x] Commit e push di `attach_image_to_section`.
 - [x] Valutare il branch dedicato e mantenere `main` per i deploy gia' eseguiti nel flusso storico.
 - [x] Documentare stato deploy e stato repository nei recap tecnici.
-- [ ] Allineare `edge/README.md` alla superficie completa attuale dei 24 tool.
-- [ ] Allineare `mcp/README.md` al fatto che il sito live e' dinamico.
-- [ ] Aggiornare gli esempi media e le migrazioni `0009`/`0010` nel manuale template.
-- [ ] Decidere se mantenere o archiviare `NEXT_CHAT_RECAP.md`, ormai storico.
+- [x] Allineare `edge/README.md` distinguendo i 25 tool live verificati dai 28 presenti nel sorgente locale.
+- [x] Allineare `mcp/README.md` al sito live dinamico e distinguere MCP locale e remoto.
+- [x] Aggiornare esempi media, componenti e migrazioni `0009`/`0010` nel manuale template.
+- [x] Allineare contratti, onboarding e handoff al tool `set_image_visibility`.
+- [x] Archiviare `NEXT_CHAT_RECAP.md`, `MCP_TDD_TODO.md`, `MCP_NEXT_PHASES_TODO.md` e `MCP_REMOTE_ROADMAP.md` in `archive/docs/`.
