@@ -24,9 +24,9 @@
       content="https://ph.lorenzozanna.com/assets/images/portfolio/strada/controluce-vetro.jpg"
     />
     <title>Lorenzo Zanna Photography | Ritratti, natura e strada</title>
-    <link rel="stylesheet" href="assets/css/base.css?v=20260726-faq-animation" />
-    <link rel="stylesheet" href="assets/css/home.css?v=20260726-faq-animation" />
-    <script src="assets/js/main.js?v=20260726-faq-animation" defer></script>
+    <link rel="stylesheet" href="assets/css/base.css?v=20260726-portfolio-shortcuts" />
+    <link rel="stylesheet" href="assets/css/home.css?v=20260726-portfolio-shortcuts" />
+    <script src="assets/js/main.js?v=20260726-portfolio-shortcuts" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Vai al contenuto</a>
@@ -83,39 +83,45 @@
           </p>
         </div>
         <div class="selected-grid">
-          <figure class="selected-shot reveal">
-            <img
-              src="assets/images/portfolio/ritratti/ritratto-riflesso.jpg"
-              alt="Ritratto sovrapposto a riflessi di rami"
-              width="1600"
-              height="1071"
-              loading="lazy"
-              decoding="async"
-            />
-            <figcaption>Ritratti</figcaption>
-          </figure>
-          <figure class="selected-shot selected-shot--wide reveal">
-            <img
-              src="assets/images/portfolio/strada/passante-cane.jpg"
-              alt="Passante con cane ripreso in movimento"
-              width="1600"
-              height="1200"
-              loading="lazy"
-              decoding="async"
-            />
-            <figcaption>Strada e forme</figcaption>
-          </figure>
-          <figure class="selected-shot reveal">
-            <img
-              src="assets/images/portfolio/natura/bosco-casentino.jpg"
-              alt="Bosco fitto attraversato da luce verde"
-              width="1600"
-              height="1600"
-              loading="lazy"
-              decoding="async"
-            />
-            <figcaption>Natura</figcaption>
-          </figure>
+          <a class="selected-shot reveal" href="/portfolio#ritratti" aria-label="Ritratti: apri la serie nel portfolio">
+            <figure class="selected-shot__figure">
+              <img
+                src="assets/images/portfolio/ritratti/ritratto-riflesso.jpg"
+                alt="Ritratto sovrapposto a riflessi di rami"
+                width="1600"
+                height="1071"
+                loading="lazy"
+                decoding="async"
+              />
+              <figcaption>Ritratti</figcaption>
+            </figure>
+          </a>
+          <a class="selected-shot selected-shot--wide reveal" href="/portfolio#natura" aria-label="Natura quieta: apri la serie nel portfolio">
+            <figure class="selected-shot__figure">
+              <img
+                src="assets/images/portfolio/natura/bosco-casentino.jpg"
+                alt="Bosco fitto attraversato da luce verde"
+                width="1600"
+                height="1600"
+                loading="lazy"
+                decoding="async"
+              />
+              <figcaption>Natura quieta</figcaption>
+            </figure>
+          </a>
+          <a class="selected-shot reveal" href="/portfolio#strada" aria-label="Strada: apri la serie nel portfolio">
+            <figure class="selected-shot__figure">
+              <img
+                src="assets/images/portfolio/strada/passante-cane.jpg"
+                alt="Passante con cane ripreso in movimento"
+                width="1600"
+                height="1200"
+                loading="lazy"
+                decoding="async"
+              />
+              <figcaption>Strada</figcaption>
+            </figure>
+          </a>
         </div>
       </section>
 

@@ -576,7 +576,7 @@ async function persistSectionDataChange(env, options) {
 
 function canUpdateWithPlainText(field) {
   if (field.kind === "boolean") return true;
-  if (field.kind === "plain_text" || field.kind === "text_list") return true;
+  if (field.kind === "plain_text" || field.kind === "text_list" || field.kind === "enum") return true;
   return field.kind === "rich_text" && field.plainTextTool === "update_text";
 }
 
@@ -598,6 +598,10 @@ function normalizeTextValue(value, field) {
 
   if (field.maxLength && [...normalized].length > field.maxLength) {
     throw new Error(`Text value exceeds max length ${field.maxLength}.`);
+  }
+
+  if (field.kind === "enum" && !field.values?.includes(normalized)) {
+    throw new Error("Value must be one of: " + (field.values ?? []).join(", ") + ".");
   }
 
   return normalized;

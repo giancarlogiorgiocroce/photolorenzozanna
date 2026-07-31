@@ -47,19 +47,19 @@ test("renderPageHtml includes the existing site shell and page assets", async ()
     },
   );
 
-  assert.match(html, /<link rel="stylesheet" href="assets\/css\/base\.css\?v=20260726-faq-animation" \/>/);
+  assert.match(html, /<link rel="stylesheet" href="assets\/css\/base\.css\?v=20260726-portfolio-shortcuts" \/>/);
   assert.match(html, /<meta name="theme-color" content="#0f1010" \/>/);
   assert.match(html, /<link rel="icon" href="\/favicon\.ico" sizes="any" \/>/);
   assert.match(html, /<link rel="icon" type="image\/png" href="\/assets\/icons\/favicon-32x32\.png" sizes="32x32" \/>/);
   assert.match(html, /<link rel="icon" type="image\/png" href="\/assets\/icons\/favicon-16x16\.png" sizes="16x16" \/>/);
   assert.match(html, /<link rel="apple-touch-icon" href="\/assets\/icons\/apple-touch-icon\.png" sizes="180x180" \/>/);
   assert.match(html, /<link rel="manifest" href="\/site\.webmanifest" \/>/);
-  assert.match(html, /<link rel="stylesheet" href="assets\/css\/portfolio\.css\?v=20260726-faq-animation" \/>/);
+  assert.match(html, /<link rel="stylesheet" href="assets\/css\/portfolio\.css\?v=20260726-portfolio-shortcuts" \/>/);
   assert.match(html, /<meta\s+name="description"\s+content="Ritratti, strada, natura, forme e ombre: una selezione fotografica di Lorenzo Zanna tra volti, paesaggio, luce e superfici\."\s+\/>/);
   assert.match(html, /<link rel="canonical" href="https:\/\/ph\.lorenzozanna\.com\/portfolio" \/>/);
   assert.match(html, /<meta property="og:url" content="https:\/\/ph\.lorenzozanna\.com\/portfolio" \/>/);
-  assert.match(html, /<script src="assets\/js\/main\.js\?v=20260726-faq-animation" defer><\/script>/);
-  assert.match(html, /<script src="assets\/js\/gallery\.js\?v=20260726-faq-animation" defer><\/script>/);
+  assert.match(html, /<script src="assets\/js\/main\.js\?v=20260726-portfolio-shortcuts" defer><\/script>/);
+  assert.match(html, /<script src="assets\/js\/gallery\.js\?v=20260726-portfolio-shortcuts" defer><\/script>/);
   assert.match(html, /class="site-header"/);
   assert.match(html, /<a class="brand" href="\/" aria-label="Lorenzo Zanna home">/);
   assert.match(html, /<nav class="site-nav"/);
@@ -103,7 +103,9 @@ test("renderPageHtml renders portfolio gallery sections from legacy series data"
     },
   );
 
-  assert.match(html, /<section class="portfolio-section"[^>]*data-section-id="gallery"/);
+  assert.match(html, /<section class="portfolio-section" id="ritratti"[^>]*data-section-id="gallery"/);
+  assert.match(html, /<section class="portfolio-section" id="strada"/);
+  assert.match(html, /<section class="portfolio-section" id="natura"/);
   assert.match(html, /<p class="section-kicker">01<\/p>/);
   assert.match(html, /<h2 id="gallery-ritratti-title">Ritratti<\/h2>/);
   assert.match(html, /class="masonry-gallery" data-lightbox-gallery/);
@@ -197,8 +199,49 @@ test("renderPageHtml renders the home page with the existing visual contract", a
   assert.match(html, /class="section section--intro"/);
   assert.match(html, /class="selected-grid"/);
   assert.match(html, /class="selected-shot selected-shot--wide reveal"/);
+  assert.match(html, /href="\/portfolio#ritratti"/);
+  assert.match(html, /href="\/portfolio#natura"/);
+  assert.match(html, /href="\/portfolio#strada"/);
   assert.match(html, /class="split-section__copy reveal"/);
   assert.doesNotMatch(html, /data-section-id="cta"/);
+});
+
+test("renderPageHtml derives home shortcuts from the published portfolio covers", async () => {
+  const db = createRendererDb({ gallery: true });
+  const gallerySection = db.pageSections.find((section) => section.section_key === "gallery");
+  const galleryData = JSON.parse(gallerySection.data);
+  galleryData.items[0].title = "Ritratti aggiornati";
+  galleryData.items[0].images[0] = {
+    caption: "Ritratti / aggiornato",
+    alt: "Ritratto aggiornato nel portfolio",
+    width: 1600,
+    height: 1067,
+    src: "/assets/images/portfolio/ritratti/ritratto-bar.jpg",
+  };
+  gallerySection.data = JSON.stringify(galleryData);
+
+  const html = await renderPageHtml(
+    { DB: db },
+    {
+      site: "ph",
+      page: "home",
+    },
+  );
+
+  const selectedStart = html.indexOf('class="selected-grid"');
+  const splitStart = html.indexOf('class="section split-section"');
+  const selectedHtml = html.slice(selectedStart, splitStart);
+  const portraitsIndex = selectedHtml.indexOf('href="/portfolio#ritratti"');
+  const natureIndex = selectedHtml.indexOf('href="/portfolio#natura"');
+  const streetIndex = selectedHtml.indexOf('href="/portfolio#strada"');
+
+  assert.ok(portraitsIndex >= 0);
+  assert.ok(portraitsIndex < natureIndex);
+  assert.ok(natureIndex < streetIndex);
+  assert.match(selectedHtml, /assets\/images\/portfolio\/ritratti\/ritratto-bar\.jpg/);
+  assert.match(selectedHtml, /<figcaption>Ritratti aggiornati<\/figcaption>/);
+  assert.match(selectedHtml, /<figcaption>Natura quieta<\/figcaption>/);
+  assert.match(selectedHtml, /<figcaption>Strada<\/figcaption>/);
 });
 
 test("renderPageHtml renders the about page with the existing visual contract", async () => {
@@ -475,6 +518,32 @@ function createRendererDb(options = {}) {
                   ],
                 },
                 {
+                  key: "strada",
+                  title: "Strada",
+                  images: [
+                    {
+                      caption: "Strada / passante",
+                      alt: "Passante con cane ripreso in movimento",
+                      width: 1600,
+                      height: 1200,
+                      src: "/assets/images/portfolio/strada/passante-cane.jpg",
+                    },
+                  ],
+                },
+                {
+                  key: "natura-quieta",
+                  title: "Natura quieta",
+                  images: [
+                    {
+                      caption: "Natura quieta / bosco",
+                      alt: "Bosco fitto attraversato da luce verde",
+                      width: 1600,
+                      height: 1600,
+                      src: "/assets/images/portfolio/natura/bosco-casentino.jpg",
+                    },
+                  ],
+                },
+                {
                   key: "forme-e-ombre",
                   title: "Forme e ombre",
                   images: [
@@ -611,9 +680,11 @@ class FakeRendererD1Database {
     }
 
     if (query.includes("FROM page_sections") && query.includes("page_id = ?")) {
+      const galleryOnly = query.includes("section_key = 'gallery'");
       return {
         results: this.pageSections
           .filter((section) => section.page_id === params[0] && section.enabled === 1)
+          .filter((section) => !galleryOnly || (section.section_key === "gallery" && section.type === "gallery"))
           .sort((left, right) => left.section_order - right.section_order),
       };
     }

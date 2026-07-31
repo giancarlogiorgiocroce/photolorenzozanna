@@ -25,7 +25,7 @@ const FIELD = {
   imageAlt: { path: "image.alt", kind: "plain_text", maxLength: 180 },
   faqQuestion: { path: "items[].question", kind: "plain_text", maxLength: 160 },
   faqAnswer: { path: "items[].answer", kind: "rich_text", maxLength: 700, ...RICH_TEXT_TOOLS },
-  galleryGroupTitle: { path: "items[].title", kind: "plain_text", maxLength: 90 },
+  galleryGroupTitle: { path: "items[].title", kind: "plain_text", maxLength: 90, tool: "update_text" },
   galleryImageList: { path: "items[].images", kind: "media_asset_list", tool: "attach_image_to_section" },
   galleryImageAsset: { path: "items[].images[].assetId", kind: "media_asset", tool: "replace_image" },
   galleryImageFocalPoint: {
@@ -33,9 +33,19 @@ const FIELD = {
     kind: "focal_point",
     tool: "set_image_focal_point",
   },
-  galleryImageAlt: { path: "items[].images[].alt", kind: "plain_text", maxLength: 180 },
-  galleryImageCaption: { path: "items[].images[].caption", kind: "plain_text", maxLength: 120 },
-  galleryImageVariant: { path: "items[].images[].variant", kind: "enum", values: ["standard", "wide", "tall"] },
+  galleryImageAlt: { path: "items[].images[].alt", kind: "plain_text", maxLength: 180, tool: "update_text" },
+  galleryImageCaption: {
+    path: "items[].images[].caption",
+    kind: "plain_text",
+    maxLength: 120,
+    tool: "update_text",
+  },
+  galleryImageVariant: {
+    path: "items[].images[].variant",
+    kind: "enum",
+    values: ["standard", "wide", "tall"],
+    tool: "update_text",
+  },
   contactChannelLabel: { path: "channels[].label", kind: "plain_text", maxLength: 40 },
   contactChannelValue: { path: "channels[].value", kind: "plain_text", maxLength: 120 },
   contactChannelHref: { path: "channels[].href", kind: "link", nullable: true },
@@ -59,16 +69,28 @@ const CONTRACTS = {
   },
   "home.selected_work": {
     styleContract: "home.selected_work",
-    editableFields: [
-      FIELD.kicker,
-      FIELD.title,
-      FIELD.intro,
-      { path: "shots", kind: "media_asset_list", tool: "attach_image_to_section" },
-      { path: "shots[].assetId", kind: "media_asset", tool: "replace_image" },
-      { path: "shots[].focalPoint", kind: "focal_point", tool: "set_image_focal_point" },
-      { path: "shots[].caption", kind: "plain_text", maxLength: 80 },
-      { path: "shots[].alt", kind: "plain_text", maxLength: 180 },
-      { path: "shots[].variant", kind: "enum", values: ["standard", "wide"] },
+    editableFields: [FIELD.kicker, FIELD.title, FIELD.intro],
+    contentDependencies: [
+      {
+        role: "portfolio_shortcuts",
+        sourcePage: "portfolio",
+        sourceSectionId: "gallery",
+        sourceStyleContract: "portfolio.gallery",
+        itemKeyPath: "items[].key",
+        labelPath: "items[].title",
+        coverImagePath: "items[].images[0]",
+        selectedItems: [
+          { keys: ["ritratti"], href: "/portfolio#ritratti" },
+          { keys: ["natura", "natura-quieta"], href: "/portfolio#natura" },
+          { keys: ["strada"], href: "/portfolio#strada" },
+        ],
+        editableFields: [
+          FIELD.galleryGroupTitle,
+          { ...FIELD.galleryImageAsset, path: "items[].images[0].assetId" },
+          { ...FIELD.galleryImageFocalPoint, path: "items[].images[0].focalPoint" },
+          { ...FIELD.galleryImageAlt, path: "items[].images[0].alt" },
+        ],
+      },
     ],
   },
   "home.split_section": {
@@ -188,6 +210,14 @@ function cloneContract(contract) {
   return {
     styleContract: contract.styleContract,
     editableFields: contract.editableFields.map((field) => ({ ...field })),
+    contentDependencies: (contract.contentDependencies ?? []).map((dependency) => ({
+      ...dependency,
+      selectedItems: (dependency.selectedItems ?? []).map((item) => ({
+        ...item,
+        keys: [...item.keys],
+      })),
+      editableFields: (dependency.editableFields ?? []).map((field) => ({ ...field })),
+    })),
   };
 }
 

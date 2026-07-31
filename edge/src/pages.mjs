@@ -58,6 +58,7 @@ function serializeSection(pageSlug, section) {
     order: Number(section.section_order),
     enabled: Number(section.enabled) === 1,
     editableFields: contract.editableFields,
+    contentDependencies: contract.contentDependencies,
     data: safeJson(section.data) ?? {},
   };
 }

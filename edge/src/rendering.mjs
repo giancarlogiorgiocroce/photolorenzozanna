@@ -1,8 +1,13 @@
 import { resolveSectionContract } from "./page-contracts.mjs";
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
-const ASSET_VERSION = "20260726-faq-animation";
+const ASSET_VERSION = "20260726-portfolio-shortcuts";
 const CANONICAL_ORIGIN = "https://ph.lorenzozanna.com";
+const HOME_PORTFOLIO_GROUPS = [
+  ["ritratti"],
+  ["natura", "natura-quieta"],
+  ["strada"],
+];
 
 const GALLERY_LAYOUTS = {
   ritratti: ["wide", "tall", "standard", "standard"],
@@ -36,21 +41,24 @@ const PAGE_DEFAULTS = {
           alt: "Ritratto sovrapposto a riflessi di rami",
           width: 1600,
           height: 1071,
+          href: "/portfolio#ritratti",
         },
         {
-          caption: "Strada e forme",
-          src: "assets/images/portfolio/strada/passante-cane.jpg",
-          alt: "Passante con cane ripreso in movimento",
-          width: 1600,
-          height: 1200,
-          variant: "wide",
-        },
-        {
-          caption: "Natura",
+          caption: "Natura quieta",
           src: "assets/images/portfolio/natura/bosco-casentino.jpg",
           alt: "Bosco fitto attraversato da luce verde",
           width: 1600,
           height: 1600,
+          variant: "wide",
+          href: "/portfolio#natura",
+        },
+        {
+          caption: "Strada",
+          src: "assets/images/portfolio/strada/passante-cane.jpg",
+          alt: "Passante con cane ripreso in movimento",
+          width: 1600,
+          height: 1200,
+          href: "/portfolio#strada",
         },
       ],
     },
@@ -159,9 +167,22 @@ export async function renderPageHtml(env, input) {
     .bind(page.id)
     .all();
 
-  const context = getPageContext(page.slug, page.title);
   const rawSections = (sectionsResult.results ?? []).map((section) => normalizeSection(page.slug, section));
-  const sections = await hydrateSectionMedia(env, site.id, rawSections);
+  const portfolioGallery = page.slug === "home"
+    ? await loadPortfolioGallerySection(env, site.id)
+    : null;
+  const sectionsToHydrate = portfolioGallery
+    ? [...rawSections, portfolioGallery]
+    : rawSections;
+  const hydratedSections = await hydrateSectionMedia(env, site.id, sectionsToHydrate);
+  const sections = hydratedSections.slice(0, rawSections.length);
+  const hydratedPortfolioGallery = portfolioGallery
+    ? hydratedSections.at(-1)
+    : null;
+  const context = {
+    ...getPageContext(page.slug, page.title),
+    portfolioShortcuts: buildPortfolioShortcuts(hydratedPortfolioGallery),
+  };
   const body = sections.map((section) => renderSection(section, context)).filter(Boolean).join("\n");
 
   return `<!doctype html>
@@ -191,6 +212,59 @@ ${indent(renderPrivacyNote(), 4)}
 ${indent(renderFooter(context), 4)}
   </body>
 </html>`;
+}
+
+async function loadPortfolioGallerySection(env, siteId) {
+  const page = await env.DB.prepare(
+    `SELECT id, slug, title, status
+     FROM pages
+     WHERE site_id = ? AND slug = ? AND status = 'published'`,
+  )
+    .bind(siteId, "portfolio")
+    .first();
+
+  if (!page) return null;
+
+  const section = await env.DB.prepare(
+    `SELECT id, section_key, type, section_order, enabled, data
+     FROM page_sections
+     WHERE page_id = ?
+       AND section_key = 'gallery'
+       AND type = 'gallery'
+       AND enabled = 1
+     LIMIT 1`,
+  )
+    .bind(page.id)
+    .first();
+
+  return section ? normalizeSection(page.slug, section) : null;
+}
+
+function buildPortfolioShortcuts(section) {
+  if (!section || section.styleContract !== "portfolio.gallery") return [];
+
+  const groups = Array.isArray(section.data.items) ? section.data.items : [];
+  const shortcuts = HOME_PORTFOLIO_GROUPS.map((candidateKeys, shortcutIndex) => {
+    const groupIndex = groups.findIndex((candidate) => {
+      const key = toHtmlIdSegment(candidate?.key ?? candidate?.title);
+      return candidateKeys.includes(key);
+    });
+    const group = groups[groupIndex];
+    const image = Array.isArray(group?.images)
+      ? group.images.find((candidate) => normalizeAssetPath(candidate?.src))
+      : null;
+
+    if (!group || !image) return null;
+
+    return {
+      ...image,
+      caption: group.title,
+      href: `/portfolio#${portfolioGroupAnchorId(group, groupIndex)}`,
+      variant: shortcutIndex === 1 ? "wide" : "standard",
+    };
+  }).filter(Boolean);
+
+  return shortcuts.length === HOME_PORTFOLIO_GROUPS.length ? shortcuts : [];
 }
 
 function renderPrivacyNote() {
@@ -290,7 +364,9 @@ function hydrateMediaValue(value, assets) {
 
 function renderSection(section, context) {
   if (section.styleContract === "home.hero") return renderHomeHero(section);
-  if (section.styleContract === "home.selected_work") return renderHomeSelectedWork(section);
+  if (section.styleContract === "home.selected_work") {
+    return renderHomeSelectedWork(section, context.portfolioShortcuts);
+  }
   if (section.styleContract === "home.split_section") return renderHomeSplitSection(section);
   if (section.styleContract === "about.hero") return renderAboutHero(section);
   if (section.styleContract === "about.manifesto") return renderAboutManifesto(section);
@@ -332,9 +408,13 @@ ${indent(renderImage(image, { fetchPriority: "high" }), 4)}
 </section>`;
 }
 
-function renderHomeSelectedWork(section) {
+function renderHomeSelectedWork(section, portfolioShortcuts = []) {
   const defaults = PAGE_DEFAULTS.home.selectedWork;
-  const shots = Array.isArray(section.data.shots) && section.data.shots.length ? section.data.shots : defaults.shots;
+  const shots = portfolioShortcuts.length
+    ? portfolioShortcuts
+    : Array.isArray(section.data.shots) && section.data.shots.length
+      ? section.data.shots
+      : defaults.shots;
   const intro = plainText(section.data.intro ?? section.data.paragraphs);
 
   return `<section class="section section--intro" data-section-id="${escapeAttribute(section.sectionId)}" data-section-type="text" aria-labelledby="selected-title">
@@ -349,12 +429,26 @@ ${indent(shots.map(renderSelectedShot).join("\n"), 4)}
 </section>`;
 }
 
+function normalizeInternalHref(value) {
+  const href = String(value ?? "").trim();
+  if (!href || href.includes("..")) return "";
+  return /^\/(?!\/)[A-Za-z0-9._~!$&'()*+,;=:@/%?#-]*$/.test(href) ? href : "";
+}
+
 function renderSelectedShot(shot) {
   const className = shot?.variant === "wide" ? "selected-shot selected-shot--wide reveal" : "selected-shot reveal";
-  return `<figure class="${className}">
+  const caption = escapeHtml(shot?.caption ?? "");
+  const href = normalizeInternalHref(shot?.href);
+  const figure = `<figure class="selected-shot__figure">
 ${indent(renderImage(shot), 2)}
-  <figcaption>${escapeHtml(shot?.caption ?? "")}</figcaption>
+  <figcaption>${caption}</figcaption>
 </figure>`;
+
+  if (!href) return `<div class="${className}">${figure}</div>`;
+
+  return `<a class="${className}" href="${escapeAttribute(href)}" aria-label="${escapeAttribute(`${plainText(shot?.caption)}: apri la serie nel portfolio`)}">
+${indent(figure, 2)}
+</a>`;
 }
 
 function renderHomeSplitSection(section) {
@@ -642,9 +736,10 @@ function renderGalleryGroup(section, group, index) {
   if (!title || !imagesHtml) return "";
 
   const titleId = `${escapeAttribute(section.sectionId)}-${escapeAttribute(toHtmlIdSegment(group?.key ?? group?.title ?? index + 1))}-title`;
+  const anchorId = portfolioGroupAnchorId(group, index);
   const galleryClass = index % 2 === 1 ? "masonry-gallery masonry-gallery--wide" : "masonry-gallery";
 
-  return `<section class="portfolio-section" data-section-id="${escapeAttribute(section.sectionId)}" data-section-type="gallery" aria-labelledby="${titleId}">
+  return `<section class="portfolio-section" id="${escapeAttribute(anchorId)}" data-section-id="${escapeAttribute(section.sectionId)}" data-section-type="gallery" aria-labelledby="${titleId}">
   <div class="portfolio-section__header reveal">
     <p class="section-kicker">${String(index + 1).padStart(2, "0")}</p>
     <h2 id="${titleId}">${title}</h2>
@@ -1014,6 +1109,11 @@ function toHtmlIdSegment(value) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     || "section";
+}
+
+function portfolioGroupAnchorId(group, index) {
+  const key = toHtmlIdSegment(group?.key ?? group?.title ?? index + 1);
+  return key === "natura-quieta" ? "natura" : key;
 }
 
 function requiredString(value) {

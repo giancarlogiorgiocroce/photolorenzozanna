@@ -31,6 +31,49 @@ test("resolveSectionContract maps page-specific sections to style contracts", ()
   assert.equal(faq.editableFields.find((field) => field.path === "items[].answer").kind, "rich_text");
 });
 
+test("home selected work exposes its Portfolio source instead of stale local shot fields", () => {
+  const contract = resolveSectionContract("home", {
+    section_key: "text_2",
+    type: "text",
+  });
+
+  assert.equal(contract.styleContract, "home.selected_work");
+  assert.deepEqual(
+    contract.editableFields.map((field) => field.path),
+    ["kicker", "title", "intro"],
+  );
+  assert.equal(
+    resolveEditableField(
+      "home",
+      {
+        section_key: "text_2",
+        type: "text",
+      },
+      "shots[0].caption",
+    ),
+    null,
+  );
+
+  const dependency = contract.contentDependencies[0];
+  assert.equal(dependency.role, "portfolio_shortcuts");
+  assert.equal(dependency.sourcePage, "portfolio");
+  assert.equal(dependency.sourceSectionId, "gallery");
+  assert.equal(dependency.coverImagePath, "items[].images[0]");
+  assert.deepEqual(
+    dependency.selectedItems.map((item) => item.href),
+    ["/portfolio#ritratti", "/portfolio#natura", "/portfolio#strada"],
+  );
+  assert.deepEqual(
+    dependency.editableFields.map((field) => [field.path, field.tool]),
+    [
+      ["items[].title", "update_text"],
+      ["items[].images[0].assetId", "replace_image"],
+      ["items[].images[0].focalPoint", "set_image_focal_point"],
+      ["items[].images[0].alt", "update_text"],
+    ],
+  );
+});
+
 test("resolveSectionContract falls back to generic text for legacy text sections", () => {
   const contract = resolveSectionContract("portfolio", {
     section_key: "text_2",
@@ -171,6 +214,17 @@ test("resolveEditableField exposes image asset fields without allowing free src 
   assert.equal(galleryAsset.tool, "replace_image");
   assert.equal(galleryFocalPoint.kind, "focal_point");
   assert.equal(galleryFocalPoint.tool, "set_image_focal_point");
+  assert.equal(
+    resolveEditableField(
+      "portfolio",
+      {
+        section_key: "gallery",
+        type: "gallery",
+      },
+      "items[1].images[2].variant",
+    ).tool,
+    "update_text",
+  );
   assert.equal(gallerySrc, null);
 });
 

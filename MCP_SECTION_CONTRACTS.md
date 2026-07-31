@@ -280,36 +280,33 @@ Fonte CSS/HTML:
 - `assets/css/home.css`;
 - classi: `section section--intro`, `section__header`, `selected-grid`, `selected-shot`, `selected-shot--wide`.
 
-Campi:
+Campi locali:
 
 ```json
 {
   "kicker": "Selezione",
   "title": "Ritratti, natura, strada",
-  "intro": "Volti, boschi, passanti...",
-  "shots": [
-    {
-      "caption": "Ritratti",
-      "image": "/assets/images/portfolio/ritratti/ritratto-riflesso.jpg",
-      "alt": "Ritratto sovrapposto a riflessi di rami",
-      "width": 1600,
-      "height": 1071,
-      "variant": "standard"
-    }
-  ]
+  "intro": "Volti, boschi, passanti..."
 }
 ```
 
 Editable:
 
-- `kicker`: `plain_text`, max 50;
+- `kicker`: `plain_text`, max 60;
 - `title`: `plain_text`, max 90;
-- `intro`: `rich_text`, max 360;
-- `shots[].caption`: `plain_text`, max 80;
-- `shots[].alt`: `plain_text`, required;
-- `shots[].variant`: enum `standard`, `wide`.
+- `intro`: `rich_text`, max 700.
 
-Image replacement is future media pipeline, not initial `update_text`.
+Le tre card non duplicano immagini o titoli nella Home: sono contenuto derivato da
+`portfolio/gallery`. `get_page(home)` espone una `contentDependencies[]` con ruolo
+`portfolio_shortcuts`, le chiavi selezionate e i tool da usare sulla sezione sorgente:
+
+- etichetta: `portfolio/gallery` -> `items[].title` con `update_text`;
+- copertina: prima immagine del gruppo, `items[].images[0].assetId`, con `replace_image`;
+- punto focale: `items[].images[0].focalPoint` con `set_image_focal_point`;
+- testo alternativo: `items[].images[0].alt` con `update_text`.
+
+Le chiavi `items[].key` restano identita strutturali non editabili e determinano gli
+anchor `/portfolio#ritratti`, `/portfolio#natura` e `/portfolio#strada`.
 
 ### `home.split_section`
 
@@ -609,19 +606,16 @@ Campi:
 
 ```json
 {
-  "title": "Portfolio fotografico",
-  "intro": "Ritratti, strada...",
   "items": [
     {
       "key": "ritratti",
       "title": "Ritratti",
       "images": [
         {
-          "src": "/assets/images/portfolio/ritratti/ritratto-riflesso.jpg",
+          "assetId": "asset_ritratto_riflesso",
           "alt": "Ritratto sovrapposto a riflessi di rami",
           "caption": "Ritratti / riflesso",
-          "width": 1600,
-          "height": 1071
+          "variant": "wide"
         }
       ]
     }
@@ -629,18 +623,25 @@ Campi:
 }
 ```
 
-Editable ora:
+Editable:
 
-- `items[].title`: `plain_text`;
-- `items[].images[].alt`: `plain_text`;
-- `items[].images[].caption`: `plain_text`.
+- `items[].title`: `plain_text` con `update_text`;
+- `items[].images`: lista media con `attach_image_to_section`;
+- `items[].images[].assetId`: asset media con `replace_image`;
+- `items[].images[].focalPoint`: punto focale con `set_image_focal_point`;
+- `items[].images[].alt`: `plain_text` con `update_text`;
+- `items[].images[].caption`: `plain_text` con `update_text`;
+- `items[].images[].variant`: enum `standard`, `wide`, `tall` con `update_text`.
 
-Non editable prima della media pipeline:
+Non editable direttamente:
 
 - `images[].src`;
 - `images[].width`;
 - `images[].height`;
-- layout `wide/tall`, che resta controllato dal renderer: prima usa eventuale variante esplicita sicura (`standard`, `wide`, `tall`), poi pattern curati per gruppo, e solo come fallback usa le dimensioni.
+- `items[].key`, che resta l'identita stabile usata dagli anchor.
+
+Il layout usa prima l'eventuale variante esplicita sicura (`standard`, `wide`, `tall`),
+poi i pattern curati per gruppo e solo come fallback le dimensioni.
 
 Nota layout gallery 2026-07-14:
 
@@ -751,11 +752,16 @@ portfolio/gallery -> portfolio.gallery
           "plainTextTool": "update_text",
           "richTextTool": "update_rich_text"
         }
-      ]
+      ],
+      "contentDependencies": []
     }
   ]
 }
 ```
+
+Per `home.selected_work`, `contentDependencies` contiene la sorgente
+`portfolio/gallery`, le tre serie collegate, gli anchor e i campi della sorgente
+modificabili dal cliente. Gli altri contratti restituiscono un array vuoto.
 
 ## Sequenza tool consigliata
 
@@ -770,7 +776,7 @@ portfolio/gallery -> portfolio.gallery
    - revision e log.
 
 3. `update_text`
-   - solo `plain_text` e `text_list`;
+   - `plain_text`, `text_list`, boolean e enum contrattualizzati;
    - per campi `rich_text`, aggiorna temporaneamente plain text legacy solo se il contratto lo consente.
    - Stato 2026-07-14: implementato come tool MCP sicuro con path controllati, max length da contratto, blocco HTML e revision/change log.
 

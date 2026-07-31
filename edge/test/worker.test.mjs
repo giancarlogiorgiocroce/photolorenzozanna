@@ -658,6 +658,52 @@ test("POST /mcp tools/call get_page returns sections with style contracts and ed
   assert.equal(faq.editableFields.find((field) => field.path === "items[].answer").kind, "rich_text");
 });
 
+test("POST /mcp tools/call get_page tells clients where Home portfolio shortcuts are editable", async () => {
+  const db = createSeededDb();
+  db.pageSections.push(pageSection("page_home", "section_home_text_2", "text_2", "text", 20, true, {
+    kicker: "Selezione",
+    title: "Ritratti, natura, strada",
+    intro: "Tre ingressi al portfolio.",
+    shots: [{ caption: "Dato legacy non renderizzato" }],
+  }));
+
+  const response = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    privateAuth: true,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "get_page",
+        arguments: {
+          site: "ph",
+          page: "home",
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+  const selectedWork = payload.result.structuredContent.sections
+    .find((section) => section.sectionId === "text_2");
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    selectedWork.editableFields.map((field) => field.path),
+    ["kicker", "title", "intro"],
+  );
+  assert.equal(selectedWork.contentDependencies[0].sourcePage, "portfolio");
+  assert.equal(selectedWork.contentDependencies[0].sourceSectionId, "gallery");
+  assert.equal(selectedWork.contentDependencies[0].coverImagePath, "items[].images[0]");
+  assert.equal(
+    selectedWork.contentDependencies[0].editableFields
+      .find((field) => field.path === "items[].images[0].assetId").tool,
+    "replace_image",
+  );
+});
+
 test("POST /mcp tools/call list_media_assets allows viewer scoped user tokens", async () => {
   const db = createSeededDb({
     authTokens: [
@@ -809,6 +855,10 @@ test("POST /mcp tools/call create_image_upload creates a pending media upload", 
   assert.equal(response.status, 200);
   assert.equal(payload.result.structuredContent.upload.status, "pending");
   assert.match(payload.result.structuredContent.upload.uploadToken, /^mu_/);
+  assert.match(
+    payload.result.structuredContent.upload.uploadPageUrl,
+    /^https:\/\/api\.lorenzozanna\.com\/media\/uploads\/upload_[^/]+\/form#token=mu_/,
+  );
   assert.equal(payload.result.structuredContent.asset.status, "draft");
   assert.equal(db.mediaUploads.length, 1);
   assert.equal(db.mediaAssets.find((asset) => asset.id === payload.result.structuredContent.asset.id).status, "draft");
@@ -875,6 +925,48 @@ test("POST /mcp tools/call confirm_image_upload promotes an uploaded object to r
   assert.equal(db.mediaUploads[0].status, "uploaded");
   assert.equal(db.mediaAssets.find((asset) => asset.id === created.asset.id).status, "ready");
   assert.equal(db.changeLog[0].action, "confirm_image_upload");
+});
+
+test("GET /media/uploads/:uploadId/form renders a browser upload helper without exposing the token", async () => {
+  const db = await createEditorDb();
+  const createResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "create_image_upload",
+        arguments: {
+          site: "ph",
+          filename: "ritratto.jpg",
+          mimeType: "image/jpeg",
+          sizeBytes: 456789,
+          width: 1800,
+          height: 1200,
+          alt: "Ritratto caricato via browser",
+        },
+      },
+    },
+  });
+  const created = (await createResponse.json()).result.structuredContent;
+  const helperPath = new URL(created.upload.uploadPageUrl).pathname;
+
+  const response = await fetchWorker(helperPath, {
+    db,
+    host: "api.lorenzozanna.com",
+  });
+  const html = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/html/);
+  assert.match(html, /Lorenzo Zanna Media Upload/);
+  assert.match(html, new RegExp(created.upload.id));
+  assert.match(html, /type="file"/);
+  assert.doesNotMatch(html, /mu_[A-Za-z0-9]/);
 });
 
 test("PUT /media/uploads/:uploadId stores an image object in R2 using the upload token", async () => {

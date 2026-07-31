@@ -2,6 +2,7 @@
   max-width: var(--max-width);
   margin: 0 auto;
   padding: clamp(1.4rem, 5vw, 3.4rem) var(--site-pad);
+  scroll-margin-top: 5.5rem;
 }
 
 .portfolio-section + .portfolio-section {

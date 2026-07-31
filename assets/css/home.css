@@ -64,9 +64,17 @@
 
 .selected-shot {
   position: relative;
+  display: block;
   margin: 0;
   overflow: hidden;
   background: var(--color-surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.selected-shot__figure {
+  height: 100%;
+  margin: 0;
 }
 
 .selected-shot img {

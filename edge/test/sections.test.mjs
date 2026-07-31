@@ -545,6 +545,62 @@ test("updateText rejects fields outside the section contract", async () => {
   );
 });
 
+test("updateText changes a contracted gallery variant and rejects unsupported values", async () => {
+  const db = createSectionDb();
+  db.pageSections.push({
+    id: "section_portfolio_gallery",
+    page_id: "page_portfolio",
+    section_key: "gallery",
+    type: "gallery",
+    section_order: 30,
+    enabled: 1,
+    data: JSON.stringify({
+      items: [
+        {
+          key: "ritratti",
+          title: "Ritratti",
+          images: [{ assetId: "asset_portrait", alt: "Ritratto", variant: "standard" }],
+        },
+      ],
+    }),
+  });
+
+  const result = await updateText(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      sectionId: "gallery",
+      path: "items[0].images[0].variant",
+      value: "wide",
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(result.value, "wide");
+  assert.equal(
+    JSON.parse(db.pageSections.find((section) => section.section_key === "gallery").data)
+      .items[0].images[0].variant,
+    "wide",
+  );
+
+  await assert.rejects(
+    () =>
+      updateText(
+        { DB: db },
+        {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images[0].variant",
+          value: "fullscreen",
+          actor: "tdd-suite",
+        },
+      ),
+    /Value must be one of: standard, wide, tall/,
+  );
+});
+
 test("updateCta changes a contracted link field and records a revision plus change log", async () => {
   const db = createSectionDb();
 

@@ -261,7 +261,7 @@ const TOOLS = [
   {
     name: "update_text",
     title: "Update Text",
-    description: "Update a contracted plain-text field without accepting arbitrary HTML.",
+    description: "Update a contracted plain-text, boolean, or enum field without accepting arbitrary HTML.",
     securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
@@ -270,7 +270,7 @@ const TOOLS = [
         page: { type: "string", description: "Page slug, for example portfolio." },
         sectionId: { type: "string", description: "Section identifier, for example hero or faq." },
         path: { type: "string", description: "Concrete editable field path, for example title or items[0].question." },
-        value: { type: "string", description: "Plain text value. HTML is rejected." },
+        value: { type: "string", description: "Plain text or contracted enum/boolean value. HTML is rejected." },
       },
       required: ["site", "page", "sectionId", "path", "value"],
     },
