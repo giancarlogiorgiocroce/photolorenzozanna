@@ -8,6 +8,7 @@ import {
   listMediaAssets,
   replaceImage,
   setImageFocalPoint,
+  setImageVisibility,
   updateImageAlt,
 } from "../src/media.mjs";
 
@@ -507,6 +508,76 @@ test("setImageFocalPoint rejects invalid values and non-image paths", async () =
         },
       ),
     /Field is not editable with set_image_focal_point/,
+  );
+});
+
+test("setImageVisibility hides a contracted image object and records history", async () => {
+  const db = createMediaDb();
+
+  const result = await setImageVisibility(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+      sectionId: "gallery",
+      path: "items[0].images[0]",
+      enabled: false,
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(result.site, "ph");
+  assert.equal(result.page, "portfolio");
+  assert.equal(result.sectionId, "gallery");
+  assert.equal(result.path, "items[0].images[0]");
+  assert.equal(result.enabled, false);
+  assert.equal(result.image.enabled, false);
+
+  const section = db.pageSections.find((item) => item.section_key === "gallery");
+  const image = JSON.parse(section.data).items[0].images[0];
+  assert.equal(image.enabled, false);
+
+  assert.equal(db.sectionRevisions.length, 1);
+  assert.equal(db.sectionRevisions[0].action, "set_image_visibility");
+  assert.equal(JSON.parse(db.sectionRevisions[0].before_json).data.items[0].images[0].enabled, undefined);
+  assert.equal(JSON.parse(db.sectionRevisions[0].after_json).data.items[0].images[0].enabled, false);
+
+  assert.equal(db.changeLog.length, 1);
+  assert.equal(db.changeLog[0].action, "set_image_visibility");
+  assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[0]/enabled");
+});
+
+test("setImageVisibility rejects non-contracted paths and invalid booleans", async () => {
+  await assert.rejects(
+    () =>
+      setImageVisibility(
+        { DB: createMediaDb() },
+        {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images[0].src",
+          enabled: false,
+          actor: "tdd-suite",
+        },
+      ),
+    /Field is not editable with set_image_visibility/,
+  );
+
+  await assert.rejects(
+    () =>
+      setImageVisibility(
+        { DB: createMediaDb() },
+        {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images[0]",
+          enabled: "false",
+          actor: "tdd-suite",
+        },
+      ),
+    /Invalid enabled/,
   );
 });
 

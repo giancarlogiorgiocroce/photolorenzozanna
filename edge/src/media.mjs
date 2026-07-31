@@ -712,6 +712,77 @@ export async function setImageFocalPoint(env, input) {
   };
 }
 
+export async function setImageVisibility(env, input) {
+  const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
+  const pageSlug = requiredPattern(input?.page, "page", SLUG_PATTERN);
+  const sectionKey = requiredPattern(input?.sectionId, "sectionId", SECTION_KEY_PATTERN);
+  const rawPath = requiredPattern(input?.path, "path", IMAGE_PATH_PATTERN);
+  const actor = requiredString(input?.actor || "mcp");
+  const enabled = normalizeBoolean(input?.enabled, "enabled");
+  const path = normalizeVisibilityImageObjectPath(rawPath);
+  const enabledPath = `${path}.enabled`;
+
+  const { site, page, section } = await loadSection(env, siteSlug, pageSlug, sectionKey);
+  const field = resolveEditableField(page.slug, section, enabledPath);
+  if (!field || field.kind !== "boolean") {
+    throw new Error(`Field is not editable with set_image_visibility: ${rawPath}`);
+  }
+
+  const before = serializeSection(section);
+  const data = cloneJsonObject(before.data);
+  const currentImage = readObjectAtPath(data, path);
+  const nextImage = {
+    ...currentImage,
+    enabled,
+  };
+
+  setValueAtPath(data, path, nextImage);
+
+  const revisionId = crypto.randomUUID();
+  const after = {
+    ...before,
+    data,
+  };
+
+  await env.DB.prepare(
+    `UPDATE page_sections
+     SET data = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+  )
+    .bind(JSON.stringify(data), section.id)
+    .run();
+
+  await env.DB.prepare(
+    `INSERT INTO section_revisions (
+       id, section_id, actor, action, before_json, after_json, created_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+  )
+    .bind(revisionId, section.id, actor, "set_image_visibility", JSON.stringify(before), JSON.stringify(after))
+    .run();
+
+  await insertChangeLog(env, {
+    siteId: site.id,
+    actor,
+    action: "set_image_visibility",
+    target: `pages/${page.slug}/sections/${section.section_key}/${path}/enabled`,
+    before,
+    after,
+  });
+
+  return {
+    site: site.slug,
+    page: page.slug,
+    sectionId: section.section_key,
+    path,
+    enabled,
+    image: nextImage,
+    revisionId,
+    published: true,
+    previewUrl: page.slug === "home" ? "/" : `/${page.slug}`,
+  };
+}
+
 async function writeImageReference(env, input, action) {
   const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
   const pageSlug = requiredPattern(input?.page, "page", SLUG_PATTERN);
@@ -1068,6 +1139,11 @@ function isExpiredUpload(value) {
 
 function normalizeImageObjectPath(path) {
   return path.endsWith(".assetId") ? path.slice(0, -".assetId".length) : path;
+}
+
+function normalizeVisibilityImageObjectPath(path) {
+  if (path.endsWith(".enabled")) return path.slice(0, -".enabled".length);
+  return normalizeImageObjectPath(path);
 }
 
 function normalizeImageAltForReplacement(input, asset) {

@@ -20,6 +20,7 @@ Cosa funziona oggi:
 - aggiunta immagine a una galleria con `attach_image_to_section`;
 - modifica alt text con `update_image_alt`;
 - modifica focal point con `set_image_focal_point`;
+- nascondere/mostrare una singola immagine gia collegata con `set_image_visibility`;
 - rendering delle immagini da metadata D1;
 - servizio pubblico degli asset da R2 tramite `/media/assets/:assetId/:filename`;
 - rollback delle sostituzioni immagine tramite `rollback_change`.
@@ -150,7 +151,8 @@ Tool metadata:
 
 - `update_image_alt`: modifica alt text;
 - `set_image_focal_point`: imposta focal point percentuale 0-100;
-- `update_text` su `items[].images[].enabled`: nasconde o mostra una singola immagine gia collegata, senza rimuoverla dal CMS.
+- `set_image_visibility`: nasconde o mostra una singola immagine gia collegata, senza rimuoverla dal CMS;
+- `update_text` su `items[].images[].enabled`: fallback compatibile per client conservativi.
 
 Tool non ancora implementati:
 

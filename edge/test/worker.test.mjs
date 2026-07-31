@@ -535,6 +535,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   const replaceImage = payload.result.tools.find((tool) => tool.name === "replace_image");
   const attachImageToSection = payload.result.tools.find((tool) => tool.name === "attach_image_to_section");
   const setImageFocalPoint = payload.result.tools.find((tool) => tool.name === "set_image_focal_point");
+  const setImageVisibility = payload.result.tools.find((tool) => tool.name === "set_image_visibility");
 
   assert.equal(response.status, 200);
   assert.equal(payload.jsonrpc, "2.0");
@@ -561,6 +562,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
     "replace_image",
     "attach_image_to_section",
     "set_image_focal_point",
+    "set_image_visibility",
     "update_rich_text",
     "rollback_change",
   ]);
@@ -572,6 +574,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.deepEqual(replaceImage.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(attachImageToSection.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(setImageFocalPoint.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
+  assert.deepEqual(setImageVisibility.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(updateContactChannel.inputSchema.properties.channel.enum, ["email", "instagram", "telefono"]);
   assert.equal(updateContactChannel.inputSchema.properties.href.type, "string");
   assert.equal(replaceImage.inputSchema.properties.assetId.type, "string");
@@ -579,6 +582,8 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.equal(attachImageToSection.inputSchema.properties.variant.enum.includes("tall"), true);
   assert.equal(setImageFocalPoint.inputSchema.properties.x.minimum, 0);
   assert.equal(setImageFocalPoint.inputSchema.properties.y.maximum, 100);
+  assert.equal(setImageVisibility.inputSchema.properties.enabled.type, "boolean");
+  assert.match(setImageVisibility.description, /nascondere\/mostrare/);
   assert.match(createImageUpload.description, /upload\.uploadPageUrl/);
   assert.equal(createImageUpload.inputSchema.properties.mimeType.enum.includes("image/jpeg"), true);
 });
@@ -1530,6 +1535,72 @@ test("POST /mcp tools/call set_image_focal_point updates a contracted image", as
   assert.deepEqual(image.focalPoint, { x: 35, y: 42 });
   assert.equal(db.sectionRevisions[0].action, "set_image_focal_point");
   assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[0]/focalPoint");
+});
+
+test("POST /mcp tools/call set_image_visibility hides a contracted image", async () => {
+  const db = await createEditorDb();
+  db.pageSections.push(
+    pageSection("page_portfolio", "section_portfolio_gallery", "gallery", "gallery", 25, true, {
+      items: [
+        {
+          key: "ritratti",
+          title: "Ritratti",
+          images: [
+            {
+              src: "assets/images/old.jpg",
+              alt: "Vecchio alt",
+              caption: "Vecchia caption",
+              variant: "wide",
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  const beforeResponse = await fetchWorker("/portfolio", {
+    db,
+    host: "ph.lorenzozanna.com",
+  });
+  const beforeHtml = await beforeResponse.text();
+  assert.match(beforeHtml, /assets\/images\/old\.jpg/);
+
+  const response = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "set_image_visibility",
+        arguments: {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images[0]",
+          enabled: false,
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+  const gallery = db.pageSections.find((section) => section.section_key === "gallery");
+  const image = JSON.parse(gallery.data).items[0].images[0];
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.result.structuredContent.enabled, false);
+  assert.equal(image.enabled, false);
+
+  const afterResponse = await fetchWorker("/portfolio", {
+    db,
+    host: "ph.lorenzozanna.com",
+  });
+  const afterHtml = await afterResponse.text();
+  assert.doesNotMatch(afterHtml, /assets\/images\/old\.jpg/);
+  assert.equal(db.sectionRevisions[0].action, "set_image_visibility");
+  assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[0]/enabled");
 });
 
 test("POST /mcp tools/call get_page allows viewer scoped user tokens", async () => {

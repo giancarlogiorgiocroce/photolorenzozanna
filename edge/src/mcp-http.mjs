@@ -13,6 +13,7 @@ import {
   listMediaAssets,
   replaceImage,
   setImageFocalPoint,
+  setImageVisibility,
   updateImageAlt,
 } from "./media.mjs";
 import {
@@ -435,6 +436,23 @@ const TOOLS = [
         y: { type: "integer", minimum: 0, maximum: 100, description: "Vertical focal point percentage." },
       },
       required: ["site", "page", "sectionId", "path", "x", "y"],
+    },
+  },
+  {
+    name: "set_image_visibility",
+    title: "Set Image Visibility",
+    description: "Hide or show one contracted image object, in Italian nascondere/mostrare una singola immagine, without deleting it from the CMS.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        page: { type: "string", description: "Page slug, for example portfolio." },
+        sectionId: { type: "string", description: "Section identifier, for example gallery or hero." },
+        path: { type: "string", description: "Concrete image object path, for example items[0].images[0] or image." },
+        enabled: { type: "boolean", description: "Set false to hide the image, true to show it again." },
+      },
+      required: ["site", "page", "sectionId", "path", "enabled"],
     },
   },
   {
@@ -959,6 +977,25 @@ async function handleMcpMethod(method, params, env, auth) {
         path: args.path,
         x: args.x,
         y: args.y,
+        actor: auth.actor,
+      });
+      return toolResult(result);
+    }
+
+    if (name === "set_image_visibility") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await setImageVisibility(env, {
+        site: args.site,
+        page: args.page,
+        sectionId: args.sectionId,
+        path: args.path,
+        enabled: args.enabled,
         actor: auth.actor,
       });
       return toolResult(result);

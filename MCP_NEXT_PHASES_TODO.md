@@ -444,7 +444,8 @@ Documento operativo aggiornato: `MCP_MEDIA_PIPELINE.md`.
 - [x] Tool `set_image_focal_point`.
   - Implementazione TDD 2026-07-15: aggiorna `focalPoint {x,y}` solo su immagini previste dal contratto, accetta percentuali intere 0-100, registra revisione/log e il renderer le traduce in `object-position` sicuro.
 - [x] Nascondere/mostrare una singola immagine gia presente.
-  - Implementazione TDD 2026-07-31: il contratto `portfolio.gallery` espone `items[].images[].enabled` come boolean modificabile con `update_text`; il renderer non mostra immagini con `enabled: false`, senza cancellarle dal CMS.
+  - Implementazione TDD 2026-07-31: il contratto `portfolio.gallery` espone `items[].images[].enabled`; il renderer non mostra immagini con `enabled: false`, senza cancellarle dal CMS.
+  - Compat plugin 2026-07-31: aggiunto tool esplicito `set_image_visibility` per rendere l'operazione visibile in `tools/list`; `update_text` resta fallback compatibile.
 - [ ] Tool `remove_image_from_section`.
 - [ ] Asset manager completo:
   - [x] lista asset con `list_media_assets`;
