@@ -1,7 +1,7 @@
 # MCP media pipeline R2
 
-Data: 2026-07-30
-Branch operativo: `codex/upload-helper`
+Data: 2026-07-31
+Branch operativo: `codex/realign-media`
 Worker corrente deployato: `f1cd4b54-4b60-4448-9937-5ee2d99f2d61`
 
 Questo documento descrive la pipeline immagini/media del CMS MCP Cloudflare per `ph.lorenzozanna.com`.
@@ -149,7 +149,8 @@ Tool di collegamento:
 Tool metadata:
 
 - `update_image_alt`: modifica alt text;
-- `set_image_focal_point`: imposta focal point percentuale 0-100.
+- `set_image_focal_point`: imposta focal point percentuale 0-100;
+- `update_text` su `items[].images[].enabled`: nasconde o mostra una singola immagine gia collegata, senza rimuoverla dal CMS.
 
 Tool non ancora implementati:
 

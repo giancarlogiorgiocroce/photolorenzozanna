@@ -119,6 +119,24 @@ test("renderPageHtml renders portfolio gallery sections from legacy series data"
   assert.match(html, /<figcaption data-lightbox-caption><\/figcaption>/);
 });
 
+test("renderPageHtml hides gallery images marked disabled", async () => {
+  const db = createRendererDb({
+    gallery: true,
+    galleryHiddenImage: true,
+  });
+  const html = await renderPageHtml(
+    { DB: db },
+    {
+      site: "ph",
+      page: "portfolio",
+    },
+  );
+
+  assert.doesNotMatch(html, /assets\/images\/portfolio\/ritratti\/ritratto-riflesso\.jpg/);
+  assert.doesNotMatch(html, /id="gallery-ritratti-title"/);
+  assert.match(html, /assets\/images\/portfolio\/strada\/passante-cane\.jpg/);
+});
+
 test("renderPageHtml resolves gallery images from media asset metadata", async () => {
   const db = createRendererDb({
     gallery: true,
@@ -377,6 +395,7 @@ function createRendererDb(options = {}) {
   const faqEnabled = options.faqEnabled !== false;
   const pageBlocksShape = options.pageBlocksShape === true;
   const gallery = options.gallery === true;
+  const galleryHiddenImage = options.galleryHiddenImage === true;
   const galleryAssetIds = options.galleryAssetIds === true;
   const galleryFocalPoint = options.galleryFocalPoint === true;
   const richText = options.richText === true;
@@ -514,6 +533,7 @@ function createRendererDb(options = {}) {
                           width: 1600,
                           height: 1071,
                           src: "/assets/images/portfolio/ritratti/ritratto-riflesso.jpg",
+                          ...(galleryHiddenImage ? { enabled: false } : {}),
                         },
                   ],
                 },

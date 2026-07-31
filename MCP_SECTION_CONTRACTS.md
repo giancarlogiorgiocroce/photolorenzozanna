@@ -631,6 +631,7 @@ Editable:
 - `items[].images[].focalPoint`: punto focale con `set_image_focal_point`;
 - `items[].images[].alt`: `plain_text` con `update_text`;
 - `items[].images[].caption`: `plain_text` con `update_text`;
+- `items[].images[].enabled`: `boolean` con `update_text`, per nascondere/mostrare una singola immagine senza cancellarla;
 - `items[].images[].variant`: enum `standard`, `wide`, `tall` con `update_text`.
 
 Non editable direttamente:
@@ -642,6 +643,7 @@ Non editable direttamente:
 
 Il layout usa prima l'eventuale variante esplicita sicura (`standard`, `wide`, `tall`),
 poi i pattern curati per gruppo e solo come fallback le dimensioni.
+Le immagini con `enabled: false` restano nei dati ma non vengono renderizzate.
 
 Nota layout gallery 2026-07-14:
 

@@ -251,7 +251,7 @@ function buildPortfolioShortcuts(section) {
     });
     const group = groups[groupIndex];
     const image = Array.isArray(group?.images)
-      ? group.images.find((candidate) => normalizeAssetPath(candidate?.src))
+      ? group.images.find((candidate) => candidate?.enabled !== false && normalizeAssetPath(candidate?.src))
       : null;
 
     if (!group || !image) return null;
@@ -751,6 +751,8 @@ ${indent(imagesHtml, 4)}
 }
 
 function renderGalleryImage(image, context = {}) {
+  if (image?.enabled === false) return "";
+
   const src = normalizeAssetPath(image?.src);
   if (!src) return "";
 

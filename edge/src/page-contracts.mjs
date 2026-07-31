@@ -40,6 +40,7 @@ const FIELD = {
     maxLength: 120,
     tool: "update_text",
   },
+  galleryImageEnabled: { path: "items[].images[].enabled", kind: "boolean", tool: "update_text" },
   galleryImageVariant: {
     path: "items[].images[].variant",
     kind: "enum",
@@ -89,6 +90,7 @@ const CONTRACTS = {
           { ...FIELD.galleryImageAsset, path: "items[].images[0].assetId" },
           { ...FIELD.galleryImageFocalPoint, path: "items[].images[0].focalPoint" },
           { ...FIELD.galleryImageAlt, path: "items[].images[0].alt" },
+          { ...FIELD.galleryImageEnabled, path: "items[].images[0].enabled" },
         ],
       },
     ],
@@ -148,6 +150,7 @@ const CONTRACTS = {
       FIELD.galleryImageFocalPoint,
       FIELD.galleryImageAlt,
       FIELD.galleryImageCaption,
+      FIELD.galleryImageEnabled,
       FIELD.galleryImageVariant,
     ],
   },

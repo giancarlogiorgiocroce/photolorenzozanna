@@ -621,7 +621,24 @@ test("POST /mcp tools/call list_section_presets allows viewer scoped user tokens
 });
 
 test("POST /mcp tools/call get_page returns sections with style contracts and editable fields", async () => {
+  const db = createSeededDb();
+  db.pageSections.push(pageSection("page_portfolio", "section_portfolio_gallery", "gallery", "gallery", 25, true, {
+    items: [
+      {
+        key: "ritratti",
+        title: "Ritratti",
+        images: [
+          {
+            src: "assets/images/old.jpg",
+            alt: "Vecchio alt",
+          },
+        ],
+      },
+    ],
+  }));
+
   const response = await fetchWorker("/mcp", {
+    db,
     host: "mcp.lorenzozanna.com",
     method: "POST",
     privateAuth: true,
@@ -641,6 +658,7 @@ test("POST /mcp tools/call get_page returns sections with style contracts and ed
   const payload = await response.json();
   const page = payload.result.structuredContent;
   const hero = page.sections.find((section) => section.sectionId === "hero");
+  const gallery = page.sections.find((section) => section.sectionId === "gallery");
   const faq = page.sections.find((section) => section.sectionId === "faq");
 
   assert.equal(response.status, 200);
@@ -655,6 +673,13 @@ test("POST /mcp tools/call get_page returns sections with style contracts and ed
     ["eyebrow", "title", "intro"],
   );
   assert.equal(hero.editableFields.find((field) => field.path === "intro").kind, "rich_text");
+  assert.equal(gallery.styleContract, "portfolio.gallery");
+  assert.deepEqual(
+    gallery.editableFields
+      .filter((field) => field.path === "items[].images[].enabled")
+      .map((field) => [field.kind, field.tool]),
+    [["boolean", "update_text"]],
+  );
   assert.equal(faq.styleContract, "common.faq");
   assert.equal(faq.editableFields.find((field) => field.path === "items[].answer").kind, "rich_text");
 });
@@ -702,6 +727,12 @@ test("POST /mcp tools/call get_page tells clients where Home portfolio shortcuts
     selectedWork.contentDependencies[0].editableFields
       .find((field) => field.path === "items[].images[0].assetId").tool,
     "replace_image",
+  );
+  assert.deepEqual(
+    selectedWork.contentDependencies[0].editableFields
+      .filter((field) => field.path === "items[].images[0].enabled")
+      .map((field) => [field.kind, field.tool]),
+    [["boolean", "update_text"]],
   );
 });
 
@@ -1843,6 +1874,71 @@ test("POST /mcp tools/call update_text can toggle contact channel visibility", a
   assert.equal(mcpResponse.status, 200);
   assert.equal(mcpPayload.result.structuredContent.value, true);
   assert.equal(JSON.parse(contactBand.data).channels[2].enabled, true);
+});
+
+test("POST /mcp tools/call update_text can hide a contracted gallery image", async () => {
+  const db = await createEditorDb();
+  db.pageSections.push(
+    pageSection("page_portfolio", "section_portfolio_gallery", "gallery", "gallery", 25, true, {
+      items: [
+        {
+          key: "ritratti",
+          title: "Ritratti",
+          images: [
+            {
+              src: "assets/images/old.jpg",
+              alt: "Vecchio alt",
+              caption: "Vecchia caption",
+              variant: "wide",
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  const beforeResponse = await fetchWorker("/portfolio", {
+    db,
+    host: "ph.lorenzozanna.com",
+  });
+  const beforeHtml = await beforeResponse.text();
+  assert.match(beforeHtml, /assets\/images\/old\.jpg/);
+
+  const mcpResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "update_text",
+        arguments: {
+          site: "ph",
+          page: "portfolio",
+          sectionId: "gallery",
+          path: "items[0].images[0].enabled",
+          value: "nascondi",
+        },
+      },
+    },
+  });
+  const mcpPayload = await mcpResponse.json();
+  const gallery = db.pageSections.find((section) => section.section_key === "gallery");
+
+  assert.equal(mcpResponse.status, 200);
+  assert.equal(mcpPayload.result.structuredContent.value, false);
+  assert.equal(JSON.parse(gallery.data).items[0].images[0].enabled, false);
+
+  const afterResponse = await fetchWorker("/portfolio", {
+    db,
+    host: "ph.lorenzozanna.com",
+  });
+  const afterHtml = await afterResponse.text();
+  assert.doesNotMatch(afterHtml, /assets\/images\/old\.jpg/);
+  assert.equal(db.sectionRevisions[0].action, "update_text");
+  assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[0].enabled");
 });
 
 test("POST /mcp tools/call rollback_change reverts a previous text change", async () => {

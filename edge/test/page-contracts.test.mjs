@@ -26,6 +26,7 @@ test("resolveSectionContract maps page-specific sections to style contracts", ()
 
   assert.equal(gallery.styleContract, "portfolio.gallery");
   assert.equal(gallery.editableFields.find((field) => field.path === "items[].images[].alt").kind, "plain_text");
+  assert.equal(gallery.editableFields.find((field) => field.path === "items[].images[].enabled").kind, "boolean");
 
   assert.equal(faq.styleContract, "common.faq");
   assert.equal(faq.editableFields.find((field) => field.path === "items[].answer").kind, "rich_text");
@@ -70,6 +71,7 @@ test("home selected work exposes its Portfolio source instead of stale local sho
       ["items[].images[0].assetId", "replace_image"],
       ["items[].images[0].focalPoint", "set_image_focal_point"],
       ["items[].images[0].alt", "update_text"],
+      ["items[].images[0].enabled", "update_text"],
     ],
   );
 });
@@ -197,6 +199,14 @@ test("resolveEditableField exposes image asset fields without allowing free src 
     },
     "items[1].images[2].focalPoint",
   );
+  const galleryEnabled = resolveEditableField(
+    "portfolio",
+    {
+      section_key: "gallery",
+      type: "gallery",
+    },
+    "items[1].images[2].enabled",
+  );
   const gallerySrc = resolveEditableField(
     "portfolio",
     {
@@ -214,6 +224,8 @@ test("resolveEditableField exposes image asset fields without allowing free src 
   assert.equal(galleryAsset.tool, "replace_image");
   assert.equal(galleryFocalPoint.kind, "focal_point");
   assert.equal(galleryFocalPoint.tool, "set_image_focal_point");
+  assert.equal(galleryEnabled.kind, "boolean");
+  assert.equal(galleryEnabled.tool, "update_text");
   assert.equal(
     resolveEditableField(
       "portfolio",
