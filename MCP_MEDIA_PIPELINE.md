@@ -2,7 +2,7 @@
 
 Data: 2026-07-31
 Branch operativo: `codex/realign-media`
-Worker corrente deployato: `f1cd4b54-4b60-4448-9937-5ee2d99f2d61`
+Worker corrente deployato: `22612c5c-79f6-4a5a-867d-83f6f2fc5526`
 
 Questo documento descrive la pipeline immagini/media del CMS MCP Cloudflare per `ph.lorenzozanna.com`.
 
@@ -232,20 +232,48 @@ Servizio pubblico asset R2:
 - test: `npm test` in `edge` -> 142/142;
 - smoke reale: `https://ph.lorenzozanna.com/media/assets/asset_53b5b57f-8e17-499b-a36a-689855a00c4a/favicon-1.png` -> `200 image/png`, `Content-Length: 957538`;
 - smoke portfolio: `/portfolio` contiene il path asset e l'alt `Logo con diaframma fotografico arancione su sfondo nero`.
+Visibilita singola immagine gallery:
+
+- commit contratto/rendering: `0bb75d0 Allow hiding gallery images via section contract`;
+- deploy contratto/rendering: `69d9aa5b-483c-4b27-ac4b-67c8a6d6a8f6`;
+- cosa fa: `portfolio.gallery` espone `items[].images[].enabled`; il renderer salta le immagini con `enabled: false`; le cover Home derivate dal portfolio ignorano immagini disabilitate;
+- limite emerso da prova plugin: il campo era corretto ma troppo implicito, quindi ChatGPT continuava a dire che non esisteva una funzione per nascondere una foto;
+- commit tool esplicito: `fef3c4f Expose explicit image visibility tool`;
+- deploy tool esplicito: `22612c5c-79f6-4a5a-867d-83f6f2fc5526`;
+- test: `npm test` in `edge` -> 151/151;
+- smoke live: `tools/list` su `https://api.lorenzozanna.com/mcp` espone `set_image_visibility`, con `enabled` boolean e descrizione `nascondere/mostrare`.
+
+Uso consigliato per il plugin:
+
+```json
+{
+  "name": "set_image_visibility",
+  "arguments": {
+    "site": "ph",
+    "page": "portfolio",
+    "sectionId": "gallery",
+    "path": "items[0].images[4]",
+    "enabled": false
+  }
+}
+```
+
+`set_image_visibility` e' il tool preferito per nascondere/mostrare immagini. `update_text` su `items[...].images[...].enabled` resta disponibile solo come fallback per client conservativi. Se una chat plugin continua a non vedere il tool dopo un deploy, aprire una nuova chat o riconnettere il connector per svuotare la cache degli strumenti.
 
 ## Comandi utili
+
 
 Test locali:
 
 ```powershell
-cd C:\tmp\lorenzozanna-upload-helper\edge
+cd C:\Users\gianc\Documents\codice\lorenzozanna\edge
 npm test
 ```
 
 Deploy Worker:
 
 ```powershell
-cd C:\tmp\lorenzozanna-upload-helper\edge
+cd C:\Users\gianc\Documents\codice\lorenzozanna\edge
 npx wrangler deploy
 ```
 

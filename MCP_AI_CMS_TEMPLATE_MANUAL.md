@@ -1926,6 +1926,20 @@ add_gallery_image
 remove_gallery_image
 reorder_gallery_images
 ```
+Stato implementato nel progetto Lorenzo al 2026-07-31:
+
+```text
+list_media_assets
+create_image_upload
+confirm_image_upload
+attach_image_to_section
+replace_image
+update_image_alt
+set_image_focal_point
+set_image_visibility
+```
+
+Nota pratica: per nascondere una singola immagine gia collegata usare `set_image_visibility` con `enabled: false`. Non cancellare l'asset e non modificare `src` libero. Il campo `items[].images[].enabled` rimane anche nel contratto come fallback via `update_text`, ma il tool esplicito e' preferibile per i client AI perche appare chiaramente in `tools/list`.
 
 Regole:
 

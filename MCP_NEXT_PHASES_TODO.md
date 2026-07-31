@@ -444,8 +444,10 @@ Documento operativo aggiornato: `MCP_MEDIA_PIPELINE.md`.
 - [x] Tool `set_image_focal_point`.
   - Implementazione TDD 2026-07-15: aggiorna `focalPoint {x,y}` solo su immagini previste dal contratto, accetta percentuali intere 0-100, registra revisione/log e il renderer le traduce in `object-position` sicuro.
 - [x] Nascondere/mostrare una singola immagine gia presente.
-  - Implementazione TDD 2026-07-31: il contratto `portfolio.gallery` espone `items[].images[].enabled`; il renderer non mostra immagini con `enabled: false`, senza cancellarle dal CMS.
+  - Implementazione TDD 2026-07-31: il contratto `portfolio.gallery` espone `items[].images[].enabled`; il renderer non mostra immagini con `enabled: false`, senza cancellarle dal CMS; le cover Home derivate dal portfolio ignorano immagini disabilitate.
+  - Deploy contratto 2026-07-31: commit `0bb75d0`, Worker `69d9aa5b-483c-4b27-ac4b-67c8a6d6a8f6`; smoke live `get_page portfolio` conferma `items[].images[].enabled` boolean via `update_text`.
   - Compat plugin 2026-07-31: aggiunto tool esplicito `set_image_visibility` per rendere l'operazione visibile in `tools/list`; `update_text` resta fallback compatibile.
+  - Deploy tool esplicito 2026-07-31: commit `fef3c4f`, Worker `22612c5c-79f6-4a5a-867d-83f6f2fc5526`; suite `edge` 151/151; smoke live `tools/list` conferma `set_image_visibility` con `enabled` boolean e descrizione `nascondere/mostrare`.
 - [ ] Tool `remove_image_from_section`.
 - [ ] Asset manager completo:
   - [x] lista asset con `list_media_assets`;
