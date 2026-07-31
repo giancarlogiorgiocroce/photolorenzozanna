@@ -579,6 +579,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.equal(attachImageToSection.inputSchema.properties.variant.enum.includes("tall"), true);
   assert.equal(setImageFocalPoint.inputSchema.properties.x.minimum, 0);
   assert.equal(setImageFocalPoint.inputSchema.properties.y.maximum, 100);
+  assert.match(createImageUpload.description, /upload\.uploadPageUrl/);
   assert.equal(createImageUpload.inputSchema.properties.mimeType.enum.includes("image/jpeg"), true);
 });
 
@@ -859,6 +860,10 @@ test("POST /mcp tools/call create_image_upload creates a pending media upload", 
     payload.result.structuredContent.upload.uploadPageUrl,
     /^https:\/\/api\.lorenzozanna\.com\/media\/uploads\/upload_[^/]+\/form#token=mu_/,
   );
+  assert.equal(payload.result.structuredContent.nextAction.type, "user_browser_upload");
+  assert.equal(payload.result.structuredContent.nextAction.confirmTool, "confirm_image_upload");
+  assert.equal(payload.result.structuredContent.nextAction.attachTools.includes("attach_image_to_section"), true);
+  assert.match(payload.result.content[0].text, /uploadPageUrl/);
   assert.equal(payload.result.structuredContent.asset.status, "draft");
   assert.equal(db.mediaUploads.length, 1);
   assert.equal(db.mediaAssets.find((asset) => asset.id === payload.result.structuredContent.asset.id).status, "draft");
@@ -1019,6 +1024,75 @@ test("PUT /media/uploads/:uploadId stores an image object in R2 using the upload
   assert.equal(bucket.puts[0].key, created.upload.r2Key);
   assert.equal(bucket.puts[0].body.byteLength, 5);
   assert.equal(bucket.puts[0].options.httpMetadata.contentType, "image/jpeg");
+});
+
+test("GET /media/assets/:assetId/:filename serves a ready R2 media asset", async () => {
+  const db = createSeededDb({
+    mediaAssets: [
+      mediaAsset({
+        id: "asset_ready_photo",
+        r2_key: "ph/uploads/asset_ready_photo/ritratto.jpg",
+        public_url: "media/assets/asset_ready_photo/ritratto.jpg",
+        mime_type: "image/jpeg",
+        size_bytes: 3,
+        status: "ready",
+      }),
+    ],
+  });
+  const bucket = new FakeMediaBucket({
+    "ph/uploads/asset_ready_photo/ritratto.jpg": {
+      body: new Uint8Array([255, 216, 255]),
+      contentType: "image/jpeg",
+      size: 3,
+    },
+  });
+
+  const response = await fetchWorker("/media/assets/asset_ready_photo/ritratto.jpg", {
+    db,
+    mediaBucket: bucket,
+    host: "api.lorenzozanna.com",
+  });
+  const body = new Uint8Array(await response.arrayBuffer());
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "image/jpeg");
+  assert.match(response.headers.get("cache-control"), /public/);
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.deepEqual([...body], [255, 216, 255]);
+
+  const headResponse = await fetchWorker("/media/assets/asset_ready_photo/ritratto.jpg", {
+    db,
+    mediaBucket: bucket,
+    host: "api.lorenzozanna.com",
+    method: "HEAD",
+  });
+
+  assert.equal(headResponse.status, 200);
+  assert.equal(headResponse.headers.get("content-type"), "image/jpeg");
+  assert.equal((await headResponse.text()).length, 0);
+});
+
+test("GET /media/assets/:assetId/:filename does not serve draft or unknown media assets", async () => {
+  const db = createSeededDb({
+    mediaAssets: [
+      mediaAsset({
+        id: "asset_draft_photo",
+        r2_key: "ph/uploads/asset_draft_photo/bozza.png",
+        public_url: "media/assets/asset_draft_photo/bozza.png",
+        mime_type: "image/png",
+        status: "draft",
+      }),
+    ],
+  });
+  const bucket = new FakeMediaBucket({
+    "ph/uploads/asset_draft_photo/bozza.png": { body: new Uint8Array([1, 2, 3]), contentType: "image/png" },
+  });
+
+  const response = await fetchWorker("/media/assets/asset_draft_photo/bozza.png", { db, mediaBucket: bucket });
+  const payload = await response.json();
+
+  assert.equal(response.status, 404);
+  assert.equal(payload.error, "media_asset_not_found");
 });
 
 test("PUT /media/uploads/:uploadId rejects invalid tokens and invalid image payloads", async () => {
@@ -2584,6 +2658,17 @@ class FakeD1Database {
       };
     }
 
+    if (query.includes("FROM media_assets") && query.includes("public_url = ?")) {
+      const [publicUrl, assetId] = params;
+      return {
+        results: this.mediaAssets.filter(
+          (asset) => asset.public_url === publicUrl
+            && asset.id === assetId
+            && asset.status === "ready",
+        ),
+      };
+    }
+
     if (query.includes("FROM media_assets") && query.includes("AND id = ?")) {
       return {
         results: this.mediaAssets.filter((asset) => asset.site_id === params[0] && asset.id === params[1]),
@@ -3022,6 +3107,22 @@ class FakeMediaBucket {
     });
   }
 
+  get(key) {
+    const object = this.objects[key];
+    if (!object) return Promise.resolve(null);
+    const body = object.body instanceof Uint8Array ? object.body : new Uint8Array(object.body ?? []);
+    return Promise.resolve({
+      body,
+      size: object.size ?? body.byteLength,
+      httpMetadata: {
+        contentType: object.contentType,
+      },
+      writeHttpMetadata(headers) {
+        if (object.contentType) headers.set("content-type", object.contentType);
+      },
+    });
+  }
+
   async put(key, body, options) {
     const bytes = body instanceof Uint8Array ? body : new Uint8Array(await new Response(body).arrayBuffer());
     this.puts.push({
@@ -3032,6 +3133,7 @@ class FakeMediaBucket {
     this.objects[key] = {
       size: bytes.byteLength,
       contentType: options?.httpMetadata?.contentType,
+      body: bytes,
     };
     return {
       key,

@@ -3,6 +3,7 @@ import { resolveEditableField } from "./page-contracts.mjs";
 const SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
 const SECTION_KEY_PATTERN = /^[a-z0-9_-]{1,80}$/;
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,160}$/;
+const PUBLIC_MEDIA_FILENAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,180}\.(?:jpg|png|webp|avif)$/;
 const IMAGE_PATH_PATTERN = /^[A-Za-z][A-Za-z0-9_]*(?:\[(?:0|[1-9]\d*)\])?(?:\.[A-Za-z][A-Za-z0-9_]*(?:\[(?:0|[1-9]\d*)\])?)*$/;
 const MEDIA_STATUSES = new Set(["draft", "ready", "archived", "all"]);
 const ALLOWED_IMAGE_MIME_TYPES = new Map([
@@ -96,6 +97,12 @@ export async function createImageUpload(env, input) {
       expiresAt,
       maxSizeBytes: MAX_UPLOAD_SIZE_BYTES,
     },
+    nextAction: {
+      type: "user_browser_upload",
+      message: "If you cannot upload image bytes directly, show upload.uploadPageUrl to the user. After the user uploads the file in the browser, call confirm_image_upload with upload.id, then attach or replace the ready asset.",
+      confirmTool: "confirm_image_upload",
+      attachTools: ["attach_image_to_section", "replace_image"],
+    },
     asset: serializeAsset(asset),
   };
 }
@@ -175,11 +182,16 @@ export async function confirmImageUpload(env, input) {
 }
 
 export async function handleMediaUploadRequest(request, env, segments) {
+  const isAssetRoute = segments.length === 4 && segments[1] === "assets";
   const isUploadObjectRoute = segments.length === 3 && segments[1] === "uploads";
   const isUploadFormRoute = segments.length === 4 && segments[1] === "uploads" && segments[3] === "form";
 
-  if (!isUploadObjectRoute && !isUploadFormRoute) {
+  if (!isAssetRoute && !isUploadObjectRoute && !isUploadFormRoute) {
     return json({ error: "not_found", message: "Media route not found." }, 404);
+  }
+
+  if (isAssetRoute) {
+    return handleMediaAssetRequest(request, env, segments);
   }
 
   const uploadId = String(segments[2] ?? "").trim();
@@ -248,6 +260,65 @@ export async function handleMediaUploadRequest(request, env, segments) {
     status: "stored",
     r2Key: upload.r2_key,
   });
+}
+
+async function handleMediaAssetRequest(request, env, segments) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return json({ error: "method_not_allowed", message: "Use GET or HEAD for media assets." }, 405);
+  }
+
+  if (!env?.DB) {
+    return json({ error: "missing_db", message: "D1 binding DB is not configured." }, 500);
+  }
+
+  if (!env?.MEDIA_BUCKET || typeof env.MEDIA_BUCKET.get !== "function") {
+    return json({ error: "missing_media_bucket", message: "R2 binding MEDIA_BUCKET is not configured." }, 500);
+  }
+
+  const assetId = String(segments[2] ?? "").trim();
+  const filename = String(segments[3] ?? "").trim().toLowerCase();
+  if (!ID_PATTERN.test(assetId) || !PUBLIC_MEDIA_FILENAME_PATTERN.test(filename)) {
+    return json({ error: "invalid_media_asset", message: "Invalid media asset path." }, 400);
+  }
+
+  const publicPath = `media/assets/${assetId}/${filename}`;
+  const asset = await loadReadyMediaAssetByPublicPath(env, publicPath, assetId);
+  if (!asset?.r2_key) {
+    return json({ error: "media_asset_not_found", message: "Media asset not found." }, 404);
+  }
+
+  const object = request.method === "HEAD" && typeof env.MEDIA_BUCKET.head === "function"
+    ? await env.MEDIA_BUCKET.head(asset.r2_key)
+    : await env.MEDIA_BUCKET.get(asset.r2_key);
+
+  if (!object) {
+    return json({ error: "media_asset_not_found", message: "Media asset not found." }, 404);
+  }
+
+  return new Response(request.method === "HEAD" ? null : object.body, {
+    status: 200,
+    headers: mediaAssetResponseHeaders(object, asset),
+  });
+}
+
+function mediaAssetResponseHeaders(object, asset) {
+  const headers = new Headers();
+  if (typeof object.writeHttpMetadata === "function") {
+    object.writeHttpMetadata(headers);
+  }
+
+  const contentType = normalizeHeaderContentType(
+    headers.get("content-type") || object.httpMetadata?.contentType || asset.mime_type,
+  );
+  headers.set("content-type", ALLOWED_IMAGE_MIME_TYPES.has(contentType) ? contentType : asset.mime_type);
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  headers.set("content-disposition", "inline");
+  headers.set("x-content-type-options", "nosniff");
+  if (Number.isFinite(Number(object.size)) && Number(object.size) >= 0) {
+    headers.set("content-length", String(Number(object.size)));
+  }
+  if (object.httpEtag) headers.set("etag", object.httpEtag);
+  return headers;
 }
 
 function handleMediaUploadFormRequest(request, uploadId) {
@@ -804,6 +875,16 @@ async function loadMediaAsset(env, siteId, assetId) {
   return asset;
 }
 
+async function loadReadyMediaAssetByPublicPath(env, publicPath, assetId) {
+  return await env.DB.prepare(
+    `SELECT id, r2_key, public_url, alt, caption, width, height, mime_type, size_bytes, status, created_at, updated_at
+     FROM media_assets
+     WHERE public_url = ? AND id = ? AND status = 'ready'
+     LIMIT 1`,
+  )
+    .bind(publicPath, assetId)
+    .first();
+}
 async function loadMediaUpload(env, siteId, uploadId) {
   const upload = await env.DB.prepare(
     `SELECT

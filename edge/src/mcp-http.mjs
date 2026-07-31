@@ -324,7 +324,7 @@ const TOOLS = [
   {
     name: "create_image_upload",
     title: "Create Image Upload",
-    description: "Create a short-lived upload session and draft media asset for a new image.",
+    description: "Create a short-lived upload session and draft media asset for a new image. If the client cannot send image bytes directly, still call this tool and show upload.uploadPageUrl to the user so they can upload the file in a browser; after they finish, call confirm_image_upload.",
     securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",

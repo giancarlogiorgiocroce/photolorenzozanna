@@ -327,6 +327,12 @@ Tool immagini:
 - `set_image_focal_point`;
 - `remove_image_from_section`;
 
+Stato media v1 2026-07-30:
+
+- implementati `create_image_upload`, `confirm_image_upload`, `list_media_assets`, `replace_image`, `attach_image_to_section`, `update_image_alt`, `set_image_focal_point`;
+- implementati upload R2, fallback browser `uploadPageUrl` e serving pubblico `/media/assets/:assetId/:filename`;
+- ancora da fare `remove_image_from_section`, asset manager completo, strip EXIF/GPS, trasformazioni/thumbnail e upload diretto da allegato ChatGPT se il client espone file/base64/URL temporaneo.
+
 Tool workflow:
 
 - `get_change_template`;

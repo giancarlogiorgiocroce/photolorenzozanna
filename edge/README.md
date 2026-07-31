@@ -47,10 +47,26 @@ qualsiasi.lorenzozanna.com
 Cloudflare Worker
         |
 D1: contenuti strutturati
-R2: immagini, quando servira'
+R2: immagini/media caricati dal CMS MCP
 ```
 
 L'AI non modifica HTML, CSS o file di progetto. Chiama endpoint privati e puo' cambiare solo campi strutturati, per esempio titolo hero, bio, descrizione portfolio o contatti.
+## Media pipeline
+
+Stato 2026-07-30: gli upload immagini via MCP sono attivi su R2.
+
+Componenti:
+
+- D1: `media_assets`, `media_uploads`, `media_usages`;
+- R2: bucket privato `lorenzozanna-media` tramite binding `MEDIA_BUCKET`;
+- MCP: `create_image_upload`, `confirm_image_upload`, `list_media_assets`, `replace_image`, `attach_image_to_section`, `update_image_alt`, `set_image_focal_point`;
+- upload binario: `PUT /media/uploads/:uploadId` con upload token;
+- fallback browser: `GET /media/uploads/:uploadId/form`;
+- serving pubblico: `GET/HEAD /media/assets/:assetId/:filename`.
+
+La route pubblica serve solo asset presenti in D1 con `status = ready`; R2 non e' esposto come bucket pubblico generico. Il dominio `ph.lorenzozanna.com` ha una route Worker dedicata per `media/assets/*`, altrimenti Pages risponderebbe con HTML invece dell'immagine.
+
+Manuale operativo completo: `../MCP_MEDIA_PIPELINE.md`.
 
 ## Prima di lanciare comandi
 

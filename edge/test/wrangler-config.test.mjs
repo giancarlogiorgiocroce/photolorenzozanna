@@ -30,6 +30,7 @@ test("wrangler.toml targets the current production API custom domain", async () 
     "ph.lorenzozanna.com/about.html",
     "ph.lorenzozanna.com/contact",
     "ph.lorenzozanna.com/contact.html",
+    "ph.lorenzozanna.com/media/assets/*",
   ]) {
     assert.match(config, new RegExp(`pattern = "${escapeRegExp(route)}"`));
   }
