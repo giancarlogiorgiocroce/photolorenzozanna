@@ -214,7 +214,7 @@ media senza ricevere accesso diretto a R2 o a path arbitrari:
 - upload: `create_image_upload`, `confirm_image_upload`;
 - catalogo: `list_media_assets`;
 - collegamento: `attach_image_to_section`, `replace_image`;
-- ciclo gallery nel sorgente locale, dopo il prossimo deploy: `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`;
+- ciclo gallery live: `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`;
 - metadata/layout: `update_image_alt`, `set_image_focal_point`;
 - visibilita reversibile: `set_image_visibility`.
 
@@ -225,9 +225,9 @@ end-to-end. L'upload diretto senza pagina browser resta dipendente dalle capacit
 del client.
 
 Nascondere una fotografia con `set_image_visibility` non elimina l'asset e non
-richiede un nuovo upload. I nuovi tool gallery rimuovono l'uso, riordinano l'array
-o cambiano la caption senza cancellare l'asset; sono implementati e testati
-localmente, in attesa di deploy. Archive/delete degli asset non e' ancora esposto.
+richiede un nuovo upload. I tool gallery rimuovono l'uso, riordinano l'array o
+cambiano la caption senza cancellare l'asset; sono live e verificati con rollback.
+Archive/delete degli asset non e' ancora esposto.
 
 ## Cosa Lorenzo non deve fare
 

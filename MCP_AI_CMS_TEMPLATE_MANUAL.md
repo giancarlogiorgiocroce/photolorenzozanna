@@ -1126,7 +1126,6 @@ e resta non editabile.
 
 Funzionalita ancora aperte:
 
-- deploy e smoke plugin dei tool rimozione, riordino e caption;
 - archive/delete asset con controllo `media_usages`;
 - thumbnail e varianti responsive;
 - strip EXIF/GPS.
@@ -1365,7 +1364,7 @@ Non permettere `image.src` libero via AI. L'AI deve scegliere un `assetId` da `l
 
 ## Tool MCP disponibili
 
-Il sorgente locale espone 28 tool; l'ultimo deploy live verificato ne espone 25 finche' i tre nuovi tool gallery non vengono deployati. Le categorie sono:
+La superficie MCP verificata live espone 28 tool. Le categorie sono:
 
 - lettura: pagina, preset, change log e catalogo media;
 - contenuti: testo, rich text, CTA, contatti e sottosezioni;
@@ -2075,7 +2074,6 @@ Shape gallery corrente:
 
 Evoluzioni ancora aperte:
 
-- deploy e smoke plugin di `remove_image_from_section`, `reorder_images_in_section` e `update_image_caption`;
 - titolo editoriale, tag, note e ricerca nel catalogo;
 - archive/delete con blocco per asset ancora usati;
 - strip EXIF/GPS;

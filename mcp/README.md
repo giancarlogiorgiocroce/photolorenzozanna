@@ -23,9 +23,9 @@ Autenticazione supportata:
 - OAuth authorization-code + PKCE per ChatGPT e client compatibili;
 - `AI_API_TOKEN` solo per lettura/smoke sul canale MCP.
 
-L'ultimo deploy remoto verificato espone 25 tool. Il sorgente locale ne espone 28,
-aggiungendo rimozione, riordino e caption per le gallery, che restano da deployare.
-L'elenco corrente e' documentato in `../edge/README.md`; i contratti dei campi sono in
+La superficie remota verificata espone 28 tool, inclusi rimozione, riordino e
+caption per le gallery. L'elenco corrente e' documentato in `../edge/README.md`;
+i contratti dei campi sono in
 `../MCP_SECTION_CONTRACTS.md`.
 
 ### Media
@@ -37,9 +37,9 @@ La pipeline R2 espone:
 - `list_media_assets`;
 - `replace_image`;
 - `attach_image_to_section`;
-- `remove_image_from_section` (nel sorgente locale, in attesa di deploy);
-- `reorder_images_in_section` (nel sorgente locale, in attesa di deploy);
-- `update_image_caption` (nel sorgente locale, in attesa di deploy);
+- `remove_image_from_section`;
+- `reorder_images_in_section`;
+- `update_image_caption`;
 - `update_image_alt`;
 - `set_image_focal_point`;
 - `set_image_visibility`.

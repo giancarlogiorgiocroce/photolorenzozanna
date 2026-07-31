@@ -16,11 +16,10 @@ Fonti confrontate: documentazione attiva e storica del progetto, task Codex prec
 
 Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine consigliato per il lavoro nuovo, senza duplicare le spunte:
 
-1. deployare e verificare live rimozione, riordino e caption per le gallery;
-2. completare l'asset manager con metadata, ricerca e archive/delete sicuro;
-3. introdurre strip EXIF/GPS, thumbnail e varianti responsive;
-4. chiudere test MCP/client ancora aperti e hardening sicurezza;
-5. completare performance, accessibilita e SEO strutturata del frontend.
+1. completare l'asset manager con metadata, ricerca e archive/delete sicuro;
+2. introdurre strip EXIF/GPS, thumbnail e varianti responsive;
+3. chiudere test MCP/client ancora aperti e hardening sicurezza;
+4. completare performance, accessibilita e SEO strutturata del frontend.
 
 ## 1. Centralizzazione e stato
 
@@ -30,7 +29,7 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Confrontare le spunte storiche con la suite locale completa: `160/160` test verdi al 2026-07-31.
 - [x] Verificare live le quattro route pubbliche principali: `/`, `/portfolio`, `/about`, `/contact` rispondono `200`.
 - [x] Verificare live `robots.txt`, `sitemap.xml` e redirect canonico di `/index.html`.
-- [x] Verificare live `tools/list`: 25 tool MCP esposti, incluso `set_image_visibility`.
+- [x] Verificare live `tools/list`: 28 tool MCP esposti, inclusi i tool gallery di rimozione, riordino e caption.
 - [x] Archiviare i registri TODO e le roadmap duplicate in `archive/docs/`, mantenendo solo questo file come checklist attiva.
 - [x] Mantenere gli snapshot in `.site-backups/` come archivio non operativo.
 - [x] Aggiornare `MCP_AI_CMS_TEMPLATE_MANUAL.md` allo stato media/R2 attuale.
@@ -272,7 +271,7 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Verificare in produzione `set_image_visibility` tramite `tools/list` e rendering.
 - [x] Completare un flusso reale ChatGPT -> `uploadPageUrl` -> R2 -> confirm -> attach.
 - [x] Implementare `remove_image_from_section` con revisione, audit e riallineamento completo di `media_usages`.
-- [ ] Deployare `remove_image_from_section`, `reorder_images_in_section` e `update_image_caption`; verificarli in `tools/list` e con smoke live.
+- [x] Deployare `remove_image_from_section`, `reorder_images_in_section` e `update_image_caption`; verificarli in `tools/list` e con smoke live seguito da rollback.
 - [x] Implementare `reorder_images_in_section` con permutazione completa, audit, rollback e riallineamento `media_usages`.
 - [x] Implementare `update_image_caption` per aggiornare o rimuovere la didascalia del singolo uso.
 - [ ] Aggiungere titolo editoriale, tag, note e ricerca al catalogo asset.
@@ -427,7 +426,7 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Commit e push di `attach_image_to_section`.
 - [x] Valutare il branch dedicato e mantenere `main` per i deploy gia' eseguiti nel flusso storico.
 - [x] Documentare stato deploy e stato repository nei recap tecnici.
-- [x] Allineare `edge/README.md` distinguendo i 25 tool live verificati dai 28 presenti nel sorgente locale.
+- [x] Allineare `edge/README.md` alla superficie completa di 28 tool verificata live.
 - [x] Allineare `mcp/README.md` al sito live dinamico e distinguere MCP locale e remoto.
 - [x] Aggiornare esempi media, componenti e migrazioni `0009`/`0010` nel manuale template.
 - [x] Allineare contratti, onboarding e handoff al tool `set_image_visibility`.

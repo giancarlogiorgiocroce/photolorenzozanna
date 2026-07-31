@@ -30,10 +30,10 @@ Aggiornato al 31 luglio 2026:
 - sito pubblico: `https://ph.lorenzozanna.com`;
 - HTML pubblico: renderizzato dal Worker usando D1/R2;
 - CSS, JavaScript e immagini statiche: serviti da Cloudflare Pages, progetto `lorenzozanna-ph`;
-- superficie MCP dell'ultimo deploy verificato: 25 tool;
-- superficie MCP nel sorgente locale: 28 tool, con rimozione, riordino e caption gallery in attesa di deploy;
+- superficie MCP verificata live: 28 tool;
 - suite locale documentata: `160/160` test verdi;
-- ultimo Worker media documentato: `22612c5c-79f6-4a5a-867d-83f6f2fc5526`;
+- ultimo Worker media documentato: `2cd8a6b5-6bf3-42c3-b006-1b885adda498`;
+- commit del codice deployato: `29e2b9e`;
 - immagini sorgente originali: archivio locale in `assets/portfolio/portfolio/`, non necessario al deploy.
 
 Record DNS principali:
@@ -61,13 +61,13 @@ L'AI non modifica HTML, CSS o file di progetto. Chiama endpoint privati e puo' c
 
 ## Media pipeline
 
-Stato 2026-07-31: upload, collegamento e visibilita immagini via MCP sono attivi su R2. Nel sorgente locale sono pronti anche rimozione, riordino e caption per singolo uso, ancora da deployare.
+Stato 2026-07-31: upload, collegamento, visibilita, rimozione, riordino e caption per singolo uso sono attivi via MCP su D1/R2 e verificati live con rollback.
 
 Componenti:
 
 - D1: `media_assets`, `media_uploads`, `media_usages`;
 - R2: bucket privato `lorenzozanna-media` tramite binding `MEDIA_BUCKET`;
-- MCP nel sorgente: `create_image_upload`, `confirm_image_upload`, `list_media_assets`, `replace_image`, `attach_image_to_section`, `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`, `update_image_alt`, `set_image_focal_point`, `set_image_visibility`;
+- MCP media live: `create_image_upload`, `confirm_image_upload`, `list_media_assets`, `replace_image`, `attach_image_to_section`, `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`, `update_image_alt`, `set_image_focal_point`, `set_image_visibility`;
 - upload binario: `PUT /media/uploads/:uploadId` con upload token;
 - fallback browser: `GET /media/uploads/:uploadId/form`;
 - serving pubblico: `GET/HEAD /media/assets/:assetId/:filename`.
@@ -78,7 +78,7 @@ Manuale operativo completo: `../MCP_MEDIA_PIPELINE.md`.
 
 ## Superficie MCP remota
 
-Il sorgente locale espone 28 tool; l'ultimo `tools/list` live verificato ne espone 25, senza i tre nuovi tool gallery finche' non viene eseguito il prossimo deploy:
+`tools/list` live espone 28 tool:
 
 - lettura: `get_page`, `list_section_presets`, `list_changes`, `list_media_assets`;
 - sezioni: `disable_section`, `enable_section`, `add_section_from_preset`;
@@ -364,9 +364,8 @@ Cloudflare Pages non supporta wildcard custom domains per Pages, quindi la wildc
 Il rendering dinamico e la pipeline R2 sono gia' in produzione. Le priorita media
 correnti sono:
 
-1. deploy e smoke live dei nuovi tool rimozione, riordino e caption;
-2. metadata, ricerca e archive/delete asset con blocco quando l'asset e' ancora usato;
-3. strip EXIF/GPS, thumbnail e varianti responsive;
-4. upload diretto da allegato solo quando il client MCP espone realmente i byte.
+1. metadata, ricerca e archive/delete asset con blocco quando l'asset e' ancora usato;
+2. strip EXIF/GPS, thumbnail e varianti responsive;
+3. upload diretto da allegato solo quando il client MCP espone realmente i byte.
 
 Lo stato completo e ordinato resta in `../TODO.md`.
