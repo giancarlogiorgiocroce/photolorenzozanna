@@ -31,7 +31,7 @@ Aggiornato al 1 agosto 2026:
 - HTML pubblico: renderizzato dal Worker usando D1/R2;
 - CSS, JavaScript e immagini statiche: serviti da Cloudflare Pages, progetto `lorenzozanna-ph`;
 - superficie MCP verificata live: 29 tool;
-- suite locale documentata: `167/167` test verdi;
+- suite locale documentata: `170/170` test verdi;
 - ultimo Worker media documentato: `52382b53-b196-4760-9ad5-39d69e99c038`;
 - commit del codice deployato: `ad6ee4f`;
 - immagini sorgente originali: archivio locale in `assets/portfolio/portfolio/`, non necessario al deploy.
@@ -62,6 +62,8 @@ L'AI non modifica HTML, CSS o file di progetto. Chiama endpoint privati e puo' c
 ## Media pipeline
 
 Stato 2026-08-01: upload, collegamento, metadata ricercabili, visibilita, rimozione, riordino, caption e punto focale sono attivi via MCP su D1/R2 e verificati live con ripristino. `contact.hero` supporta il punto focale anche quando l'immagine e ancora fornita dal fallback del renderer.
+
+Il candidato locale `b838516` aggiunge `set_media_asset_archived` con archiviazione e ripristino reversibili, audit e blocco degli asset ancora referenziati. Il deploy e lo smoke live sono ancora pendenti.
 
 Componenti:
 
@@ -364,8 +366,9 @@ Cloudflare Pages non supporta wildcard custom domains per Pages, quindi la wildc
 Il rendering dinamico e la pipeline R2 sono gia' in produzione. Le priorita media
 correnti sono:
 
-1. archive/delete asset con blocco quando l'asset e' ancora usato;
-2. strip EXIF/GPS, thumbnail e varianti responsive;
-3. upload diretto da allegato solo quando il client MCP espone realmente i byte.
+1. deploy e smoke live di `set_media_asset_archived`;
+2. eliminazione fisica separata per asset archiviati e non usati;
+3. strip EXIF/GPS, thumbnail e varianti responsive;
+4. upload diretto da allegato solo quando il client MCP espone realmente i byte.
 
 Lo stato completo e ordinato resta in `../TODO.md`.

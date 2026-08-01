@@ -16,7 +16,7 @@ Fonti confrontate: documentazione attiva e storica del progetto, task Codex prec
 
 Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine consigliato per il lavoro nuovo, senza duplicare le spunte:
 
-1. completare l'asset manager con metadata, ricerca e archive/delete sicuro;
+1. completare l'asset manager con eliminazione fisica sicura, thumbnail e varianti;
 2. introdurre strip EXIF/GPS, thumbnail e varianti responsive;
 3. chiudere test MCP/client ancora aperti e hardening sicurezza;
 4. completare performance, accessibilita e SEO strutturata del frontend.
@@ -26,10 +26,11 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Leggere tutti i file Markdown del progetto, inclusi audit, recap, roadmap, contratti e README.
 - [x] Leggere tutte le task Codex precedenti associate alla cartella `lorenzozanna`.
 - [x] Confrontare le spunte storiche con il codice effettivamente mantenuto.
-- [x] Confrontare le spunte storiche con la suite locale completa: `167/167` test verdi al 2026-08-01.
+- [x] Confrontare le spunte storiche con la suite locale completa: `170/170` test verdi al 2026-08-01.
 - [x] Verificare live le quattro route pubbliche principali: `/`, `/portfolio`, `/about`, `/contact` rispondono `200`.
 - [x] Verificare live `robots.txt`, `sitemap.xml` e redirect canonico di `/index.html`.
 - [x] Verificare live `tools/list`: 29 tool MCP esposti, incluso `update_media_asset` oltre ai tool gallery.
+- [ ] Verificare live `set_media_asset_archived` dopo il push e il deploy del commit `b838516`.
 - [x] Archiviare i registri TODO e le roadmap duplicate in `archive/docs/`, mantenendo solo questo file come checklist attiva.
 - [x] Mantenere gli snapshot in `.site-backups/` come archivio non operativo.
 - [x] Aggiornare `MCP_AI_CMS_TEMPLATE_MANUAL.md` allo stato media/R2 attuale.
@@ -277,7 +278,9 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Implementare `update_image_caption` per aggiornare o rimuovere la didascalia del singolo uso.
 - [x] Aggiungere titolo editoriale, tag, note e ricerca al catalogo asset; deployato con migrazione `0011`, tool `update_media_asset` e smoke live con ripristino esatto.
 - [ ] Implementare thumbnail/preview dedicate per l'asset manager.
-- [ ] Implementare archiviazione/eliminazione controllata con blocco per asset ancora usati.
+- [x] Implementare archiviazione reversibile da `ready` ad `archived` e relativo ripristino, con audit e blocco per asset ancora usati; commit locale `b838516`, suite `170/170`.
+- [ ] Deployare `set_media_asset_archived` e verificarlo live con ripristino o con il blocco di un asset referenziato.
+- [ ] Implementare l'eliminazione fisica separata, consentita soltanto per asset `archived` senza usi e con cleanup coerente D1/R2.
 - [ ] Implementare strip EXIF/GPS prima della pubblicazione.
 - [ ] Decidere e implementare scansione antivirus/security se applicabile.
 - [ ] Testare rollback esplicito di `attach_image_to_section`.
