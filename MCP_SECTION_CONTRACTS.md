@@ -1,6 +1,6 @@
 # Contratti sezioni MCP
 
-Aggiornato: 2026-07-31
+Aggiornato: 2026-08-01
 
 Questo documento mappa il contratto contenutistico e visivo delle sezioni gia presenti nel sito. Serve come base per `get_page`, `update_text`, `update_cta`, `update_rich_text`, preset sezioni e validazione MCP.
 
@@ -145,10 +145,20 @@ Regole:
 - nessun tool accetta `src` libero;
 - `assetId` deve appartenere allo stesso sito ed essere `ready`;
 - `alt` e' obbligatorio per immagini informative, vuoto solo se il contratto dichiara `decorative: true`;
-- `width` e `height` sono interi positivi verificati durante upload/confirm;
+- `width` e `height` sono oggi metadata dichiarati e validati come interi positivi; l'estrazione delle dimensioni reali dal file e' ancora aperta;
 - `focalPoint.x` e `focalPoint.y` accettano interi da 0 a 100;
 - `enabled: false` nasconde l'uso senza cancellare asset o dati;
-- MIME consentiti: JPEG, PNG, WebP e AVIF; SVG non consentito.
+- MIME dichiarati consentiti: JPEG, PNG, WebP e AVIF; SVG non consentito. La verifica di magic bytes/decodificabilita del contenuto e' ancora aperta.
+
+### Copertura immagini live
+
+- `home/hero`, `chi-sono/hero` e `contatti/hero` usano l'oggetto `image` con `assetId`, `focalPoint` e `alt` contrattualizzati;
+- `contatti/hero` accetta anche un override sparso `image.focalPoint` quando il renderer sta ancora usando l'immagine statica di fallback;
+- `portfolio/gallery` usa `items[].images[]` con asset, focal point, alt, caption, visibilita e variante, oltre ai tool di attach/remove/reorder;
+- `home/selected_work` non duplica immagini: espone come dipendenza le cover derivate da `portfolio/gallery`;
+- `portfolio/page_hero` non espone un'immagine perche il renderer live corrente non ne contiene una;
+- il futuro preset `image_text` resta non addable finche non avra un contratto e un renderer media-aware dedicati.
+
 
 ## Contratti comuni
 
@@ -274,8 +284,10 @@ Editable:
 
 - `eyebrow`: `plain_text`, max 60;
 - `title`: `plain_text`, max 90;
-- `intro`: `rich_text`, max 420;
+- `intro`: `rich_text`, max 700;
 - `primaryCta`, `secondaryCta`: `link`;
+- `image.assetId`: asset media `ready` con `replace_image`;
+- `image.focalPoint`: punto focale percentuale con `set_image_focal_point`;
 - `image.alt`: `plain_text`, required unless `decorative: true`.
 
 Non editable via testo:
@@ -385,6 +397,8 @@ Editable:
 - `eyebrow`: `plain_text`;
 - `title`: `plain_text`;
 - `intro`: `rich_text`;
+- `image.assetId`: asset media `ready` con `replace_image`;
+- `image.focalPoint`: punto focale percentuale con `set_image_focal_point`;
 - `image.alt`: `plain_text`.
 
 ### `about.manifesto`

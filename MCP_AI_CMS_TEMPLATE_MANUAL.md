@@ -1,11 +1,12 @@
 # Manuale per un AI CMS via MCP su Cloudflare
 
-Aggiornato: 2026-07-31
+Aggiornato: 2026-08-01
 
 > Questo e' un manuale/template riusabile, non un registro operativo. Lo stato
 > corrente e l'unica checklist del progetto sono in `TODO.md`. La pipeline R2,
-> il fallback browser e i tool media descritti qui sono implementati; le
-> funzionalita ancora aperte sono indicate esplicitamente come evoluzioni.
+> il fallback browser e i tool media descritti qui sono implementati. ChatGPT
+> supporta file parameter MCP, ma il tool diretto del progetto e' ancora una
+> evoluzione aperta, indicata esplicitamente insieme agli altri prossimi passi.
 
 Questo documento descrive come abbiamo costruito il backend MCP per `ph.lorenzozanna.com` e come riapplicare la stessa architettura a un nuovo sito.
 
@@ -158,6 +159,7 @@ Struttura usata qui:
       0008_seed_contact_band.sql
       0009_media_assets.sql
       0010_media_uploads.sql
+      0011_media_asset_metadata.sql
     test/
     wrangler.toml
 ```
@@ -1126,7 +1128,8 @@ e resta non editabile.
 
 Funzionalita ancora aperte:
 
-- archive/delete asset con controllo `media_usages`;
+- upload diretto con file parameter ChatGPT e fallback browser provider-neutral;
+- verifica firma/decodificabilita e dimensioni reali del file;
 - thumbnail e varianti responsive;
 - strip EXIF/GPS.
 
@@ -1364,12 +1367,12 @@ Non permettere `image.src` libero via AI. L'AI deve scegliere un `assetId` da `l
 
 ## Tool MCP disponibili
 
-La superficie MCP verificata live espone 28 tool. Le categorie sono:
+La superficie MCP verificata live espone 31 tool. Le categorie sono:
 
 - lettura: pagina, preset, change log e catalogo media;
 - contenuti: testo, rich text, CTA, contatti e sottosezioni;
 - sezioni e FAQ: aggiunta controllata, visibilita e operazioni itemizzate;
-- media: upload, attach, remove, reorder, caption, replace, alt, focal point e visibilita;
+- media: upload, catalogo ricercabile, lifecycle asset, attach, remove, reorder, caption, replace, alt, focal point e visibilita;
 - revisioni: rollback con protezione stale.
 
 ### `get_page`
@@ -1609,10 +1612,13 @@ Protezione importante: se lo stato corrente non coincide con lo snapshot `after`
 
 ### Tool media
 
-Catalogo e upload:
+Catalogo, lifecycle e upload:
 
 ```text
 list_media_assets
+update_media_asset
+set_media_asset_archived
+delete_media_asset
 create_image_upload
 confirm_image_upload
 ```
@@ -1630,7 +1636,7 @@ set_image_focal_point
 set_image_visibility
 ```
 
-Flusso standard:
+Flusso attuale in produzione:
 
 1. chiamare `create_image_upload` con filename, MIME, peso, dimensioni e alt;
 2. inviare i byte con `PUT /media/uploads/:uploadId` oppure mostrare
@@ -1638,6 +1644,15 @@ Flusso standard:
 3. chiamare `confirm_image_upload`;
 4. collegare l'asset `ready` con `attach_image_to_section` o `replace_image`;
 5. verificare con `get_page` e con il rendering pubblico.
+
+La specifica OpenAI Plugins corrente consente inoltre di dichiarare un campo
+file top-level in `_meta["openai/fileParams"]`. ChatGPT passa
+`download_url`, `file_id` e gli eventuali `mime_type`/`file_name`, non il base64
+nel JSON-RPC. Nel progetto il prossimo tool `upload_image_file` importera questo
+riferimento temporaneo in R2 e restituira un asset `ready`; attach e replace
+resteranno operazioni separate. Il fallback browser resta necessario finche il
+tool non e' deployato e continuera a servire i client senza file parameter.
+Riferimento: https://developers.openai.com/plugins/reference#define-file-inputs
 
 Esempio visibilita reversibile:
 
@@ -1659,7 +1674,7 @@ Questo nasconde l'uso senza cancellare l'asset. Nel sorgente locale
 `reorder_images_in_section` applica una permutazione completa e
 `update_image_caption` cambia o rimuove la didascalia del singolo uso. Rimozione
 e riordino riallineano `media_usages`; tutte le mutazioni sono revisionate e
-reversibili. Archive/delete resta un'evoluzione aperta.
+reversibili. `set_media_asset_archived` e `delete_media_asset` completano il lifecycle: la cancellazione fisica richiede asset archiviato, zero usi e conferma esplicita.
 
 ## Renderer dinamico
 
@@ -2018,6 +2033,9 @@ Tool implementati:
 
 ```text
 list_media_assets
+update_media_asset
+set_media_asset_archived
+delete_media_asset
 create_image_upload
 confirm_image_upload
 attach_image_to_section
@@ -2030,17 +2048,22 @@ set_image_focal_point
 set_image_visibility
 ```
 
-Il fallback `uploadPageUrl` consente a ChatGPT e ad altri client che non
-espongono i byte di completare l'upload dal browser. Il token resta nel fragment
-URL, scade dopo 15 minuti ed e' salvato nel database solo come hash. Questo
-flusso e' stato verificato end-to-end fino a R2 e all'attach nel portfolio.
+Il fallback `uploadPageUrl` consente a ChatGPT e agli altri client di completare
+l'upload dal browser con il descriptor corrente. Il token resta nel fragment URL,
+scade dopo 15 minuti ed e' salvato nel database solo come hash. Questo flusso e'
+stato verificato end-to-end fino a R2 e all'attach nel portfolio.
+
+ChatGPT supporta ora file parameter MCP tramite `_meta["openai/fileParams"]` e
+passa un URL temporaneo con `file_id`. Il progetto deve ancora implementare
+`upload_image_file`, validare il download e trasferire lo stream in R2. Il
+fallback browser non va rimosso perche mantiene la compatibilita provider-neutral.
 
 Regole:
 
 - l'AI non scrive mai `src` arbitrari;
 - un collegamento accetta solo `assetId` dello stesso sito con stato `ready`;
 - alt obbligatorio per immagini informative;
-- MIME consentiti: JPEG, PNG, WebP e AVIF; SVG vietato;
+- MIME dichiarati consentiti: JPEG, PNG, WebP e AVIF; SVG vietato;
 - limite upload: 12 MB;
 - `set_image_visibility` nasconde un uso senza cancellare dati o asset;
 - `remove_image_from_section` rimuove un uso, conserva l'asset e riallinea tutti i path `media_usages`;
@@ -2074,11 +2097,11 @@ Shape gallery corrente:
 
 Evoluzioni ancora aperte:
 
-- titolo editoriale, tag, note e ricerca nel catalogo;
-- archive/delete con blocco per asset ancora usati;
+- upload diretto con file parameter ChatGPT, ora supportato dalla specifica client;
+- verifica di magic bytes/decodificabilita e dimensioni reali del file;
 - strip EXIF/GPS;
 - thumbnail e varianti responsive AVIF/WebP/JPG;
-- upload diretto da allegato solo quando il client espone file/base64/URL.
+- valutazione di scansione malware e quote/rate limit specifici per upload.
 
 ## Sequenza template per il prossimo sito
 
@@ -2142,6 +2165,8 @@ corrente.
 - tool specializzati per blocchi itemizzati
 - list_media_assets
 - create_image_upload / confirm_image_upload
+- upload_image_file con file parameter, piu fallback browser per client senza supporto
+- update_media_asset / set_media_asset_archived / delete_media_asset
 - attach_image_to_section / remove_image_from_section / reorder_images_in_section / replace_image
 - update_image_caption / update_image_alt / set_image_focal_point / set_image_visibility
 ```

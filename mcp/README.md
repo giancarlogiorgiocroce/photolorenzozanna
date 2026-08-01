@@ -47,9 +47,14 @@ La pipeline R2 espone:
 - `set_image_focal_point`;
 - `set_image_visibility`.
 
-Quando un client non puo inviare i byte dell'allegato, deve mostrare
-`upload.uploadPageUrl`; dopo l'upload browser chiama `confirm_image_upload` e poi
-`attach_image_to_section` o `replace_image`.
+Il remote MCP corrente non dichiara ancora file parameter. Fino al deploy di
+`upload_image_file`, il client deve mostrare `upload.uploadPageUrl`; dopo l'upload
+browser chiama `confirm_image_upload` e poi `attach_image_to_section` o
+`replace_image`.
+
+ChatGPT supporta gia `_meta["openai/fileParams"]` e passa un `download_url`
+temporaneo con `file_id`; questa e' la prossima integrazione, mentre il browser
+resta il fallback per i client MCP che non supportano file input.
 
 Manuale operativo: `../MCP_MEDIA_PIPELINE.md`.
 

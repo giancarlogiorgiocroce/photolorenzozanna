@@ -1,6 +1,6 @@
 # MCP auth e onboarding Lorenzo
 
-Data: 2026-07-15
+Aggiornato: 2026-08-01
 
 ## Decisione fase 4
 
@@ -212,22 +212,26 @@ I token `editor` e gli access token OAuth con `content:write` possono usare i to
 media senza ricevere accesso diretto a R2 o a path arbitrari:
 
 - upload: `create_image_upload`, `confirm_image_upload`;
-- catalogo: `list_media_assets`;
+- catalogo: `list_media_assets`, `update_media_asset`;
 - collegamento: `attach_image_to_section`, `replace_image`;
 - ciclo gallery live: `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`;
 - metadata/layout: `update_image_alt`, `set_image_focal_point`;
 - visibilita reversibile: `set_image_visibility`.
+- lifecycle asset: `set_media_asset_archived`, `delete_media_asset`;
 
-Se il client non espone i byte dell'allegato, deve mostrare
+Il remote MCP corrente non espone ancora file parameter, quindi deve mostrare
 `upload.uploadPageUrl`. Lorenzo completa l'upload nel browser, poi il connector
 chiama `confirm_image_upload` e collega l'asset. Questo flusso e' stato verificato
-end-to-end. L'upload diretto senza pagina browser resta dipendente dalle capacita
-del client.
+end-to-end e resta il fallback compatibile.
+
+ChatGPT supporta gia `_meta["openai/fileParams"]` e puo passare al tool un
+`download_url` temporaneo con `file_id`. Il prossimo incremento server e'
+`upload_image_file`; non richiede un nuovo canale di autenticazione.
 
 Nascondere una fotografia con `set_image_visibility` non elimina l'asset e non
 richiede un nuovo upload. I tool gallery rimuovono l'uso, riordinano l'array o
 cambiano la caption senza cancellare l'asset; sono live e verificati con rollback.
-Archive/delete degli asset non e' ancora esposto.
+Archiviazione reversibile e cancellazione fisica sicura sono esposte rispettivamente con `set_media_asset_archived` e `delete_media_asset`; la cancellazione richiede asset `archived`, zero usi e `confirm: true`.
 
 ## Cosa Lorenzo non deve fare
 
@@ -243,3 +247,4 @@ Archive/delete degli asset non e' ancora esposto.
 - MCP Authorization specification: https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization
 - OpenAI Apps SDK authentication: https://developers.openai.com/apps-sdk/build/auth
 - OpenAI Apps SDK connect from ChatGPT: https://developers.openai.com/apps-sdk/deploy/connect-chatgpt
+- OpenAI Plugins file inputs: https://developers.openai.com/plugins/reference#define-file-inputs

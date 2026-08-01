@@ -1,6 +1,6 @@
 # TODO unico del progetto
 
-Aggiornato: 2026-07-31
+Aggiornato: 2026-08-01
 
 Questo e' l'unico registro operativo dei TODO di `ph.lorenzozanna.com` e del relativo AI CMS via MCP. I precedenti registri e roadmap sono conservati in `archive/docs/` solo come cronologia.
 
@@ -16,10 +16,10 @@ Fonti confrontate: documentazione attiva e storica del progetto, task Codex prec
 
 Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine consigliato per il lavoro nuovo, senza duplicare le spunte:
 
-1. completare l'asset manager con thumbnail, preview e varianti responsive;
-2. introdurre strip EXIF/GPS, thumbnail e varianti responsive;
-3. chiudere test MCP/client ancora aperti e hardening sicurezza;
-4. completare performance, accessibilita e SEO strutturata del frontend.
+1. implementare e verificare l'upload diretto degli allegati ChatGPT tramite file parameter MCP, mantenendo il fallback browser;
+2. chiudere la validazione server-side del file reale: firma/formato, dimensioni effettive e strip EXIF/GPS;
+3. completare l'asset manager con thumbnail, preview e varianti responsive;
+4. chiudere test MCP/client ancora aperti, hardening sicurezza, performance, accessibilita e SEO strutturata.
 
 ## 1. Centralizzazione e stato
 
@@ -260,9 +260,9 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Escludere dal renderer e dalle cover Home derivate le immagini con `enabled: false`.
 - [x] Implementare il fallback browser `GET/HEAD /media/uploads/:uploadId/form` tramite `uploadPageUrl`.
 - [x] Servire pubblicamente solo asset `ready` tramite `GET/HEAD /media/assets/:assetId/:filename`.
-- [x] Validare MIME/formato immagine.
+- [x] Validare MIME dichiarato e `Content-Type` rispetto alla allowlist JPEG/PNG/WebP/AVIF.
 - [x] Validare dimensione massima del file.
-- [x] Validare width e height dichiarate.
+- [x] Validare `width` e `height` dichiarate come interi positivi.
 - [x] Rendere alt text obbligatorio per immagini informative.
 - [x] Validare ownership dell'asset per sito.
 - [x] Risolvere `assetId` in metadata renderizzabili.
@@ -281,12 +281,19 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Implementare archiviazione reversibile da `ready` ad `archived` e relativo ripristino, con audit e blocco per asset ancora usati; commit `b838516`, suite `170/170`.
 - [x] Deployare `set_media_asset_archived` nel Worker `9efc103f-465f-4994-b326-e427b475dcf5` e verificarlo live con il blocco di un asset referenziato.
 - [x] Implementare `delete_media_asset`: eliminazione fisica separata solo per asset `archived`, senza usi, nel namespace R2 del sito e con `confirm: true`; deploy `2a3aa4de-5fa8-41ad-b396-386f4b1e39c2`, smoke completo e cleanup senza residui.
+- [x] Verificare la specifica OpenAI Plugins corrente: ChatGPT puo passare file ai tool tramite `_meta["openai/fileParams"]` come `{ download_url, file_id, mime_type?, file_name? }`; verifica documentale del 2026-08-01.
+- [ ] Esporre un tool diretto `upload_image_file` con input file conforme a `_meta["openai/fileParams"]`, senza accettare URL arbitrari dal prompt.
+- [ ] Scaricare il `download_url` temporaneo nel Worker con timeout, limiti di redirect e dimensione, quindi scrivere lo stream nel bucket R2.
+- [ ] Verificare firma/magic bytes e decodificabilita del file, senza fidarsi soltanto di estensione e `Content-Type`.
+- [ ] Estrarre e verificare `width` e `height` reali invece di affidarsi solo ai valori dichiarati dal client.
+- [ ] Riutilizzare per l'upload diretto catalogo, audit, ownership, stato `ready` e tool esistenti `attach_image_to_section`/`replace_image`.
+- [ ] Mantenere `create_image_upload` + `uploadPageUrl` + `confirm_image_upload` come fallback per client MCP che non supportano file parameter.
 - [ ] Implementare strip EXIF/GPS prima della pubblicazione.
 - [ ] Decidere e implementare scansione antivirus/security se applicabile.
 - [ ] Testare rollback esplicito di `attach_image_to_section`.
 - [x] Testare rollback esplicito di `remove_image_from_section`, incluso il ripristino degli indici `media_usages`.
 - [x] Testare rollback esplicito di `reorder_images_in_section`, incluso il ripristino degli indici `media_usages`.
-- [ ] Testare upload binario diretto da allegato ChatGPT senza `uploadPageUrl`, quando il client espone file/base64/URL temporaneo.
+- [ ] Testare end-to-end l'allegato ChatGPT -> file parameter -> Worker -> R2 -> asset `ready` -> attach/replace, senza `uploadPageUrl`.
 
 ## 11. Preview, publish, revisioni e audit
 
@@ -325,8 +332,8 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Testare il flusso immagini con un connector ChatGPT reale usando `uploadPageUrl`.
 - [ ] Testare esplicitamente con MCP Inspector CLI, non solo con client equivalente.
 - [ ] Testare un Claude custom connector reale.
-- [ ] Testare upload diretto dell'allegato da ChatGPT se la superficie client lo rende disponibile al tool MCP.
-- [ ] Verificare e documentare i requisiti correnti dei client prima del rilascio pubblico.
+- [ ] Testare in un connector ChatGPT reale il nuovo `upload_image_file` con `_meta["openai/fileParams"]` dopo implementazione e deploy.
+- [x] Verificare e documentare i requisiti correnti dei client prima del rilascio pubblico: file parameter ChatGPT documentati; fallback browser conservato per client generici.
 - [ ] Documentare i limiti correnti dei piani Free/Pro dove incidono sul connector.
 
 ## 13. Sicurezza e osservabilita'
@@ -430,8 +437,9 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Commit e push di `attach_image_to_section`.
 - [x] Valutare il branch dedicato e mantenere `main` per i deploy gia' eseguiti nel flusso storico.
 - [x] Documentare stato deploy e stato repository nei recap tecnici.
-- [x] Allineare `edge/README.md` alla superficie completa di 28 tool verificata live.
+- [x] Allineare `edge/README.md` alla superficie completa di 31 tool verificata live.
 - [x] Allineare `mcp/README.md` al sito live dinamico e distinguere MCP locale e remoto.
-- [x] Aggiornare esempi media, componenti e migrazioni `0009`/`0010` nel manuale template.
+- [x] Aggiornare esempi media, componenti e migrazioni `0009`-`0011` nel manuale template.
 - [x] Allineare contratti, onboarding e handoff al tool `set_image_visibility`.
+- [x] Allineare documentazione attiva, contratti immagine e prossimi passi alla specifica ChatGPT file parameter corrente, distinguendo capacita client disponibile da tool diretto ancora da implementare.
 - [x] Archiviare `NEXT_CHAT_RECAP.md`, `MCP_TDD_TODO.md`, `MCP_NEXT_PHASES_TODO.md` e `MCP_REMOTE_ROADMAP.md` in `archive/docs/`.

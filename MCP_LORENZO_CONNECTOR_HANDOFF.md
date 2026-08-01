@@ -1,6 +1,6 @@
 # Handoff connector AI Lorenzo
 
-Data: 2026-07-15
+Aggiornato: 2026-08-01
 
 ## Stato
 
@@ -77,6 +77,9 @@ Il connector live espone i tool media:
 - `create_image_upload`;
 - `confirm_image_upload`;
 - `list_media_assets`;
+- `update_media_asset`;
+- `set_media_asset_archived`;
+- `delete_media_asset`;
 - `replace_image`;
 - `attach_image_to_section`;
 - `remove_image_from_section`;
@@ -89,11 +92,11 @@ Il connector live espone i tool media:
 Rimozione, riordino e caption sono live e verificati con rollback completo e
 riallineamento di `media_usages`.
 
-Flusso consigliato quando Lorenzo chiede di aggiungere una nuova immagine:
+Flusso di produzione corrente quando Lorenzo chiede di aggiungere una nuova immagine:
 
 1. Raccogliere filename, MIME, peso, dimensioni e alt text.
 2. Chiamare `create_image_upload`.
-3. Se il client non puo inviare direttamente i byte dell'immagine, mostrare a Lorenzo `upload.uploadPageUrl`.
+3. Mostrare a Lorenzo `upload.uploadPageUrl`, perche il tool diretto con file parameter non e' ancora deployato.
 4. Lorenzo apre il link e carica il file dal browser.
 5. Quando Lorenzo conferma di aver caricato, chiamare `confirm_image_upload` con `upload.id`.
 6. Collegare l'asset pronto con `attach_image_to_section` oppure `replace_image`.
@@ -132,10 +135,14 @@ alt: Logo con diaframma fotografico arancione su sfondo nero
 Lo smoke remoto sul public URL ha risposto `200 image/png`, quindi le immagini R2 sono servite dal Worker e non da file locali/GitHub.
 
 Il flusso ChatGPT con `uploadPageUrl` e' stato verificato end-to-end fino a R2 e
-all'attach nel portfolio. Il limite residuo riguarda solo l'upload binario diretto:
-se il client non espone i byte dell'allegato al tool MCP, la pagina browser resta
-necessaria. Se in futuro il client espone file/base64/URL temporaneo, si puo
-aggiungere un tool unico `upload_and_attach_image`.
+all'attach nel portfolio e resta operativo come fallback.
+
+La specifica OpenAI Plugins corrente supporta gia file parameter tramite
+`_meta["openai/fileParams"]`: ChatGPT passa al tool `download_url`, `file_id` e
+gli eventuali `mime_type`/`file_name`. Il server non espone ancora questo input.
+Il prossimo incremento e' `upload_image_file`, che importa il riferimento
+temporaneo in R2 e restituisce un asset `ready`; il collegamento continua a usare
+`attach_image_to_section` o `replace_image`.
 
 ## Messaggio semplice per Lorenzo
 
