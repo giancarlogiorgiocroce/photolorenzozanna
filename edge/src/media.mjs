@@ -695,7 +695,7 @@ export async function deleteMediaAsset(env, input) {
   }
 
   const deletedCount = Number(results?.[1]?.meta?.changes ?? results?.[1]?.changes ?? 0);
-  if (deletedCount !== 1) {
+  if (deletedCount < 1) {
     throw new Error("Media asset changed during deletion; its archived D1 record was retained for a safe retry.");
   }
 

@@ -3710,8 +3710,9 @@ class FakeD1Database {
       }
 
       this.mediaAssets = this.mediaAssets.filter((item) => item.id !== assetId);
+      const deletedUploadCount = this.mediaUploads.filter((upload) => upload.asset_id === assetId).length;
       this.mediaUploads = this.mediaUploads.filter((upload) => upload.asset_id !== assetId);
-      return { success: true, meta: { changes: 1 } };
+      return { success: true, meta: { changes: 1 + deletedUploadCount } };
     }
 
     if (query.includes("INSERT INTO change_log")) {
