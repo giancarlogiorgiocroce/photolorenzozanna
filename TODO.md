@@ -26,7 +26,7 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Leggere tutti i file Markdown del progetto, inclusi audit, recap, roadmap, contratti e README.
 - [x] Leggere tutte le task Codex precedenti associate alla cartella `lorenzozanna`.
 - [x] Confrontare le spunte storiche con il codice effettivamente mantenuto.
-- [x] Confrontare le spunte storiche con la suite locale completa: `160/160` test verdi al 2026-07-31.
+- [x] Confrontare le spunte storiche con la suite locale completa: `162/162` test verdi al 2026-08-01.
 - [x] Verificare live le quattro route pubbliche principali: `/`, `/portfolio`, `/about`, `/contact` rispondono `200`.
 - [x] Verificare live `robots.txt`, `sitemap.xml` e redirect canonico di `/index.html`.
 - [x] Verificare live `tools/list`: 28 tool MCP esposti, inclusi i tool gallery di rimozione, riordino e caption.
@@ -253,6 +253,7 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Implementare `attach_image_to_section` per array contrattualizzati.
 - [x] Implementare `update_image_alt`.
 - [x] Implementare `set_image_focal_point`.
+- [x] Allineare `contact.hero` quando l'oggetto `image` non e ancora persistito: `set_image_focal_point` accetta sia `image` sia `image.focalPoint`, materializza l'override e conserva il fallback visuale; verificato live con rollback.
 - [x] Implementare `set_image_visibility` per nascondere/mostrare una singola immagine senza cancellarla.
 - [x] Esporre `items[].images[].enabled` nel contratto `portfolio.gallery` come fallback controllato.
 - [x] Escludere dal renderer e dalle cover Home derivate le immagini con `enabled: false`.

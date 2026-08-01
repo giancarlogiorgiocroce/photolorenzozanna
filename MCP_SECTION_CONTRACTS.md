@@ -478,6 +478,8 @@ Editable:
 - `eyebrow`: `plain_text`;
 - `title`: `plain_text`;
 - `intro`: `rich_text`;
+- `image.assetId`: asset media con `replace_image`;
+- `image.focalPoint`: punto focale con `set_image_focal_point`; il tool accetta sia il path oggetto `image` sia il path campo `image.focalPoint` e puo creare un override sparso quando l'immagine arriva dal fallback del renderer;
 - `image.alt`: `plain_text`, required unless decorative.
 
 ### `contact.band`

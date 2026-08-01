@@ -18,7 +18,7 @@ Cloudflare Pages resta la sorgente degli asset statici; non e' la sorgente dell'
 
 ## Stato attuale del deploy
 
-Aggiornato al 31 luglio 2026:
+Aggiornato al 1 agosto 2026:
 
 - registrar dominio: Aruba;
 - DNS autorevoli e zona: Cloudflare;
@@ -31,9 +31,9 @@ Aggiornato al 31 luglio 2026:
 - HTML pubblico: renderizzato dal Worker usando D1/R2;
 - CSS, JavaScript e immagini statiche: serviti da Cloudflare Pages, progetto `lorenzozanna-ph`;
 - superficie MCP verificata live: 28 tool;
-- suite locale documentata: `160/160` test verdi;
-- ultimo Worker media documentato: `2cd8a6b5-6bf3-42c3-b006-1b885adda498`;
-- commit del codice deployato: `29e2b9e`;
+- suite locale documentata: `162/162` test verdi;
+- ultimo Worker media documentato: `4463dc69-0639-4bcb-b519-27da6e1d335f`;
+- commit del codice deployato: `547e9c4`;
 - immagini sorgente originali: archivio locale in `assets/portfolio/portfolio/`, non necessario al deploy.
 
 Record DNS principali:
@@ -61,7 +61,7 @@ L'AI non modifica HTML, CSS o file di progetto. Chiama endpoint privati e puo' c
 
 ## Media pipeline
 
-Stato 2026-07-31: upload, collegamento, visibilita, rimozione, riordino e caption per singolo uso sono attivi via MCP su D1/R2 e verificati live con rollback.
+Stato 2026-08-01: upload, collegamento, visibilita, rimozione, riordino, caption e punto focale sono attivi via MCP su D1/R2 e verificati live con rollback. `contact.hero` supporta il punto focale anche quando l'immagine e ancora fornita dal fallback del renderer.
 
 Componenti:
 
