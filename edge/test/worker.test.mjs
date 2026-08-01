@@ -531,6 +531,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   const listMediaAssets = payload.result.tools.find((tool) => tool.name === "list_media_assets");
   const createImageUpload = payload.result.tools.find((tool) => tool.name === "create_image_upload");
   const updateMediaAsset = payload.result.tools.find((tool) => tool.name === "update_media_asset");
+  const setMediaAssetArchived = payload.result.tools.find((tool) => tool.name === "set_media_asset_archived");
   const updateText = payload.result.tools.find((tool) => tool.name === "update_text");
   const updateContactChannel = payload.result.tools.find((tool) => tool.name === "update_contact_channel");
   const replaceImage = payload.result.tools.find((tool) => tool.name === "replace_image");
@@ -564,6 +565,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
     "confirm_image_upload",
     "update_image_alt",
     "update_media_asset",
+    "set_media_asset_archived",
     "replace_image",
     "attach_image_to_section",
     "remove_image_from_section",
@@ -580,6 +582,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.deepEqual(updateContactChannel.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(createImageUpload.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(updateMediaAsset.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
+  assert.deepEqual(setMediaAssetArchived.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(replaceImage.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(attachImageToSection.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(removeImageFromSection.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
@@ -605,6 +608,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.equal(updateMediaAsset.inputSchema.properties.title.maxLength, 120);
   assert.equal(updateMediaAsset.inputSchema.properties.tags.maxItems, 20);
   assert.equal(updateMediaAsset.inputSchema.properties.notes.maxLength, 1000);
+  assert.equal(setMediaAssetArchived.inputSchema.properties.archived.type, "boolean");
 });
 
 test("POST /mcp tools/call list_section_presets allows viewer scoped user tokens", async () => {
@@ -889,6 +893,90 @@ test("POST /mcp tools/call update_media_asset updates metadata searchable by lis
   );
   assert.equal(db.changeLog[0].action, "update_media_asset");
   assert.equal(db.changeLog[0].actor, "lorenzo");
+});
+
+test("POST /mcp tools/call set_media_asset_archived archives and restores an unused asset", async () => {
+  const db = await createEditorDb();
+  db.mediaAssets.push(
+    mediaAsset({
+      id: "asset_ready_portrait",
+      public_url: "assets/images/media/portrait.jpg",
+      alt: "Ritratto dalla libreria media",
+      status: "ready",
+    }),
+  );
+
+  const archiveResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "set_media_asset_archived",
+        arguments: {
+          site: "ph",
+          assetId: "asset_ready_portrait",
+          archived: true,
+        },
+      },
+    },
+  });
+  const archivePayload = await archiveResponse.json();
+
+  const archivedListResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "list_media_assets",
+        arguments: {
+          site: "ph",
+          status: "archived",
+        },
+      },
+    },
+  });
+  const archivedListPayload = await archivedListResponse.json();
+
+  const restoreResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: {
+        name: "set_media_asset_archived",
+        arguments: {
+          site: "ph",
+          assetId: "asset_ready_portrait",
+          archived: false,
+        },
+      },
+    },
+  });
+  const restorePayload = await restoreResponse.json();
+
+  assert.equal(archiveResponse.status, 200);
+  assert.equal(archivePayload.result.structuredContent.asset.status, "archived");
+  assert.deepEqual(
+    archivedListPayload.result.structuredContent.assets.map((asset) => asset.id),
+    ["asset_ready_portrait"],
+  );
+  assert.equal(restoreResponse.status, 200);
+  assert.equal(restorePayload.result.structuredContent.asset.status, "ready");
+  assert.deepEqual(db.changeLog.map((change) => change.action), ["archive_media_asset", "restore_media_asset"]);
 });
 
 test("POST /mcp tools/call get_page exposes contact-band as a contact contract", async () => {
@@ -3290,6 +3378,14 @@ class FakeD1Database {
             && asset.id === assetId
             && asset.status === "ready",
         ),
+      };
+    }
+
+    if (query.includes("COUNT(*) AS usage_count") && query.includes("FROM media_usages")) {
+      return {
+        results: [{
+          usage_count: this.mediaUsages.filter((usage) => usage.asset_id === params[0]).length,
+        }],
       };
     }
 

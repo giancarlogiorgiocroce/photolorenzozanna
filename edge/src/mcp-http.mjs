@@ -14,6 +14,7 @@ import {
   removeImageFromSection,
   reorderImagesInSection,
   replaceImage,
+  setMediaAssetArchived,
   setImageFocalPoint,
   setImageVisibility,
   updateImageAlt,
@@ -401,6 +402,24 @@ const TOOLS = [
         notes: { type: "string", maxLength: 1000, description: "Optional internal editorial notes. Empty string removes them." },
       },
       required: ["site", "assetId"],
+    },
+  },
+  {
+    name: "set_media_asset_archived",
+    title: "Archive or Restore Media Asset",
+    description: "Archive an unused ready media asset or restore an archived asset. Archiving is rejected while the asset is referenced by page content.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        assetId: { type: "string", description: "Media asset id from list_media_assets." },
+        archived: {
+          type: "boolean",
+          description: "True archives the asset; false restores it to ready.",
+        },
+      },
+      required: ["site", "assetId", "archived"],
     },
   },
   {
@@ -1018,6 +1037,23 @@ async function handleMcpMethod(method, params, env, auth) {
       const result = await updateMediaAsset(env, input);
       return toolResult(result);
     }
+    if (name === "set_media_asset_archived") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await setMediaAssetArchived(env, {
+        site: args.site,
+        assetId: args.assetId,
+        archived: args.archived,
+        actor: auth.actor,
+      });
+      return toolResult(result);
+    }
+
 
     if (name === "replace_image") {
       if (!hasMcpPermission(auth, "content:write", args.site)) {

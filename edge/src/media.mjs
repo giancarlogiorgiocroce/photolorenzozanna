@@ -543,6 +543,71 @@ export async function updateMediaAsset(env, input) {
   };
 }
 
+export async function setMediaAssetArchived(env, input) {
+  const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
+  const assetId = requiredPattern(input?.assetId, "assetId", ID_PATTERN);
+  const actor = requiredString(input?.actor || "mcp");
+  const archived = normalizeBoolean(input?.archived, "archived");
+  const site = await loadSite(env, siteSlug);
+  const asset = await loadMediaAsset(env, site.id, assetId);
+  const before = serializeAsset(asset);
+  const targetStatus = archived ? "archived" : "ready";
+
+  if (asset.status === targetStatus) {
+    throw new Error(`Media asset is already ${targetStatus}.`);
+  }
+
+  const usage = await env.DB.prepare(
+    `SELECT COUNT(*) AS usage_count
+     FROM media_usages
+     WHERE asset_id = ?`,
+  )
+    .bind(asset.id)
+    .first();
+  const usageCount = Number(usage?.usage_count ?? 0);
+
+  if (archived) {
+    if (asset.status !== "ready") {
+      throw new Error("Only ready media assets can be archived.");
+    }
+    if (usageCount > 0) {
+      throw new Error(`Media asset is still in use at ${usageCount} path(s).`);
+    }
+  } else if (asset.status !== "archived") {
+    throw new Error("Only archived media assets can be restored.");
+  }
+
+  await env.DB.prepare(
+    `UPDATE media_assets
+     SET status = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+  )
+    .bind(targetStatus, asset.id)
+    .run();
+
+  const after = {
+    ...before,
+    status: targetStatus,
+  };
+
+  await insertChangeLog(env, {
+    siteId: site.id,
+    actor,
+    action: archived ? "archive_media_asset" : "restore_media_asset",
+    target: `media/${asset.id}/status`,
+    before,
+    after,
+  });
+
+  return {
+    site: site.slug,
+    asset: after,
+    archived,
+    usageCount,
+    published: targetStatus === "ready",
+  };
+}
+
 export async function updateImageAlt(env, input) {
   const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
   const assetId = requiredPattern(input?.assetId, "assetId", ID_PATTERN);

@@ -10,6 +10,7 @@ import {
   reorderImagesInSection,
   replaceImage,
   setImageFocalPoint,
+  setMediaAssetArchived,
   setImageVisibility,
   updateImageAlt,
   updateImageCaption,
@@ -315,6 +316,70 @@ test("updateMediaAsset rejects empty changes and unsafe metadata", async () => {
       ),
     /HTML is not allowed/,
   );
+});
+
+test("setMediaAssetArchived archives and restores an unused ready asset with audit", async () => {
+  const db = createMediaDb();
+
+  const archived = await setMediaAssetArchived(
+    { DB: db },
+    {
+      site: "ph",
+      assetId: "asset_ready_portrait",
+      archived: true,
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(archived.asset.status, "archived");
+  assert.equal(archived.usageCount, 0);
+  assert.equal(db.changeLog[0].action, "archive_media_asset");
+  assert.equal((await listMediaAssets({ DB: db }, { site: "ph" })).count, 1);
+  assert.deepEqual(
+    (await listMediaAssets({ DB: db }, { site: "ph", status: "archived" })).assets.map((asset) => asset.id),
+    ["asset_ready_portrait"],
+  );
+
+  const restored = await setMediaAssetArchived(
+    { DB: db },
+    {
+      site: "ph",
+      assetId: "asset_ready_portrait",
+      archived: false,
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(restored.asset.status, "ready");
+  assert.equal(db.changeLog[1].action, "restore_media_asset");
+});
+
+test("setMediaAssetArchived blocks assets that still have usages", async () => {
+  const db = createMediaDb();
+  db.mediaUsages.push({
+    id: "usage_1",
+    asset_id: "asset_ready_portrait",
+    page_id: "page_portfolio",
+    section_id: "section_portfolio_gallery",
+    path: "items[0].images[0]",
+  });
+
+  await assert.rejects(
+    () =>
+      setMediaAssetArchived(
+        { DB: db },
+        {
+          site: "ph",
+          assetId: "asset_ready_portrait",
+          archived: true,
+          actor: "tdd-suite",
+        },
+      ),
+    /still in use at 1 path/,
+  );
+
+  assert.equal(db.mediaAssets.find((asset) => asset.id === "asset_ready_portrait").status, "ready");
+  assert.equal(db.changeLog.length, 0);
 });
 
 test("replaceImage attaches an existing media asset to a contracted image path and records history", async () => {
@@ -1177,6 +1242,14 @@ class FakeMediaD1Database {
         results: this.pageSections.filter(
           (section) => section.page_id === params[0] && section.section_key === params[1],
         ),
+      };
+    }
+
+    if (query.includes("COUNT(*) AS usage_count") && query.includes("FROM media_usages")) {
+      return {
+        results: [{
+          usage_count: this.mediaUsages.filter((usage) => usage.asset_id === params[0]).length,
+        }],
       };
     }
 
