@@ -29,8 +29,8 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Confrontare le spunte storiche con la suite locale completa: `170/170` test verdi al 2026-08-01.
 - [x] Verificare live le quattro route pubbliche principali: `/`, `/portfolio`, `/about`, `/contact` rispondono `200`.
 - [x] Verificare live `robots.txt`, `sitemap.xml` e redirect canonico di `/index.html`.
-- [x] Verificare live `tools/list`: 29 tool MCP esposti, incluso `update_media_asset` oltre ai tool gallery.
-- [ ] Verificare live `set_media_asset_archived` dopo il push e il deploy del commit `b838516`.
+- [x] Verificare live `tools/list`: 30 tool MCP esposti, inclusi `update_media_asset` e `set_media_asset_archived` oltre ai tool gallery.
+- [x] Verificare live `set_media_asset_archived`: l'asset referenziato una volta viene rifiutato e resta `ready`; credenziale temporanea rimossa.
 - [x] Archiviare i registri TODO e le roadmap duplicate in `archive/docs/`, mantenendo solo questo file come checklist attiva.
 - [x] Mantenere gli snapshot in `.site-backups/` come archivio non operativo.
 - [x] Aggiornare `MCP_AI_CMS_TEMPLATE_MANUAL.md` allo stato media/R2 attuale.
@@ -278,8 +278,8 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Implementare `update_image_caption` per aggiornare o rimuovere la didascalia del singolo uso.
 - [x] Aggiungere titolo editoriale, tag, note e ricerca al catalogo asset; deployato con migrazione `0011`, tool `update_media_asset` e smoke live con ripristino esatto.
 - [ ] Implementare thumbnail/preview dedicate per l'asset manager.
-- [x] Implementare archiviazione reversibile da `ready` ad `archived` e relativo ripristino, con audit e blocco per asset ancora usati; commit locale `b838516`, suite `170/170`.
-- [ ] Deployare `set_media_asset_archived` e verificarlo live con ripristino o con il blocco di un asset referenziato.
+- [x] Implementare archiviazione reversibile da `ready` ad `archived` e relativo ripristino, con audit e blocco per asset ancora usati; commit `b838516`, suite `170/170`.
+- [x] Deployare `set_media_asset_archived` nel Worker `9efc103f-465f-4994-b326-e427b475dcf5` e verificarlo live con il blocco di un asset referenziato.
 - [ ] Implementare l'eliminazione fisica separata, consentita soltanto per asset `archived` senza usi e con cleanup coerente D1/R2.
 - [ ] Implementare strip EXIF/GPS prima della pubblicazione.
 - [ ] Decidere e implementare scansione antivirus/security se applicabile.

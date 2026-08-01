@@ -2,8 +2,8 @@
 
 Data: 2026-08-01
 Branch operativo: `codex/realign-media`
-Worker corrente deployato: `52382b53-b196-4760-9ad5-39d69e99c038`
-Commit codice deployato: `ad6ee4f`
+Worker corrente deployato: `9efc103f-465f-4994-b326-e427b475dcf5`
+Commit codice deployato: `b838516`
 
 Questo documento descrive la pipeline immagini/media del CMS MCP Cloudflare per `ph.lorenzozanna.com`. La checklist unica delle attivita completate e aperte resta `TODO.md`.
 
@@ -33,7 +33,6 @@ Cosa non e' ancora completo:
 - non esiste ancora un tool unico `upload_and_attach_image` con file diretto;
 - non esiste una UI asset manager tradizionale;
 - non ci sono ancora autore e data di scatto editoriali sugli asset;
-- `set_media_asset_archived` e' implementato e testato nel commit locale `b838516`, ma non e' ancora live;
 - non c'e' ancora eliminazione fisica degli asset con cleanup coordinato D1/R2;
 - non facciamo ancora strip EXIF/GPS lato server;
 - non facciamo ancora trasformazioni responsive o thumbnail generate;
@@ -159,7 +158,7 @@ Tool metadata:
 
 - `update_image_alt`: modifica alt text;
 - `update_media_asset`: aggiorna o rimuove titolo editoriale, tag e note globali dell'asset con audit in `change_log`;
-- `set_media_asset_archived`: archivia un asset `ready` non usato o ripristina un asset `archived`; registra audit e rifiuta l'archiviazione se esistono `media_usages` (deploy pendente);
+- `set_media_asset_archived`: archivia un asset `ready` non usato o ripristina un asset `archived`; registra audit e rifiuta l'archiviazione se esistono `media_usages`;
 - `set_image_focal_point`: imposta focal point percentuale 0-100;
 - `set_image_visibility`: nasconde o mostra una singola immagine gia collegata, senza rimuoverla dal CMS;
 - `update_text` su `items[].images[].enabled`: fallback compatibile per client conservativi.
@@ -196,7 +195,7 @@ Rischi residui o miglioramenti:
 - valutare antivirus se il sito viene aperto a molti utenti non fidati;
 - generare thumbnail e varianti responsive;
 - aggiungere quote/rate limit specifici upload;
-- deployare l'archiviazione reversibile e aggiungere la cancellazione fisica sicura con controllo `media_usages`;
+- aggiungere la cancellazione fisica sicura con controllo `media_usages`;
 - valutare autore e data di scatto editoriali se diventano utili al flusso di selezione.
 
 ## Rendering
@@ -260,6 +259,15 @@ Ciclo gallery completo:
 - smoke mutante sulla serie `ritratti` con 5 immagini: caption temporanea, scambio degli ultimi due elementi e rimozione dell'ultimo elemento;
 - ogni mutazione e' stata annullata subito tramite la propria revisione; D1 e `media_usages` sono tornati esattamente allo stato iniziale;
 - smoke finali: health `200`, portfolio `200`, HTML e gallery presenti.
+
+Archiviazione asset reversibile:
+
+- commit: `b838516 Add reversible media asset archiving`;
+- deploy: `9efc103f-465f-4994-b326-e427b475dcf5`;
+- suite pre-deploy: `170/170`;
+- smoke `tools/list`: 30 tool live, incluso `set_media_asset_archived`;
+- smoke mutante controllato: l'unico asset live ha un uso, quindi l'archiviazione e' stata rifiutata e lo stato e' rimasto `ready`;
+- la credenziale temporanea usata per lo smoke e' stata rimossa.
 
 Uso consigliato per il plugin:
 
@@ -357,8 +365,7 @@ Smoke tool list:
 
 ## Prossimi passi consigliati
 
-1. Pubblicare e verificare live `set_media_asset_archived`.
-2. Aggiungere l'eliminazione fisica per asset gia archiviati e senza usi.
-3. Valutare autore e data di scatto editoriali se utili al catalogo.
-4. Aggiungere strip EXIF/GPS, thumbnail e varianti responsive.
-5. Valutare `upload_and_attach_image` solo se il client MCP puo passare file/base64/URL temporaneo in modo affidabile.
+1. Aggiungere l'eliminazione fisica per asset gia archiviati e senza usi.
+2. Valutare autore e data di scatto editoriali se utili al catalogo.
+3. Aggiungere strip EXIF/GPS, thumbnail e varianti responsive.
+4. Valutare `upload_and_attach_image` solo se il client MCP puo passare file/base64/URL temporaneo in modo affidabile.
