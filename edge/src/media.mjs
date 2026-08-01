@@ -608,6 +608,106 @@ export async function setMediaAssetArchived(env, input) {
   };
 }
 
+export async function deleteMediaAsset(env, input) {
+  if (input?.confirm !== true) {
+    throw new Error("Explicit confirmation is required to permanently delete a media asset.");
+  }
+
+  const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
+  const assetId = requiredPattern(input?.assetId, "assetId", ID_PATTERN);
+  const actor = requiredString(input?.actor || "mcp");
+  const site = await loadSite(env, siteSlug);
+  const asset = await loadMediaAsset(env, site.id, assetId);
+
+  if (asset.status !== "archived") {
+    throw new Error("Only archived media assets can be permanently deleted.");
+  }
+
+  const usage = await env.DB.prepare(
+    `SELECT COUNT(*) AS usage_count
+     FROM media_usages
+     WHERE asset_id = ?`,
+  )
+    .bind(asset.id)
+    .first();
+  const usageCount = Number(usage?.usage_count ?? 0);
+  if (usageCount > 0) {
+    throw new Error(`Media asset is still in use at ${usageCount} path(s).`);
+  }
+
+  const r2Key = String(asset.r2_key ?? "").trim();
+  if (!r2Key) {
+    throw new Error("Media asset has no managed R2 object and cannot be permanently deleted.");
+  }
+  if (!r2Key.startsWith(`${site.slug}/`)) {
+    throw new Error("Media asset R2 object is outside the site storage namespace.");
+  }
+  if (typeof env.MEDIA_BUCKET?.delete !== "function") {
+    throw new Error("Media bucket binding is not configured.");
+  }
+  if (typeof env.DB?.batch !== "function") {
+    throw new Error("D1 batch support is required for permanent media deletion.");
+  }
+
+  const before = serializeAsset(asset);
+  try {
+    await env.MEDIA_BUCKET.delete(r2Key);
+  } catch (error) {
+    throw new Error(`Media R2 deletion failed: ${error?.message || "unknown error"}`);
+  }
+
+  const changeId = crypto.randomUUID();
+  const eligibilitySql = `id = ? AND site_id = ? AND status = 'archived'
+       AND NOT EXISTS (
+         SELECT 1 FROM media_usages WHERE asset_id = ?
+       )`;
+  const auditStatement = env.DB.prepare(
+    `INSERT INTO change_log (
+       id, site_id, actor, action, target, before_json, after_json, created_at
+     )
+     SELECT ?, ?, ?, ?, ?, ?, ?, datetime('now')
+     WHERE EXISTS (
+       SELECT 1 FROM media_assets
+       WHERE ${eligibilitySql}
+     )`,
+  ).bind(
+    changeId,
+    site.id,
+    actor,
+    "delete_media_asset",
+    `media/${asset.id}`,
+    JSON.stringify(before),
+    null,
+    asset.id,
+    site.id,
+    asset.id,
+  );
+  const deleteStatement = env.DB.prepare(
+    `DELETE FROM media_assets
+     WHERE ${eligibilitySql}`,
+  ).bind(asset.id, site.id, asset.id);
+
+  let results;
+  try {
+    results = await env.DB.batch([auditStatement, deleteStatement]);
+  } catch (error) {
+    throw new Error(`Media D1 cleanup failed after R2 deletion: ${error?.message || "unknown error"}`);
+  }
+
+  const deletedCount = Number(results?.[1]?.meta?.changes ?? results?.[1]?.changes ?? 0);
+  if (deletedCount !== 1) {
+    throw new Error("Media asset changed during deletion; its archived D1 record was retained for a safe retry.");
+  }
+
+  return {
+    site: site.slug,
+    assetId: asset.id,
+    deleted: true,
+    r2ObjectDeleted: true,
+    deletedAsset: before,
+  };
+}
+
 export async function updateImageAlt(env, input) {
   const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
   const assetId = requiredPattern(input?.assetId, "assetId", ID_PATTERN);

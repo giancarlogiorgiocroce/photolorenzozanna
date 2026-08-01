@@ -10,6 +10,7 @@ import {
   attachImageToSection,
   confirmImageUpload,
   createImageUpload,
+  deleteMediaAsset,
   listMediaAssets,
   removeImageFromSection,
   reorderImagesInSection,
@@ -420,6 +421,25 @@ const TOOLS = [
         },
       },
       required: ["site", "assetId", "archived"],
+    },
+  },
+  {
+    name: "delete_media_asset",
+    title: "Permanently Delete Media Asset",
+    description: "Irreversibly delete an archived, unused media asset from managed R2 storage and D1. Related upload sessions are removed by cascade. Requires explicit confirm: true.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        assetId: { type: "string", description: "Archived media asset id from list_media_assets." },
+        confirm: {
+          type: "boolean",
+          const: true,
+          description: "Must be true to confirm irreversible physical deletion.",
+        },
+      },
+      required: ["site", "assetId", "confirm"],
     },
   },
   {
@@ -1049,6 +1069,22 @@ async function handleMcpMethod(method, params, env, auth) {
         site: args.site,
         assetId: args.assetId,
         archived: args.archived,
+        actor: auth.actor,
+      });
+      return toolResult(result);
+    }
+    if (name === "delete_media_asset") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const result = await deleteMediaAsset(env, {
+        site: args.site,
+        assetId: args.assetId,
+        confirm: args.confirm,
         actor: auth.actor,
       });
       return toolResult(result);

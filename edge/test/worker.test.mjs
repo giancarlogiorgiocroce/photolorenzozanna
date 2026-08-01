@@ -532,6 +532,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   const createImageUpload = payload.result.tools.find((tool) => tool.name === "create_image_upload");
   const updateMediaAsset = payload.result.tools.find((tool) => tool.name === "update_media_asset");
   const setMediaAssetArchived = payload.result.tools.find((tool) => tool.name === "set_media_asset_archived");
+  const deleteMediaAsset = payload.result.tools.find((tool) => tool.name === "delete_media_asset");
   const updateText = payload.result.tools.find((tool) => tool.name === "update_text");
   const updateContactChannel = payload.result.tools.find((tool) => tool.name === "update_contact_channel");
   const replaceImage = payload.result.tools.find((tool) => tool.name === "replace_image");
@@ -566,6 +567,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
     "update_image_alt",
     "update_media_asset",
     "set_media_asset_archived",
+    "delete_media_asset",
     "replace_image",
     "attach_image_to_section",
     "remove_image_from_section",
@@ -583,6 +585,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.deepEqual(createImageUpload.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(updateMediaAsset.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(setMediaAssetArchived.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
+  assert.deepEqual(deleteMediaAsset.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(replaceImage.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(attachImageToSection.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(removeImageFromSection.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
@@ -609,6 +612,8 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.equal(updateMediaAsset.inputSchema.properties.tags.maxItems, 20);
   assert.equal(updateMediaAsset.inputSchema.properties.notes.maxLength, 1000);
   assert.equal(setMediaAssetArchived.inputSchema.properties.archived.type, "boolean");
+  assert.equal(deleteMediaAsset.inputSchema.properties.confirm.const, true);
+  assert.equal(deleteMediaAsset.inputSchema.required.includes("confirm"), true);
 });
 
 test("POST /mcp tools/call list_section_presets allows viewer scoped user tokens", async () => {
@@ -977,6 +982,86 @@ test("POST /mcp tools/call set_media_asset_archived archives and restores an unu
   assert.equal(restoreResponse.status, 200);
   assert.equal(restorePayload.result.structuredContent.asset.status, "ready");
   assert.deepEqual(db.changeLog.map((change) => change.action), ["archive_media_asset", "restore_media_asset"]);
+});
+
+test("POST /mcp tools/call delete_media_asset removes an archived unused asset from R2 and D1", async () => {
+  const db = await createEditorDb();
+  const asset = mediaAsset({
+    id: "asset_archived_delete",
+    r2_key: "ph/originals/delete-me.jpg",
+    public_url: "media/assets/asset_archived_delete/delete-me.jpg",
+    alt: "Asset temporaneo da eliminare",
+    status: "archived",
+  });
+  db.mediaAssets.push(asset);
+  db.mediaUploads.push({
+    id: "upload_archived_delete",
+    site_id: "site_ph",
+    asset_id: asset.id,
+    r2_key: asset.r2_key,
+    status: "uploaded",
+  });
+  const bucket = new FakeMediaBucket({
+    [asset.r2_key]: {
+      size: asset.size_bytes,
+      contentType: asset.mime_type,
+      body: new Uint8Array([1, 2, 3]),
+    },
+  });
+
+  const deleteResponse = await fetchWorker("/mcp", {
+    db,
+    mediaBucket: bucket,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "delete_media_asset",
+        arguments: {
+          site: "ph",
+          assetId: asset.id,
+          confirm: true,
+        },
+      },
+    },
+  });
+  const deletePayload = await deleteResponse.json();
+
+  const listResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "list_media_assets",
+        arguments: {
+          site: "ph",
+          status: "all",
+        },
+      },
+    },
+  });
+  const listPayload = await listResponse.json();
+
+  assert.equal(deleteResponse.status, 200);
+  assert.equal(deletePayload.result.structuredContent.deleted, true);
+  assert.equal(deletePayload.result.structuredContent.assetId, asset.id);
+  assert.deepEqual(bucket.deletedKeys, [asset.r2_key]);
+  assert.equal(db.mediaUploads.some((upload) => upload.asset_id === asset.id), false);
+  assert.equal(
+    listPayload.result.structuredContent.assets.some((item) => item.id === asset.id),
+    false,
+  );
+  assert.equal(db.changeLog.at(-1).action, "delete_media_asset");
+  assert.equal(db.changeLog.at(-1).actor, "lorenzo");
 });
 
 test("POST /mcp tools/call get_page exposes contact-band as a contact contract", async () => {
@@ -3284,6 +3369,15 @@ class FakeD1Database {
     return new FakeD1Statement(this, query);
   }
 
+  async batch(statements) {
+    const results = [];
+    for (const statement of statements) {
+      results.push(await statement.run());
+    }
+    return results;
+  }
+
+
   _first(query, params) {
     const results = this._all(query, params).results;
     return results[0] ?? null;
@@ -3605,6 +3699,21 @@ class FakeD1Database {
       return { success: true };
     }
 
+    if (query.includes("DELETE FROM media_assets")) {
+      const [assetId, siteId, usageAssetId] = params;
+      const asset = this.mediaAssets.find(
+        (item) => item.id === assetId && item.site_id === siteId && item.status === "archived",
+      );
+      const hasUsages = this.mediaUsages.some((usage) => usage.asset_id === usageAssetId);
+      if (!asset || hasUsages) {
+        return { success: true, meta: { changes: 0 } };
+      }
+
+      this.mediaAssets = this.mediaAssets.filter((item) => item.id !== assetId);
+      this.mediaUploads = this.mediaUploads.filter((upload) => upload.asset_id !== assetId);
+      return { success: true, meta: { changes: 1 } };
+    }
+
     if (query.includes("INSERT INTO change_log")) {
       const [id, siteId, actor, action, target, beforeJson, afterJson] = params;
       this.changeLog.push({
@@ -3848,6 +3957,7 @@ class FakeMediaBucket {
   constructor(objects) {
     this.objects = objects;
     this.puts = [];
+    this.deletedKeys = [];
   }
 
   head(key) {
@@ -3861,6 +3971,11 @@ class FakeMediaBucket {
     });
   }
 
+  async delete(key) {
+    if (this.deleteError) throw this.deleteError;
+    this.deletedKeys.push(key);
+    delete this.objects[key];
+  }
   get(key) {
     const object = this.objects[key];
     if (!object) return Promise.resolve(null);

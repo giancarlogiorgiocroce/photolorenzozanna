@@ -5,6 +5,7 @@ import {
   attachImageToSection,
   confirmImageUpload,
   createImageUpload,
+  deleteMediaAsset,
   listMediaAssets,
   removeImageFromSection,
   reorderImagesInSection,
@@ -379,6 +380,133 @@ test("setMediaAssetArchived blocks assets that still have usages", async () => {
   );
 
   assert.equal(db.mediaAssets.find((asset) => asset.id === "asset_ready_portrait").status, "ready");
+  assert.equal(db.changeLog.length, 0);
+});
+
+test("deleteMediaAsset permanently removes an archived unused R2 asset with audit", async () => {
+  const db = createMediaDb();
+  const asset = db.mediaAssets.find((item) => item.id === "asset_ready_portrait");
+  asset.status = "archived";
+  db.mediaUploads.push({
+    id: "upload_portrait",
+    site_id: "site_ph",
+    asset_id: asset.id,
+    r2_key: asset.r2_key,
+    status: "uploaded",
+  });
+  const bucket = new FakeMediaBucket({
+    [asset.r2_key]: {
+      size: asset.size_bytes,
+      contentType: asset.mime_type,
+    },
+  });
+
+  const result = await deleteMediaAsset(
+    { DB: db, MEDIA_BUCKET: bucket },
+    {
+      site: "ph",
+      assetId: asset.id,
+      confirm: true,
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(result.deleted, true);
+  assert.equal(result.assetId, "asset_ready_portrait");
+  assert.equal(result.r2ObjectDeleted, true);
+  assert.deepEqual(bucket.deletedKeys, ["ph/originals/portrait.jpg"]);
+  assert.equal(db.mediaAssets.some((item) => item.id === asset.id), false);
+  assert.equal(db.mediaUploads.some((upload) => upload.asset_id === asset.id), false);
+  assert.equal(db.changeLog[0].action, "delete_media_asset");
+  assert.equal(db.changeLog[0].target, "media/asset_ready_portrait");
+  assert.equal(JSON.parse(db.changeLog[0].before_json).status, "archived");
+  assert.equal(db.changeLog[0].after_json, null);
+});
+
+test("deleteMediaAsset enforces confirmation, archived state, zero usages, managed R2, and R2 success", async () => {
+  const db = createMediaDb();
+  const asset = db.mediaAssets.find((item) => item.id === "asset_ready_portrait");
+  const bucket = new FakeMediaBucket({
+    [asset.r2_key]: {
+      size: asset.size_bytes,
+      contentType: asset.mime_type,
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      deleteMediaAsset(
+        { DB: db, MEDIA_BUCKET: bucket },
+        { site: "ph", assetId: asset.id, confirm: false, actor: "tdd-suite" },
+      ),
+    /Explicit confirmation is required/,
+  );
+
+  await assert.rejects(
+    () =>
+      deleteMediaAsset(
+        { DB: db, MEDIA_BUCKET: bucket },
+        { site: "ph", assetId: asset.id, confirm: true, actor: "tdd-suite" },
+      ),
+    /Only archived media assets can be permanently deleted/,
+  );
+
+  asset.status = "archived";
+  db.mediaUsages.push({
+    id: "usage_delete_blocker",
+    asset_id: asset.id,
+    page_id: "page_portfolio",
+    section_id: "section_portfolio_gallery",
+    path: "items[0].images[0]",
+  });
+  await assert.rejects(
+    () =>
+      deleteMediaAsset(
+        { DB: db, MEDIA_BUCKET: bucket },
+        { site: "ph", assetId: asset.id, confirm: true, actor: "tdd-suite" },
+      ),
+    /still in use at 1 path/,
+  );
+
+  db.mediaUsages = [];
+  asset.r2_key = null;
+  await assert.rejects(
+    () =>
+      deleteMediaAsset(
+        { DB: db, MEDIA_BUCKET: bucket },
+        { site: "ph", assetId: asset.id, confirm: true, actor: "tdd-suite" },
+      ),
+    /managed R2 object/,
+  );
+
+  asset.r2_key = "ph/originals/portrait.jpg";
+
+  bucket.deleteError = new Error("simulated R2 failure");
+  await assert.rejects(
+    () =>
+      deleteMediaAsset(
+        { DB: db, MEDIA_BUCKET: bucket },
+        { site: "ph", assetId: asset.id, confirm: true, actor: "tdd-suite" },
+      ),
+    /simulated R2 failure/,
+  );
+
+  bucket.deleteError = null;
+  db.batch = async () => {
+    throw new Error("simulated D1 failure");
+  };
+  await assert.rejects(
+    () =>
+      deleteMediaAsset(
+        { DB: db, MEDIA_BUCKET: bucket },
+        { site: "ph", assetId: asset.id, confirm: true, actor: "tdd-suite" },
+      ),
+    /D1 cleanup failed after R2 deletion: simulated D1 failure/,
+  );
+  assert.deepEqual(bucket.deletedKeys, ["ph/originals/portrait.jpg"]);
+  assert.equal(bucket.objects["ph/originals/portrait.jpg"], undefined);
+
+  assert.equal(db.mediaAssets.some((item) => item.id === asset.id), true);
   assert.equal(db.changeLog.length, 0);
 });
 
@@ -1221,6 +1349,15 @@ class FakeMediaD1Database {
     return new FakeMediaD1Statement(this, query);
   }
 
+  async batch(statements) {
+    const results = [];
+    for (const statement of statements) {
+      results.push(await statement.run());
+    }
+    return results;
+  }
+
+
   _first(query, params) {
     const results = this._all(query, params).results;
     return results[0] ?? null;
@@ -1473,6 +1610,21 @@ class FakeMediaD1Database {
       return { success: true };
     }
 
+    if (query.includes("DELETE FROM media_assets")) {
+      const [assetId, siteId, usageAssetId] = params;
+      const asset = this.mediaAssets.find(
+        (item) => item.id === assetId && item.site_id === siteId && item.status === "archived",
+      );
+      const hasUsages = this.mediaUsages.some((usage) => usage.asset_id === usageAssetId);
+      if (!asset || hasUsages) {
+        return { success: true, meta: { changes: 0 } };
+      }
+
+      this.mediaAssets = this.mediaAssets.filter((item) => item.id !== assetId);
+      this.mediaUploads = this.mediaUploads.filter((upload) => upload.asset_id !== assetId);
+      return { success: true, meta: { changes: 1 } };
+    }
+
     if (query.includes("INSERT INTO change_log")) {
       const [id, siteId, actor, action, target, beforeJson, afterJson] = params;
       this.changeLog.push({
@@ -1495,6 +1647,7 @@ class FakeMediaD1Database {
 class FakeMediaBucket {
   constructor(objects) {
     this.objects = objects;
+    this.deletedKeys = [];
   }
 
   head(key) {
@@ -1506,6 +1659,11 @@ class FakeMediaBucket {
         contentType: object.contentType,
       },
     });
+  }
+  async delete(key) {
+    if (this.deleteError) throw this.deleteError;
+    this.deletedKeys.push(key);
+    delete this.objects[key];
   }
 }
 
