@@ -452,34 +452,94 @@ export async function listMediaAssets(env, input) {
   const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
   const status = normalizeStatus(input?.status ?? "ready");
   const limit = normalizeLimit(input?.limit ?? 50);
+  const query = normalizeMediaSearchQuery(input?.query);
+  const searchPattern = `%${escapeLikePattern(query.toLowerCase())}%`;
   const site = await loadSite(env, siteSlug);
 
-  const rows = status === "all"
-    ? await env.DB.prepare(
-      `SELECT id, r2_key, public_url, alt, caption, width, height, mime_type, size_bytes, status, created_at, updated_at
-       FROM media_assets
-       WHERE site_id = ?
-       ORDER BY updated_at DESC, id ASC
-       LIMIT ?`,
-    )
-      .bind(site.id, limit)
-      .all()
-    : await env.DB.prepare(
-      `SELECT id, r2_key, public_url, alt, caption, width, height, mime_type, size_bytes, status, created_at, updated_at
-       FROM media_assets
-       WHERE site_id = ? AND status = ?
-       ORDER BY updated_at DESC, id ASC
-       LIMIT ?`,
-    )
-      .bind(site.id, status, limit)
-      .all();
+  const rows = await env.DB.prepare(
+    `SELECT id, r2_key, public_url, title, tags_json, notes, alt, caption, width, height, mime_type, size_bytes, status, created_at, updated_at
+     FROM media_assets
+     WHERE site_id = ?
+       AND (? = 'all' OR status = ?)
+       AND (
+         ? = ''
+         OR LOWER(
+           COALESCE(title, '') || ' ' ||
+           COALESCE(tags_json, '') || ' ' ||
+           COALESCE(notes, '') || ' ' ||
+           COALESCE(alt, '') || ' ' ||
+           COALESCE(caption, '') || ' ' ||
+           COALESCE(public_url, '')
+         ) LIKE ? ESCAPE '!'
+       )
+     ORDER BY updated_at DESC, id ASC
+     LIMIT ?`,
+  )
+    .bind(site.id, status, status, query, searchPattern, limit)
+    .all();
 
   const assets = (rows.results ?? []).map(serializeAsset);
   return {
     site: site.slug,
     status,
+    query,
     count: assets.length,
     assets,
+  };
+}
+
+export async function updateMediaAsset(env, input) {
+  const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
+  const assetId = requiredPattern(input?.assetId, "assetId", ID_PATTERN);
+  const actor = requiredString(input?.actor || "mcp");
+  const metadataKeys = ["title", "tags", "notes"];
+  if (!metadataKeys.some((key) => hasOwn(input, key))) {
+    throw new Error("At least one media metadata field is required.");
+  }
+
+  const site = await loadSite(env, siteSlug);
+  const asset = await loadMediaAsset(env, site.id, assetId);
+  const before = serializeAsset(asset);
+  const title = hasOwn(input, "title")
+    ? normalizeOptionalText(input.title, { maxLength: 120, name: "title" }) || null
+    : before.title;
+  const tags = hasOwn(input, "tags") ? normalizeMediaTags(input.tags) : before.tags;
+  const notes = hasOwn(input, "notes")
+    ? normalizeOptionalText(input.notes, { maxLength: 1000, name: "notes" }) || null
+    : before.notes;
+
+  if (title === before.title && notes === before.notes && JSON.stringify(tags) === JSON.stringify(before.tags)) {
+    throw new Error("Media metadata is unchanged.");
+  }
+
+  await env.DB.prepare(
+    `UPDATE media_assets
+     SET title = ?, tags_json = ?, notes = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+  )
+    .bind(title, JSON.stringify(tags), notes, asset.id)
+    .run();
+
+  const after = {
+    ...before,
+    title,
+    tags,
+    notes,
+  };
+
+  await insertChangeLog(env, {
+    siteId: site.id,
+    actor,
+    action: "update_media_asset",
+    target: `media/${asset.id}/metadata`,
+    before,
+    after,
+  });
+
+  return {
+    site: site.slug,
+    asset: after,
+    published: asset.status === "ready",
   };
 }
 
@@ -1158,7 +1218,7 @@ async function loadSection(env, siteSlug, pageSlug, sectionKey) {
 
 async function loadMediaAsset(env, siteId, assetId) {
   const asset = await env.DB.prepare(
-    `SELECT id, r2_key, public_url, alt, caption, width, height, mime_type, size_bytes, status, created_at, updated_at
+    `SELECT id, r2_key, public_url, title, tags_json, notes, alt, caption, width, height, mime_type, size_bytes, status, created_at, updated_at
      FROM media_assets
      WHERE site_id = ? AND id = ?
      LIMIT 1`,
@@ -1175,7 +1235,7 @@ async function loadMediaAsset(env, siteId, assetId) {
 
 async function loadReadyMediaAssetByPublicPath(env, publicPath, assetId) {
   return await env.DB.prepare(
-    `SELECT id, r2_key, public_url, alt, caption, width, height, mime_type, size_bytes, status, created_at, updated_at
+    `SELECT id, r2_key, public_url, title, tags_json, notes, alt, caption, width, height, mime_type, size_bytes, status, created_at, updated_at
      FROM media_assets
      WHERE public_url = ? AND id = ? AND status = 'ready'
      LIMIT 1`,
@@ -1268,6 +1328,9 @@ function serializeAsset(asset) {
     id: asset.id,
     r2Key: asset.r2_key ?? null,
     publicUrl: asset.public_url,
+    title: asset.title ?? null,
+    tags: parseMediaTags(asset.tags_json),
+    notes: asset.notes ?? null,
     alt: asset.alt ?? "",
     caption: asset.caption ?? null,
     width: Number(asset.width),
@@ -1332,6 +1395,48 @@ function normalizeUploadSize(value) {
   }
 
   return sizeBytes;
+}
+
+function normalizeMediaSearchQuery(value) {
+  if (value == null) return "";
+  if (typeof value !== "string") {
+    throw new Error("Invalid media search query.");
+  }
+
+  const query = value.trim().replace(/\s+/g, " ");
+  if ([...query].length > 120) {
+    throw new Error("Media search query exceeds max length 120.");
+  }
+  return query;
+}
+
+function escapeLikePattern(value) {
+  return value
+    .replaceAll("!", "!!")
+    .replaceAll("%", "!%")
+    .replaceAll("_", "!_");
+}
+
+function normalizeMediaTags(value) {
+  if (!Array.isArray(value) || value.length > 20) {
+    throw new Error("Media tags must be an array with at most 20 items.");
+  }
+
+  const tags = [];
+  const seen = new Set();
+  for (const item of value) {
+    const tag = normalizeText(item, { maxLength: 40, name: "tag" });
+    const key = tag.toLocaleLowerCase("it");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    tags.push(tag);
+  }
+  return tags;
+}
+
+function parseMediaTags(value) {
+  const tags = Array.isArray(value) ? value : safeJson(value);
+  return Array.isArray(tags) ? tags.filter((tag) => typeof tag === "string") : [];
 }
 
 function normalizeUploadFilename(value, mimeType) {

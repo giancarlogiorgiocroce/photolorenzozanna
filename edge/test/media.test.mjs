@@ -13,6 +13,7 @@ import {
   setImageVisibility,
   updateImageAlt,
   updateImageCaption,
+  updateMediaAsset,
 } from "../src/media.mjs";
 
 test("createImageUpload creates a pending upload session and draft media asset", async () => {
@@ -234,6 +235,86 @@ test("listMediaAssets returns ready media assets for a site without exposing oth
   assert.equal(result.assets[0].r2Key, "ph/originals/portrait.jpg");
   assert.equal(result.assets[0].mimeType, "image/jpeg");
   assert.equal(result.assets[0].sizeBytes, 345678);
+});
+
+test("listMediaAssets searches editorial metadata without exposing other statuses", async () => {
+  const db = createMediaDb();
+  const portrait = db.mediaAssets.find((asset) => asset.id === "asset_ready_portrait");
+  portrait.title = "Ritratto tra i rami";
+  portrait.tags_json = JSON.stringify(["ritratto", "riflessi"]);
+  portrait.notes = "Selezione editoriale per la pagina Chi sono.";
+
+  const result = await listMediaAssets(
+    { DB: db },
+    {
+      site: "ph",
+      query: "riflessi",
+    },
+  );
+
+  assert.equal(result.query, "riflessi");
+  assert.equal(result.count, 1);
+  assert.equal(result.assets[0].id, "asset_ready_portrait");
+  assert.equal(result.assets[0].title, "Ritratto tra i rami");
+  assert.deepEqual(result.assets[0].tags, ["ritratto", "riflessi"]);
+  assert.equal(result.assets[0].notes, "Selezione editoriale per la pagina Chi sono.");
+});
+
+test("updateMediaAsset updates title, tags and notes with an audited change", async () => {
+  const db = createMediaDb();
+
+  const result = await updateMediaAsset(
+    { DB: db },
+    {
+      site: "ph",
+      assetId: "asset_ready_portrait",
+      title: "Ritratto tra i rami",
+      tags: ["Ritratto", "riflessi", "ritratto"],
+      notes: "Usare come possibile copertina.",
+      actor: "tdd-suite",
+    },
+  );
+
+  assert.equal(result.site, "ph");
+  assert.equal(result.asset.title, "Ritratto tra i rami");
+  assert.deepEqual(result.asset.tags, ["Ritratto", "riflessi"]);
+  assert.equal(result.asset.notes, "Usare come possibile copertina.");
+
+  const asset = db.mediaAssets.find((item) => item.id === "asset_ready_portrait");
+  assert.equal(asset.title, "Ritratto tra i rami");
+  assert.equal(asset.tags_json, JSON.stringify(["Ritratto", "riflessi"]));
+  assert.equal(asset.notes, "Usare come possibile copertina.");
+  assert.equal(db.changeLog[0].action, "update_media_asset");
+  assert.equal(db.changeLog[0].target, "media/asset_ready_portrait/metadata");
+});
+
+test("updateMediaAsset rejects empty changes and unsafe metadata", async () => {
+  await assert.rejects(
+    () =>
+      updateMediaAsset(
+        { DB: createMediaDb() },
+        {
+          site: "ph",
+          assetId: "asset_ready_portrait",
+          actor: "tdd-suite",
+        },
+      ),
+    /At least one media metadata field is required/,
+  );
+
+  await assert.rejects(
+    () =>
+      updateMediaAsset(
+        { DB: createMediaDb() },
+        {
+          site: "ph",
+          assetId: "asset_ready_portrait",
+          title: "<strong>Non sicuro</strong>",
+          actor: "tdd-suite",
+        },
+      ),
+    /HTML is not allowed/,
+  );
 });
 
 test("replaceImage attaches an existing media asset to a contracted image path and records history", async () => {
@@ -1045,6 +1126,9 @@ function mediaAsset(options) {
     r2_key: options.r2_key ?? `ph/originals/${options.id}.jpg`,
     public_url: options.public_url ?? "assets/images/media/portrait.jpg",
     alt: options.alt,
+    title: options.title ?? null,
+    tags_json: options.tags_json ?? JSON.stringify(options.tags ?? []),
+    notes: options.notes ?? null,
     caption: options.caption,
     width: options.width ?? 1600,
     height: options.height ?? 1200,
@@ -1101,6 +1185,28 @@ class FakeMediaD1Database {
         results: this.mediaAssets.filter((asset) => asset.site_id === params[0] && asset.id === params[1]),
       };
     }
+    if (query.includes("FROM media_assets") && query.includes("LIKE ?")) {
+      const [siteId, statusFilter, statusValue, queryValue, searchPattern, limit] = params;
+      const needle = String(queryValue ?? "").toLowerCase();
+      return {
+        results: this.mediaAssets
+          .filter((asset) => asset.site_id === siteId)
+          .filter((asset) => statusFilter === "all" || asset.status === statusValue)
+          .filter((asset) => {
+            if (!needle) return true;
+            const searchable = [
+              asset.title,
+              asset.tags_json,
+              asset.notes,
+              asset.alt,
+              asset.caption,
+            ].join(" ").toLowerCase();
+            return searchable.includes(needle) && Boolean(searchPattern);
+          })
+          .slice(0, limit),
+      };
+    }
+
 
     if (query.includes("FROM media_assets") && query.includes("status = ?")) {
       const [siteId, status, limit] = params;
@@ -1208,6 +1314,16 @@ class FakeMediaD1Database {
     }
 
     if (query.includes("UPDATE media_assets")) {
+      if (query.includes("title = ?")) {
+        const [title, tagsJson, notes, assetId] = params;
+        const asset = this.mediaAssets.find((item) => item.id === assetId);
+        asset.title = title;
+        asset.tags_json = tagsJson;
+        asset.notes = notes;
+        asset.updated_at = "2026-07-15 00:00:01";
+        return { success: true };
+      }
+
       if (query.includes("status = ?")) {
         const [status, assetId] = params;
         const asset = this.mediaAssets.find((item) => item.id === assetId);

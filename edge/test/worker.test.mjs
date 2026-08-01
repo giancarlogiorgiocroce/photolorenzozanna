@@ -530,6 +530,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   const getPage = payload.result.tools.find((tool) => tool.name === "get_page");
   const listMediaAssets = payload.result.tools.find((tool) => tool.name === "list_media_assets");
   const createImageUpload = payload.result.tools.find((tool) => tool.name === "create_image_upload");
+  const updateMediaAsset = payload.result.tools.find((tool) => tool.name === "update_media_asset");
   const updateText = payload.result.tools.find((tool) => tool.name === "update_text");
   const updateContactChannel = payload.result.tools.find((tool) => tool.name === "update_contact_channel");
   const replaceImage = payload.result.tools.find((tool) => tool.name === "replace_image");
@@ -562,6 +563,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
     "create_image_upload",
     "confirm_image_upload",
     "update_image_alt",
+    "update_media_asset",
     "replace_image",
     "attach_image_to_section",
     "remove_image_from_section",
@@ -577,6 +579,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.deepEqual(updateText.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(updateContactChannel.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(createImageUpload.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
+  assert.deepEqual(updateMediaAsset.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(replaceImage.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(attachImageToSection.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(removeImageFromSection.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
@@ -598,6 +601,10 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.match(setImageVisibility.description, /nascondere\/mostrare/);
   assert.match(createImageUpload.description, /upload\.uploadPageUrl/);
   assert.equal(createImageUpload.inputSchema.properties.mimeType.enum.includes("image/jpeg"), true);
+  assert.equal(listMediaAssets.inputSchema.properties.query.maxLength, 120);
+  assert.equal(updateMediaAsset.inputSchema.properties.title.maxLength, 120);
+  assert.equal(updateMediaAsset.inputSchema.properties.tags.maxItems, 20);
+  assert.equal(updateMediaAsset.inputSchema.properties.notes.maxLength, 1000);
 });
 
 test("POST /mcp tools/call list_section_presets allows viewer scoped user tokens", async () => {
@@ -816,6 +823,72 @@ test("POST /mcp tools/call list_media_assets allows viewer scoped user tokens", 
   );
   assert.equal(payload.result.structuredContent.assets[0].publicUrl, "assets/images/media/portrait.jpg");
   assert.equal(db.authTokens[0].last_used_at, "2026-07-13 00:00:01");
+});
+
+test("POST /mcp tools/call update_media_asset updates metadata searchable by list_media_assets", async () => {
+  const db = await createEditorDb();
+  db.mediaAssets.push(
+    mediaAsset({
+      id: "asset_ready_portrait",
+      public_url: "assets/images/media/portrait.jpg",
+      alt: "Ritratto dalla libreria media",
+      status: "ready",
+    }),
+  );
+
+  const updateResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "update_media_asset",
+        arguments: {
+          site: "ph",
+          assetId: "asset_ready_portrait",
+          title: "Ritratto tra i rami",
+          tags: ["ritratto", "riflessi"],
+          notes: "Selezione per la pagina Chi sono.",
+        },
+      },
+    },
+  });
+  const updatePayload = await updateResponse.json();
+
+  const listResponse = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "list_media_assets",
+        arguments: {
+          site: "ph",
+          query: "riflessi",
+        },
+      },
+    },
+  });
+  const listPayload = await listResponse.json();
+
+  assert.equal(updateResponse.status, 200);
+  assert.equal(updatePayload.result.structuredContent.asset.title, "Ritratto tra i rami");
+  assert.deepEqual(updatePayload.result.structuredContent.asset.tags, ["ritratto", "riflessi"]);
+  assert.equal(listResponse.status, 200);
+  assert.deepEqual(
+    listPayload.result.structuredContent.assets.map((asset) => asset.id),
+    ["asset_ready_portrait"],
+  );
+  assert.equal(db.changeLog[0].action, "update_media_asset");
+  assert.equal(db.changeLog[0].actor, "lorenzo");
 });
 
 test("POST /mcp tools/call get_page exposes contact-band as a contact contract", async () => {
@@ -3022,6 +3095,9 @@ function mediaAsset(options) {
     site_id: options.site_id ?? "site_ph",
     r2_key: options.r2_key ?? `ph/originals/${options.id}.jpg`,
     public_url: options.public_url,
+    title: options.title ?? null,
+    tags_json: options.tags_json ?? JSON.stringify(options.tags ?? []),
+    notes: options.notes ?? null,
     alt: options.alt ?? "",
     caption: options.caption ?? null,
     width: options.width ?? 1600,
@@ -3220,6 +3296,28 @@ class FakeD1Database {
     if (query.includes("FROM media_assets") && query.includes("AND id = ?")) {
       return {
         results: this.mediaAssets.filter((asset) => asset.site_id === params[0] && asset.id === params[1]),
+      };
+    }
+
+    if (query.includes("FROM media_assets") && query.includes("LIKE ?")) {
+      const [siteId, statusFilter, statusValue, queryValue, searchPattern, limit] = params;
+      const needle = String(queryValue ?? "").toLowerCase();
+      return {
+        results: this.mediaAssets
+          .filter((asset) => asset.site_id === siteId)
+          .filter((asset) => statusFilter === "all" || asset.status === statusValue)
+          .filter((asset) => {
+            if (!needle) return true;
+            const searchable = [
+              asset.title,
+              asset.tags_json,
+              asset.notes,
+              asset.alt,
+              asset.caption,
+            ].join(" ").toLowerCase();
+            return searchable.includes(needle) && Boolean(searchPattern);
+          })
+          .slice(0, limit),
       };
     }
 
@@ -3427,6 +3525,18 @@ class FakeD1Database {
     }
 
     if (query.includes("UPDATE media_assets")) {
+      if (query.includes("title = ?")) {
+        const [title, tagsJson, notes, assetId] = params;
+        const asset = this.mediaAssets.find((item) => item.id === assetId);
+        if (asset) {
+          asset.title = title;
+          asset.tags_json = tagsJson;
+          asset.notes = notes;
+          asset.updated_at = "2026-07-13 00:00:01";
+        }
+        return { success: true };
+      }
+
       if (query.includes("status = ?")) {
         const [status, assetId] = params;
         const asset = this.mediaAssets.find((item) => item.id === assetId);

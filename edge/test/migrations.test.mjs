@@ -162,3 +162,16 @@ test("0010 creates media upload sessions with hashed upload tokens", async () =>
   assert.doesNotMatch(sql, /\bsecret\b/i);
   assert.doesNotMatch(sql, /\bDROP\s+TABLE\b/i);
 });
+
+test("0011 adds searchable editorial metadata to media assets", async () => {
+  const sql = await readFile(
+    new URL("../migrations/0011_media_asset_metadata.sql", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(sql, /ALTER TABLE media_assets ADD COLUMN title TEXT/);
+  assert.match(sql, /ALTER TABLE media_assets ADD COLUMN tags_json TEXT NOT NULL DEFAULT '\[\]'/);
+  assert.match(sql, /ALTER TABLE media_assets ADD COLUMN notes TEXT/);
+  assert.match(sql, /CREATE INDEX IF NOT EXISTS idx_media_assets_site_title/);
+  assert.doesNotMatch(sql, /\bDROP\s+TABLE\b/i);
+});

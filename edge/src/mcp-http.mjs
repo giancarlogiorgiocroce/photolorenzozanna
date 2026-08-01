@@ -17,6 +17,7 @@ import {
   setImageFocalPoint,
   setImageVisibility,
   updateImageAlt,
+  updateMediaAsset,
   updateImageCaption,
 } from "./media.mjs";
 import {
@@ -99,6 +100,7 @@ const TOOLS = [
           enum: ["ready", "draft", "archived", "all"],
           description: "Optional media status filter. Defaults to ready.",
         },
+        query: { type: "string", maxLength: 120, description: "Optional case-insensitive search across title, tags, notes, alt, caption, and filename." },
         limit: { type: "integer", description: "Maximum assets to return, from 1 to 100." },
       },
       required: ["site"],
@@ -376,6 +378,29 @@ const TOOLS = [
         alt: { type: "string", description: "Accessible alt text. Required for non-decorative images." },
       },
       required: ["site", "assetId", "alt"],
+    },
+  },
+  {
+    name: "update_media_asset",
+    title: "Update Media Asset",
+    description: "Update searchable editorial metadata for a media asset. Empty title or notes remove that field; an empty tags array removes all tags. HTML is not accepted.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    inputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        assetId: { type: "string", description: "Media asset id from list_media_assets." },
+        title: { type: "string", maxLength: 120, description: "Optional editorial title. Empty string removes it." },
+        tags: {
+          type: "array",
+          maxItems: 20,
+          uniqueItems: true,
+          items: { type: "string", maxLength: 40 },
+          description: "Optional searchable editorial tags. Empty array removes all tags.",
+        },
+        notes: { type: "string", maxLength: 1000, description: "Optional internal editorial notes. Empty string removes them." },
+      },
+      required: ["site", "assetId"],
     },
   },
   {
@@ -676,6 +701,7 @@ async function handleMcpMethod(method, params, env, auth) {
         site: args.site,
         status: args.status,
         limit: args.limit,
+        query: args.query,
       });
       return toolResult(result);
     }
@@ -969,6 +995,27 @@ async function handleMcpMethod(method, params, env, auth) {
         alt: args.alt,
         actor: auth.actor,
       });
+      return toolResult(result);
+    }
+
+    if (name === "update_media_asset") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const input = {
+        site: args.site,
+        assetId: args.assetId,
+        actor: auth.actor,
+      };
+      copyOptionalArg(input, args, "title");
+      copyOptionalArg(input, args, "tags");
+      copyOptionalArg(input, args, "notes");
+
+      const result = await updateMediaAsset(env, input);
       return toolResult(result);
     }
 
