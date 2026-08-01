@@ -516,7 +516,11 @@ function renderValueCard(item, index) {
 
 function renderContactHero(section) {
   const defaults = PAGE_DEFAULTS.contatti.hero;
-  const image = section.data.image ?? defaults.image;
+  const imageOverrides = section.data.image;
+  const image = {
+    ...defaults.image,
+    ...(imageOverrides && typeof imageOverrides === "object" && !Array.isArray(imageOverrides) ? imageOverrides : {}),
+  };
 
   return `<section class="contact-hero" data-section-id="${escapeAttribute(section.sectionId)}" data-section-type="hero" aria-labelledby="contact-title">
   <div class="contact-hero__copy reveal">

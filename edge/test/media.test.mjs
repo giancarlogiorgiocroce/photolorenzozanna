@@ -764,6 +764,49 @@ test("setImageFocalPoint updates a contracted image object and records history",
   assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[0]/focalPoint");
 });
 
+test("setImageFocalPoint materializes a missing contracted contact hero image", async () => {
+  const db = createMediaDb();
+  db.pages.push({
+    id: "page_contatti",
+    site_id: "site_ph",
+    slug: "contatti",
+    title: "Contatti",
+  });
+  db.pageSections.push({
+    id: "section_contatti_hero",
+    page_id: "page_contatti",
+    section_key: "hero",
+    type: "hero",
+    section_order: 10,
+    enabled: 1,
+    data: JSON.stringify({
+      title: "Contatti",
+      intro: "Scrivi per un ritratto.",
+    }),
+  });
+
+  const result = await setImageFocalPoint(
+    { DB: db },
+    {
+      site: "ph",
+      page: "contatti",
+      sectionId: "hero",
+      path: "image.focalPoint",
+      x: 47,
+      y: 61,
+      actor: "tdd-suite",
+    },
+  );
+
+  const section = db.pageSections.find((item) => item.id === "section_contatti_hero");
+  assert.equal(result.path, "image");
+  assert.deepEqual(result.focalPoint, { x: 47, y: 61 });
+  assert.deepEqual(JSON.parse(section.data).image, {
+    focalPoint: { x: 47, y: 61 },
+  });
+  assert.equal(db.changeLog[0].target, "pages/contatti/sections/hero/image/focalPoint");
+});
+
 test("setImageFocalPoint rejects invalid values and non-image paths", async () => {
   await assert.rejects(
     () =>

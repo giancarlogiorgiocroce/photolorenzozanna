@@ -869,7 +869,7 @@ export async function setImageFocalPoint(env, input) {
   const sectionKey = requiredPattern(input?.sectionId, "sectionId", SECTION_KEY_PATTERN);
   const rawPath = requiredPattern(input?.path, "path", IMAGE_PATH_PATTERN);
   const actor = requiredString(input?.actor || "mcp");
-  const path = normalizeImageObjectPath(rawPath);
+  const path = normalizeFocalPointImageObjectPath(rawPath);
   const focalPath = `${path}.focalPoint`;
   const x = normalizeFocalPercent(input?.x, "x");
   const y = normalizeFocalPercent(input?.y, "y");
@@ -882,9 +882,13 @@ export async function setImageFocalPoint(env, input) {
 
   const before = serializeSection(section);
   const data = cloneJsonObject(before.data);
-  const currentImage = readObjectAtPath(data, path);
+  const storedImage = readValueAtPath(data, path);
+  if (storedImage != null && !isObjectRecord(storedImage)) {
+    throw new Error(`Path does not contain an image object: ${path}`);
+  }
+
   const nextImage = {
-    ...currentImage,
+    ...(storedImage ?? {}),
     focalPoint: { x, y },
   };
 
@@ -1362,6 +1366,11 @@ function isExpiredUpload(value) {
 
 function normalizeImageObjectPath(path) {
   return path.endsWith(".assetId") ? path.slice(0, -".assetId".length) : path;
+}
+
+function normalizeFocalPointImageObjectPath(path) {
+  if (path.endsWith(".focalPoint")) return path.slice(0, -".focalPoint".length);
+  return normalizeImageObjectPath(path);
 }
 
 function normalizeVisibilityImageObjectPath(path) {

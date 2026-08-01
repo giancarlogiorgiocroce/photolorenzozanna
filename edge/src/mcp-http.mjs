@@ -482,7 +482,7 @@ const TOOLS = [
   {
     name: "set_image_focal_point",
     title: "Set Image Focal Point",
-    description: "Set a controlled focal point for a contracted image object using percentage coordinates from 0 to 100.",
+    description: "Set a controlled focal point for a contracted image using percentage coordinates from 0 to 100. Accepts either the image object path or the focalPoint field path exposed by get_page.",
     securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
@@ -490,7 +490,7 @@ const TOOLS = [
         site: { type: "string", description: "Site slug, usually ph." },
         page: { type: "string", description: "Page slug, for example portfolio." },
         sectionId: { type: "string", description: "Section identifier, for example gallery or hero." },
-        path: { type: "string", description: "Concrete image object path, for example items[0].images[0] or image." },
+        path: { type: "string", description: "Concrete image object or focalPoint field path, for example items[0].images[0], items[0].images[0].focalPoint, image, or image.focalPoint." },
         x: { type: "integer", minimum: 0, maximum: 100, description: "Horizontal focal point percentage." },
         y: { type: "integer", minimum: 0, maximum: 100, description: "Vertical focal point percentage." },
       },

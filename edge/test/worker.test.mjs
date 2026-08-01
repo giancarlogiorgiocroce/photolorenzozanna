@@ -1877,6 +1877,47 @@ test("POST /mcp tools/call set_image_focal_point updates a contracted image", as
   assert.equal(db.changeLog[0].target, "pages/portfolio/sections/gallery/items[0].images[0]/focalPoint");
 });
 
+test("POST /mcp tools/call set_image_focal_point updates the sparse contact hero image", async () => {
+  const db = await createEditorDb();
+
+  const response = await fetchWorker("/mcp", {
+    db,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "set_image_focal_point",
+        arguments: {
+          site: "ph",
+          page: "contatti",
+          sectionId: "hero",
+          path: "image",
+          x: 47,
+          y: 61,
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+  const hero = db.pageSections.find((section) => section.id === "section_contatti_hero");
+  const image = JSON.parse(hero.data).image;
+  const pageResponse = await fetchWorker("/contact", {
+    db,
+    host: "ph.lorenzozanna.com",
+  });
+  const html = await pageResponse.text();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(payload.result.structuredContent.focalPoint, { x: 47, y: 61 });
+  assert.deepEqual(image, { focalPoint: { x: 47, y: 61 } });
+  assert.match(html, /assets\/images\/portfolio\/forme\/ombre-grata\.jpg/);
+  assert.match(html, /style="object-position: 47% 61%;"/);
+});
+
 test("POST /mcp tools/call set_image_visibility hides a contracted image", async () => {
   const db = await createEditorDb();
   db.pageSections.push(
