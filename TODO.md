@@ -26,10 +26,10 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Leggere tutti i file Markdown del progetto, inclusi audit, recap, roadmap, contratti e README.
 - [x] Leggere tutte le task Codex precedenti associate alla cartella `lorenzozanna`.
 - [x] Confrontare le spunte storiche con il codice effettivamente mantenuto.
-- [x] Confrontare le spunte storiche con la suite locale completa: `162/162` test verdi al 2026-08-01.
+- [x] Confrontare le spunte storiche con la suite locale completa: `167/167` test verdi al 2026-08-01.
 - [x] Verificare live le quattro route pubbliche principali: `/`, `/portfolio`, `/about`, `/contact` rispondono `200`.
 - [x] Verificare live `robots.txt`, `sitemap.xml` e redirect canonico di `/index.html`.
-- [x] Verificare live `tools/list`: 28 tool MCP esposti, inclusi i tool gallery di rimozione, riordino e caption.
+- [x] Verificare live `tools/list`: 29 tool MCP esposti, incluso `update_media_asset` oltre ai tool gallery.
 - [x] Archiviare i registri TODO e le roadmap duplicate in `archive/docs/`, mantenendo solo questo file come checklist attiva.
 - [x] Mantenere gli snapshot in `.site-backups/` come archivio non operativo.
 - [x] Aggiornare `MCP_AI_CMS_TEMPLATE_MANUAL.md` allo stato media/R2 attuale.
@@ -275,7 +275,7 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Deployare `remove_image_from_section`, `reorder_images_in_section` e `update_image_caption`; verificarli in `tools/list` e con smoke live seguito da rollback.
 - [x] Implementare `reorder_images_in_section` con permutazione completa, audit, rollback e riallineamento `media_usages`.
 - [x] Implementare `update_image_caption` per aggiornare o rimuovere la didascalia del singolo uso.
-- [ ] Aggiungere titolo editoriale, tag, note e ricerca al catalogo asset.
+- [x] Aggiungere titolo editoriale, tag, note e ricerca al catalogo asset; deployato con migrazione `0011`, tool `update_media_asset` e smoke live con ripristino esatto.
 - [ ] Implementare thumbnail/preview dedicate per l'asset manager.
 - [ ] Implementare archiviazione/eliminazione controllata con blocco per asset ancora usati.
 - [ ] Implementare strip EXIF/GPS prima della pubblicazione.

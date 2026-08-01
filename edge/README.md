@@ -22,7 +22,7 @@ Aggiornato al 1 agosto 2026:
 
 - registrar dominio: Aruba;
 - DNS autorevoli e zona: Cloudflare;
-- database D1: `lorenzozanna_content`, migrazioni applicate fino a `0010`;
+- database D1: `lorenzozanna_content`, migrazioni applicate fino a `0011`;
 - bucket R2 privato: `lorenzozanna-media`, binding Worker `MEDIA_BUCKET`;
 - Worker API/MCP/rendering: `https://api.lorenzozanna.com`;
 - endpoint MCP remoto: `https://api.lorenzozanna.com/mcp`;
@@ -30,10 +30,10 @@ Aggiornato al 1 agosto 2026:
 - sito pubblico: `https://ph.lorenzozanna.com`;
 - HTML pubblico: renderizzato dal Worker usando D1/R2;
 - CSS, JavaScript e immagini statiche: serviti da Cloudflare Pages, progetto `lorenzozanna-ph`;
-- superficie MCP verificata live: 28 tool;
-- suite locale documentata: `162/162` test verdi;
-- ultimo Worker media documentato: `4463dc69-0639-4bcb-b519-27da6e1d335f`;
-- commit del codice deployato: `547e9c4`;
+- superficie MCP verificata live: 29 tool;
+- suite locale documentata: `167/167` test verdi;
+- ultimo Worker media documentato: `52382b53-b196-4760-9ad5-39d69e99c038`;
+- commit del codice deployato: `ad6ee4f`;
 - immagini sorgente originali: archivio locale in `assets/portfolio/portfolio/`, non necessario al deploy.
 
 Record DNS principali:
@@ -61,13 +61,13 @@ L'AI non modifica HTML, CSS o file di progetto. Chiama endpoint privati e puo' c
 
 ## Media pipeline
 
-Stato 2026-08-01: upload, collegamento, visibilita, rimozione, riordino, caption e punto focale sono attivi via MCP su D1/R2 e verificati live con rollback. `contact.hero` supporta il punto focale anche quando l'immagine e ancora fornita dal fallback del renderer.
+Stato 2026-08-01: upload, collegamento, metadata ricercabili, visibilita, rimozione, riordino, caption e punto focale sono attivi via MCP su D1/R2 e verificati live con ripristino. `contact.hero` supporta il punto focale anche quando l'immagine e ancora fornita dal fallback del renderer.
 
 Componenti:
 
 - D1: `media_assets`, `media_uploads`, `media_usages`;
 - R2: bucket privato `lorenzozanna-media` tramite binding `MEDIA_BUCKET`;
-- MCP media live: `create_image_upload`, `confirm_image_upload`, `list_media_assets`, `replace_image`, `attach_image_to_section`, `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`, `update_image_alt`, `set_image_focal_point`, `set_image_visibility`;
+- MCP media live: `create_image_upload`, `confirm_image_upload`, `list_media_assets`, `update_media_asset`, `replace_image`, `attach_image_to_section`, `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`, `update_image_alt`, `set_image_focal_point`, `set_image_visibility`;
 - upload binario: `PUT /media/uploads/:uploadId` con upload token;
 - fallback browser: `GET /media/uploads/:uploadId/form`;
 - serving pubblico: `GET/HEAD /media/assets/:assetId/:filename`.
@@ -78,13 +78,13 @@ Manuale operativo completo: `../MCP_MEDIA_PIPELINE.md`.
 
 ## Superficie MCP remota
 
-`tools/list` live espone 28 tool:
+`tools/list` live espone 29 tool:
 
 - lettura: `get_page`, `list_section_presets`, `list_changes`, `list_media_assets`;
 - sezioni: `disable_section`, `enable_section`, `add_section_from_preset`;
 - FAQ: `add_faq_section`, `add_faq_item`, `update_faq_item`, `remove_faq_item`, `reorder_faq_items`;
 - testo e link: `add_text_subsection`, `update_text`, `update_rich_text`, `update_cta`, `update_contact_channel`;
-- media: `create_image_upload`, `confirm_image_upload`, `update_image_alt`, `replace_image`, `attach_image_to_section`, `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`, `set_image_focal_point`, `set_image_visibility`;
+- media: `create_image_upload`, `confirm_image_upload`, `update_image_alt`, `update_media_asset`, `replace_image`, `attach_image_to_section`, `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`, `set_image_focal_point`, `set_image_visibility`;
 - revisioni: `rollback_change`.
 
 La checklist operativa e' `../TODO.md`; i contratti dei campi sono in
@@ -364,7 +364,7 @@ Cloudflare Pages non supporta wildcard custom domains per Pages, quindi la wildc
 Il rendering dinamico e la pipeline R2 sono gia' in produzione. Le priorita media
 correnti sono:
 
-1. metadata, ricerca e archive/delete asset con blocco quando l'asset e' ancora usato;
+1. archive/delete asset con blocco quando l'asset e' ancora usato;
 2. strip EXIF/GPS, thumbnail e varianti responsive;
 3. upload diretto da allegato solo quando il client MCP espone realmente i byte.
 

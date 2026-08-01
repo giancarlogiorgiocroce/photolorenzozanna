@@ -32,7 +32,7 @@ Cosa non e' ancora completo:
 - ChatGPT non passa automaticamente i byte dell'immagine allegata al tool MCP, se il client non espone questa capacita;
 - non esiste ancora un tool unico `upload_and_attach_image` con file diretto;
 - non esiste una UI asset manager tradizionale;
-- non ci sono ancora titolo/tags/search avanzata sugli asset;
+- non ci sono ancora autore e data di scatto editoriali sugli asset;
 - non c'e' ancora delete/archive asset con controllo degli usi;
 - non facciamo ancora strip EXIF/GPS lato server;
 - non facciamo ancora trasformazioni responsive o thumbnail generate;
@@ -43,7 +43,8 @@ Cosa non e' ancora completo:
 Le migration coinvolte sono:
 
 - `edge/migrations/0009_media_assets.sql`;
-- `edge/migrations/0010_media_uploads.sql`.
+- `edge/migrations/0010_media_uploads.sql`;
+- `edge/migrations/0011_media_asset_metadata.sql`.
 
 Tabelle principali:
 
@@ -59,7 +60,7 @@ r2_key: ph/uploads/<assetId>/<filename>
 public_url: media/assets/<assetId>/<filename>
 mime_type: image/jpeg|image/png|image/webp|image/avif
 status: ready
-alt, caption, width, height, size_bytes
+alt, caption, title, tags, notes, width, height, size_bytes
 ```
 
 Il nome pubblico resta leggibile per il cliente, ma la chiave fisica contiene `assetId` univoco. Questo evita sovrascritture e permette di ritrovare l'immagine tramite DB.
@@ -136,7 +137,7 @@ Dopo che carico l'immagine dal browser, chiama confirm_image_upload e poi attach
 
 Tool di lettura:
 
-- `list_media_assets`: lista asset pronti, o filtrati per status se il ruolo lo permette.
+- `list_media_assets`: lista asset pronti, o filtrati per status se il ruolo lo permette; `query` cerca su titolo, tag, note, alt, caption e filename.
 
 Tool di upload:
 
@@ -151,11 +152,12 @@ Tool di collegamento:
 - `reorder_images_in_section`: applica una permutazione completa degli indici correnti e riallinea `media_usages`;
 - `update_image_caption`: aggiorna o rimuove la caption del singolo uso senza cambiare i metadata globali dell'asset.
 
-I tre tool sono live, revisionati e reversibili tramite `rollback_change`.
+I tool di collegamento sono live, revisionati e reversibili tramite `rollback_change`.
 
 Tool metadata:
 
 - `update_image_alt`: modifica alt text;
+- `update_media_asset`: aggiorna o rimuove titolo editoriale, tag e note globali dell'asset con audit in `change_log`;
 - `set_image_focal_point`: imposta focal point percentuale 0-100;
 - `set_image_visibility`: nasconde o mostra una singola immagine gia collegata, senza rimuoverla dal CMS;
 - `update_text` su `items[].images[].enabled`: fallback compatibile per client conservativi.
@@ -163,7 +165,6 @@ Tool metadata:
 Tool non ancora implementati:
 
 - `archive_media_asset` oppure `delete_media_asset`;
-- `update_media_asset` con titolo/tags/nome leggibile;
 - `upload_and_attach_image` se il client puo passare file/base64/URL.
 
 ## Sicurezza
@@ -194,7 +195,7 @@ Rischi residui o miglioramenti:
 - generare thumbnail e varianti responsive;
 - aggiungere quote/rate limit specifici upload;
 - aggiungere archiviazione o cancellazione sicura asset con controllo `media_usages`;
-- aggiungere audit piu umano per asset: titolo, tags, note, autore, data scatto.
+- valutare autore e data di scatto editoriali se diventano utili al flusso di selezione.
 
 ## Rendering
 
@@ -354,7 +355,7 @@ Smoke tool list:
 
 ## Prossimi passi consigliati
 
-1. Aggiungere metadata asset manager: titolo leggibile, tag, note, autore/data e ricerca.
-2. Aggiungere archive/delete asset con blocco se l'asset e' ancora usato.
+1. Aggiungere archive/delete asset con blocco se l'asset e' ancora usato.
+2. Valutare autore e data di scatto editoriali se utili al catalogo.
 3. Aggiungere strip EXIF/GPS, thumbnail e varianti responsive.
 4. Valutare `upload_and_attach_image` solo se il client MCP puo passare file/base64/URL temporaneo in modo affidabile.
