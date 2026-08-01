@@ -30,10 +30,10 @@ Aggiornato al 1 agosto 2026:
 - sito pubblico: `https://ph.lorenzozanna.com`;
 - HTML pubblico: renderizzato dal Worker usando D1/R2;
 - CSS, JavaScript e immagini statiche: serviti da Cloudflare Pages, progetto `lorenzozanna-ph`;
-- superficie MCP verificata live: 30 tool;
-- suite locale documentata: `170/170` test verdi;
-- ultimo Worker media documentato: `9efc103f-465f-4994-b326-e427b475dcf5`;
-- commit del codice deployato: `b838516`;
+- superficie MCP verificata live: 31 tool;
+- suite locale documentata: `173/173` test verdi;
+- ultimo Worker media documentato: `2a3aa4de-5fa8-41ad-b396-386f4b1e39c2`;
+- commit del codice deployato: `4b3a351`;
 - immagini sorgente originali: archivio locale in `assets/portfolio/portfolio/`, non necessario al deploy.
 
 Record DNS principali:
@@ -64,12 +64,13 @@ L'AI non modifica HTML, CSS o file di progetto. Chiama endpoint privati e puo' c
 Stato 2026-08-01: upload, collegamento, metadata ricercabili, visibilita, rimozione, riordino, caption e punto focale sono attivi via MCP su D1/R2 e verificati live con ripristino. `contact.hero` supporta il punto focale anche quando l'immagine e ancora fornita dal fallback del renderer.
 
 `set_media_asset_archived` gestisce archiviazione e ripristino reversibili, audit e blocco degli asset ancora referenziati. Lo smoke live ha confermato che un asset con un uso resta `ready`.
+`delete_media_asset` elimina in modo irreversibile solo asset archiviati, inutilizzati e gestiti nel namespace R2 del sito; richiede `confirm: true` e rimuove in cascade le sessioni upload.
 
 Componenti:
 
 - D1: `media_assets`, `media_uploads`, `media_usages`;
 - R2: bucket privato `lorenzozanna-media` tramite binding `MEDIA_BUCKET`;
-- MCP media live: `create_image_upload`, `confirm_image_upload`, `list_media_assets`, `update_media_asset`, `set_media_asset_archived`, `replace_image`, `attach_image_to_section`, `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`, `update_image_alt`, `set_image_focal_point`, `set_image_visibility`;
+- MCP media live: `create_image_upload`, `confirm_image_upload`, `list_media_assets`, `update_media_asset`, `set_media_asset_archived`, `delete_media_asset`, `replace_image`, `attach_image_to_section`, `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`, `update_image_alt`, `set_image_focal_point`, `set_image_visibility`;
 - upload binario: `PUT /media/uploads/:uploadId` con upload token;
 - fallback browser: `GET /media/uploads/:uploadId/form`;
 - serving pubblico: `GET/HEAD /media/assets/:assetId/:filename`.
@@ -80,13 +81,13 @@ Manuale operativo completo: `../MCP_MEDIA_PIPELINE.md`.
 
 ## Superficie MCP remota
 
-`tools/list` live espone 30 tool:
+`tools/list` live espone 31 tool:
 
 - lettura: `get_page`, `list_section_presets`, `list_changes`, `list_media_assets`;
 - sezioni: `disable_section`, `enable_section`, `add_section_from_preset`;
 - FAQ: `add_faq_section`, `add_faq_item`, `update_faq_item`, `remove_faq_item`, `reorder_faq_items`;
 - testo e link: `add_text_subsection`, `update_text`, `update_rich_text`, `update_cta`, `update_contact_channel`;
-- media: `create_image_upload`, `confirm_image_upload`, `update_image_alt`, `update_media_asset`, `set_media_asset_archived`, `replace_image`, `attach_image_to_section`, `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`, `set_image_focal_point`, `set_image_visibility`;
+- media: `create_image_upload`, `confirm_image_upload`, `update_image_alt`, `update_media_asset`, `set_media_asset_archived`, `delete_media_asset`, `replace_image`, `attach_image_to_section`, `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`, `set_image_focal_point`, `set_image_visibility`;
 - revisioni: `rollback_change`.
 
 La checklist operativa e' `../TODO.md`; i contratti dei campi sono in
@@ -366,8 +367,8 @@ Cloudflare Pages non supporta wildcard custom domains per Pages, quindi la wildc
 Il rendering dinamico e la pipeline R2 sono gia' in produzione. Le priorita media
 correnti sono:
 
-1. eliminazione fisica separata per asset archiviati e non usati;
-2. strip EXIF/GPS, thumbnail e varianti responsive;
+1. thumbnail/preview dedicate e varianti responsive;
+2. strip EXIF/GPS prima della pubblicazione;
 3. upload diretto da allegato solo quando il client MCP espone realmente i byte.
 
 Lo stato completo e ordinato resta in `../TODO.md`.

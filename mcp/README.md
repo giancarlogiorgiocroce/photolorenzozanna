@@ -23,7 +23,7 @@ Autenticazione supportata:
 - OAuth authorization-code + PKCE per ChatGPT e client compatibili;
 - `AI_API_TOKEN` solo per lettura/smoke sul canale MCP.
 
-La superficie remota verificata espone 30 tool, inclusi metadata, archiviazione reversibile,
+La superficie remota verificata espone 31 tool, inclusi metadata, lifecycle asset,
 rimozione, riordino e caption per le gallery. L'elenco corrente e' documentato in `../edge/README.md`;
 i contratti dei campi sono in
 `../MCP_SECTION_CONTRACTS.md`.
@@ -37,6 +37,7 @@ La pipeline R2 espone:
 - `list_media_assets`;
 - `update_media_asset`;
 - `set_media_asset_archived`;
+- `delete_media_asset`;
 - `replace_image`;
 - `attach_image_to_section`;
 - `remove_image_from_section`;

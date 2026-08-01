@@ -2,8 +2,8 @@
 
 Data: 2026-08-01
 Branch operativo: `codex/realign-media`
-Worker corrente deployato: `9efc103f-465f-4994-b326-e427b475dcf5`
-Commit codice deployato: `b838516`
+Worker corrente deployato: `2a3aa4de-5fa8-41ad-b396-386f4b1e39c2`
+Commit codice deployato: `4b3a351`
 
 Questo documento descrive la pipeline immagini/media del CMS MCP Cloudflare per `ph.lorenzozanna.com`. La checklist unica delle attivita completate e aperte resta `TODO.md`.
 
@@ -17,6 +17,8 @@ Cosa funziona oggi:
 - fallback browser `uploadPageUrl` per i client che non possono inviare byte binari;
 - conferma upload e promozione asset da `draft` a `ready`;
 - elenco asset media pronti;
+- metadata editoriali ricercabili con `update_media_asset`;
+- archiviazione reversibile ed eliminazione fisica sicura con `set_media_asset_archived` e `delete_media_asset`;
 - sostituzione immagine esistente con `replace_image`;
 - aggiunta immagine a una galleria con `attach_image_to_section`;
 - modifica alt text con `update_image_alt`;
@@ -33,7 +35,6 @@ Cosa non e' ancora completo:
 - non esiste ancora un tool unico `upload_and_attach_image` con file diretto;
 - non esiste una UI asset manager tradizionale;
 - non ci sono ancora autore e data di scatto editoriali sugli asset;
-- non c'e' ancora eliminazione fisica degli asset con cleanup coordinato D1/R2;
 - non facciamo ancora strip EXIF/GPS lato server;
 - non facciamo ancora trasformazioni responsive o thumbnail generate;
 - non facciamo scansione malware dedicata.
@@ -159,13 +160,13 @@ Tool metadata:
 - `update_image_alt`: modifica alt text;
 - `update_media_asset`: aggiorna o rimuove titolo editoriale, tag e note globali dell'asset con audit in `change_log`;
 - `set_media_asset_archived`: archivia un asset `ready` non usato o ripristina un asset `archived`; registra audit e rifiuta l'archiviazione se esistono `media_usages`;
+- `delete_media_asset`: elimina definitivamente un asset `archived` senza usi dal namespace R2 del sito e da D1; richiede `confirm: true`, registra audit e rimuove `media_uploads` in cascade;
 - `set_image_focal_point`: imposta focal point percentuale 0-100;
 - `set_image_visibility`: nasconde o mostra una singola immagine gia collegata, senza rimuoverla dal CMS;
 - `update_text` su `items[].images[].enabled`: fallback compatibile per client conservativi.
 
 Tool non ancora implementati:
 
-- `delete_media_asset`, separato dall'archiviazione reversibile;
 - `upload_and_attach_image` se il client puo passare file/base64/URL.
 
 ## Sicurezza
@@ -195,7 +196,6 @@ Rischi residui o miglioramenti:
 - valutare antivirus se il sito viene aperto a molti utenti non fidati;
 - generare thumbnail e varianti responsive;
 - aggiungere quote/rate limit specifici upload;
-- aggiungere la cancellazione fisica sicura con controllo `media_usages`;
 - valutare autore e data di scatto editoriali se diventano utili al flusso di selezione.
 
 ## Rendering
@@ -268,6 +268,16 @@ Archiviazione asset reversibile:
 - smoke `tools/list`: 30 tool live, incluso `set_media_asset_archived`;
 - smoke mutante controllato: l'unico asset live ha un uso, quindi l'archiviazione e' stata rifiutata e lo stato e' rimasto `ready`;
 - la credenziale temporanea usata per lo smoke e' stata rimossa.
+
+Cancellazione fisica sicura:
+
+- commit iniziale: `54c1c69 Add safe physical media deletion`;
+- correzione cascade D1: `4b3a351 Handle cascaded rows in media deletion`;
+- deploy definitivo: `2a3aa4de-5fa8-41ad-b396-386f4b1e39c2`;
+- suite pre-deploy: `173/173`;
+- smoke `tools/list`: 31 tool live, incluso `delete_media_asset` con `confirm: true`;
+- smoke completo: eliminati oggetto R2, asset D1 e sessione `media_uploads` in cascade; audit verificato;
+- credenziale, audit e risorse temporanee dello smoke rimossi senza residui.
 
 Uso consigliato per il plugin:
 
@@ -365,7 +375,6 @@ Smoke tool list:
 
 ## Prossimi passi consigliati
 
-1. Aggiungere l'eliminazione fisica per asset gia archiviati e senza usi.
-2. Valutare autore e data di scatto editoriali se utili al catalogo.
-3. Aggiungere strip EXIF/GPS, thumbnail e varianti responsive.
-4. Valutare `upload_and_attach_image` solo se il client MCP puo passare file/base64/URL temporaneo in modo affidabile.
+1. Aggiungere thumbnail/preview e varianti responsive.
+2. Aggiungere strip EXIF/GPS prima della pubblicazione.
+3. Valutare `upload_and_attach_image` solo se il client MCP puo passare file/base64/URL temporaneo in modo affidabile.
