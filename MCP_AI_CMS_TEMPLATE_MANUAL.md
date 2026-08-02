@@ -1,12 +1,12 @@
 # Manuale per un AI CMS via MCP su Cloudflare
 
-Aggiornato: 2026-08-01
+Aggiornato: 2026-08-02
 
 > Questo e' un manuale/template riusabile, non un registro operativo. Lo stato
 > corrente e l'unica checklist del progetto sono in `TODO.md`. La pipeline R2,
 > il fallback browser e i tool media descritti qui sono implementati. ChatGPT
-> supporta file parameter MCP, ma il tool diretto del progetto e' ancora una
-> evoluzione aperta, indicata esplicitamente insieme agli altri prossimi passi.
+> supporta file parameter MCP e il branch locale implementa il tool diretto;
+> deploy e prova ChatGPT reale restano indicati tra i prossimi passi.
 
 Questo documento descrive come abbiamo costruito il backend MCP per `ph.lorenzozanna.com` e come riapplicare la stessa architettura a un nuovo sito.
 
@@ -1128,8 +1128,8 @@ e resta non editabile.
 
 Funzionalita ancora aperte:
 
-- upload diretto con file parameter ChatGPT e fallback browser provider-neutral;
-- verifica firma/decodificabilita e dimensioni reali del file;
+- deploy e prova reale dell'upload diretto, mantenendo il fallback provider-neutral;
+- decodificabilita completa oltre la firma e le dimensioni reali gia verificate;
 - thumbnail e varianti responsive;
 - strip EXIF/GPS.
 
@@ -1619,6 +1619,7 @@ list_media_assets
 update_media_asset
 set_media_asset_archived
 delete_media_asset
+upload_image_file (branch locale, non ancora deployato)
 create_image_upload
 confirm_image_upload
 ```
@@ -1648,10 +1649,12 @@ Flusso attuale in produzione:
 La specifica OpenAI Plugins corrente consente inoltre di dichiarare un campo
 file top-level in `_meta["openai/fileParams"]`. ChatGPT passa
 `download_url`, `file_id` e gli eventuali `mime_type`/`file_name`, non il base64
-nel JSON-RPC. Nel progetto il prossimo tool `upload_image_file` importera questo
-riferimento temporaneo in R2 e restituira un asset `ready`; attach e replace
-resteranno operazioni separate. Il fallback browser resta necessario finche il
-tool non e' deployato e continuera a servire i client senza file parameter.
+nel JSON-RPC. Il branch locale implementa `upload_image_file`: download HTTPS
+controllato, massimo 3 redirect, timeout, limite 12 MB, firma e dimensioni reali,
+streaming R2 e scrittura atomica catalogo/audit con cleanup. Restituisce un asset
+`ready`; attach e replace restano operazioni separate. Il fallback browser resta
+necessario finche il tool non e' deployato e continuera a servire i client senza
+file parameter.
 Riferimento: https://developers.openai.com/plugins/reference#define-file-inputs
 
 Esempio visibilita reversibile:
@@ -2035,6 +2038,7 @@ Tool implementati:
 list_media_assets
 update_media_asset
 set_media_asset_archived
+upload_image_file (branch locale, non ancora deployato)
 delete_media_asset
 create_image_upload
 confirm_image_upload
@@ -2054,9 +2058,10 @@ scade dopo 15 minuti ed e' salvato nel database solo come hash. Questo flusso e'
 stato verificato end-to-end fino a R2 e all'attach nel portfolio.
 
 ChatGPT supporta ora file parameter MCP tramite `_meta["openai/fileParams"]` e
-passa un URL temporaneo con `file_id`. Il progetto deve ancora implementare
-`upload_image_file`, validare il download e trasferire lo stream in R2. Il
-fallback browser non va rimosso perche mantiene la compatibilita provider-neutral.
+passa un URL temporaneo con `file_id`. Il branch locale implementa
+`upload_image_file`, valida download, firma e dimensioni e trasferisce lo stream
+in R2; resta da deployarlo e provarlo con ChatGPT. Il fallback browser non va
+rimosso perche mantiene la compatibilita provider-neutral.
 
 Regole:
 
@@ -2097,8 +2102,8 @@ Shape gallery corrente:
 
 Evoluzioni ancora aperte:
 
-- upload diretto con file parameter ChatGPT, ora supportato dalla specifica client;
-- verifica di magic bytes/decodificabilita e dimensioni reali del file;
+- deploy e test connector reale dell'upload diretto con file parameter ChatGPT;
+- verifica di decodificabilita completa oltre magic bytes e dimensioni reali;
 - strip EXIF/GPS;
 - thumbnail e varianti responsive AVIF/WebP/JPG;
 - valutazione di scansione malware e quote/rate limit specifici per upload.

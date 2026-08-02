@@ -530,6 +530,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   const getPage = payload.result.tools.find((tool) => tool.name === "get_page");
   const listMediaAssets = payload.result.tools.find((tool) => tool.name === "list_media_assets");
   const createImageUpload = payload.result.tools.find((tool) => tool.name === "create_image_upload");
+  const uploadImageFile = payload.result.tools.find((tool) => tool.name === "upload_image_file");
   const updateMediaAsset = payload.result.tools.find((tool) => tool.name === "update_media_asset");
   const setMediaAssetArchived = payload.result.tools.find((tool) => tool.name === "set_media_asset_archived");
   const deleteMediaAsset = payload.result.tools.find((tool) => tool.name === "delete_media_asset");
@@ -562,6 +563,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
     "update_text",
     "update_cta",
     "update_contact_channel",
+    "upload_image_file",
     "create_image_upload",
     "confirm_image_upload",
     "update_image_alt",
@@ -582,6 +584,7 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.deepEqual(listMediaAssets.securitySchemes, [{ type: "oauth2", scopes: ["content:read"] }]);
   assert.deepEqual(updateText.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(updateContactChannel.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
+  assert.deepEqual(uploadImageFile.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(createImageUpload.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(updateMediaAsset.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(setMediaAssetArchived.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
@@ -605,6 +608,14 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.equal(setImageFocalPoint.inputSchema.properties.y.maximum, 100);
   assert.equal(setImageVisibility.inputSchema.properties.enabled.type, "boolean");
   assert.match(setImageVisibility.description, /nascondere\/mostrare/);
+  assert.deepEqual(uploadImageFile._meta["openai/fileParams"], ["file"]);
+  assert.deepEqual(Object.keys(uploadImageFile.inputSchema.$defs.OpenAIFile.properties), [
+    "download_url", "file_id", "mime_type", "file_name",
+  ]);
+  assert.deepEqual(uploadImageFile.inputSchema.$defs.OpenAIFile.required, ["download_url", "file_id"]);
+  assert.equal(uploadImageFile.inputSchema.required.includes("file"), true);
+  assert.equal(uploadImageFile.annotations.openWorldHint, true);
+  assert.equal(uploadImageFile.outputSchema.properties.asset.properties.status.const, "ready");
   assert.match(createImageUpload.description, /upload\.uploadPageUrl/);
   assert.equal(createImageUpload.inputSchema.properties.mimeType.enum.includes("image/jpeg"), true);
   assert.equal(listMediaAssets.inputSchema.properties.query.maxLength, 120);
@@ -1130,6 +1141,70 @@ test("POST /mcp tools/call update_contact_channel edits and hides contact channe
   assert.equal(JSON.parse(contactBand.data).channels[2].enabled, false);
   assert.equal(db.sectionRevisions[0].action, "update_contact_channel");
   assert.equal(db.changeLog[0].target, "pages/contatti/sections/contact-band/channels[2]");
+});
+
+test("POST /mcp tools/call upload_image_file imports a ChatGPT file parameter into R2 and D1", async (t) => {
+  const db = await createEditorDb();
+  const bucket = new FakeMediaBucket({});
+  const bytes = directPngHeader(900, 600);
+  const fetchCalls = [];
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    fetchCalls.push({ url, init });
+    return new Response(bytes, {
+      status: 200,
+      headers: {
+        "content-type": "image/png",
+        "content-length": String(bytes.byteLength),
+      },
+    });
+  });
+
+  const response = await fetchWorker("/mcp", {
+    db,
+    mediaBucket: bucket,
+    host: "mcp.lorenzozanna.com",
+    method: "POST",
+    bearerToken: USER_TOKEN,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "upload_image_file",
+        arguments: {
+          site: "ph",
+          file: {
+            download_url: "https://files.openai.example/download/signed",
+            file_id: "file_worker_direct",
+            mime_type: "image/png",
+            file_name: "Chat Ritratto.PNG",
+          },
+          alt: "Ritratto caricato dalla chat",
+          caption: "Upload MCP diretto",
+        },
+      },
+    },
+  });
+  const payload = await response.json();
+  const result = payload.result.structuredContent;
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.result.isError, false);
+  assert.equal(result.source.fileId, "file_worker_direct");
+  assert.equal(result.asset.status, "ready");
+  assert.equal(result.asset.mimeType, "image/png");
+  assert.equal(result.asset.width, 900);
+  assert.equal(result.asset.height, 600);
+  assert.equal(result.asset.sizeBytes, bytes.byteLength);
+  assert.match(result.asset.publicUrl, /^media\/assets\/asset_.*\/chat-ritratto\.png$/);
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0].init.redirect, "manual");
+  assert.equal(bucket.puts.length, 1);
+  assert.deepEqual(bucket.puts[0].body, bytes);
+  assert.equal(db.mediaUploads.length, 0);
+  assert.equal(db.mediaAssets.find((asset) => asset.id === result.asset.id)?.status, "ready");
+  assert.equal(db.changeLog.at(-1).action, "upload_image_file");
+  assert.equal(db.changeLog.at(-1).actor, "lorenzo");
 });
 
 test("POST /mcp tools/call create_image_upload creates a pending media upload", async () => {
@@ -3262,6 +3337,15 @@ function pageSection(pageId, id, key, type, order, enabled, data) {
   };
 }
 
+function directPngHeader(width, height) {
+  const bytes = new Uint8Array(24);
+  bytes.set([137, 80, 78, 71, 13, 10, 26, 10], 0);
+  bytes.set([0, 0, 0, 13, 73, 72, 68, 82], 8);
+  bytes.set([(width >>> 24) & 0xff, (width >>> 16) & 0xff, (width >>> 8) & 0xff, width & 0xff], 16);
+  bytes.set([(height >>> 24) & 0xff, (height >>> 16) & 0xff, (height >>> 8) & 0xff, height & 0xff], 20);
+  return bytes;
+}
+
 function mediaAsset(options) {
   return {
     id: options.id,
@@ -3644,7 +3728,7 @@ class FakeD1Database {
         height,
         mime_type: mimeType,
         size_bytes: sizeBytes,
-        status,
+        status: status ?? (query.includes("'ready'") ? "ready" : status),
         created_at: "2026-07-13 00:00:01",
         updated_at: "2026-07-13 00:00:01",
       });
@@ -4007,6 +4091,7 @@ class FakeMediaBucket {
     };
     return {
       key,
+      size: bytes.byteLength,
     };
   }
 }

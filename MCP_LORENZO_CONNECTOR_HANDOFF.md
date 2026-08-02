@@ -1,6 +1,6 @@
 # Handoff connector AI Lorenzo
 
-Aggiornato: 2026-08-01
+Aggiornato: 2026-08-02
 
 ## Stato
 
@@ -88,6 +88,10 @@ Il connector live espone i tool media:
 - `update_image_alt`;
 - `set_image_focal_point`;
 - `set_image_visibility`.
+Il branch locale aggiunge un trentaduesimo tool, `upload_image_file`, con file
+parameter ChatGPT. Non va ancora presentato come disponibile al cliente finche
+non viene deployato e verificato sul connector reale.
+
 
 Rimozione, riordino e caption sono live e verificati con rollback completo e
 riallineamento di `media_usages`.
@@ -139,10 +143,11 @@ all'attach nel portfolio e resta operativo come fallback.
 
 La specifica OpenAI Plugins corrente supporta gia file parameter tramite
 `_meta["openai/fileParams"]`: ChatGPT passa al tool `download_url`, `file_id` e
-gli eventuali `mime_type`/`file_name`. Il server non espone ancora questo input.
-Il prossimo incremento e' `upload_image_file`, che importa il riferimento
-temporaneo in R2 e restituisce un asset `ready`; il collegamento continua a usare
-`attach_image_to_section` o `replace_image`.
+gli eventuali `mime_type`/`file_name`. Il branch locale espone questo input con
+`upload_image_file`, importa il riferimento temporaneo in streaming, verifica
+firma e dimensioni reali e restituisce un asset `ready`. Il collegamento continua
+a usare `attach_image_to_section` o `replace_image`; produzione resta sul fallback
+browser fino al deploy.
 
 ## Messaggio semplice per Lorenzo
 

@@ -1,6 +1,6 @@
 # MCP media pipeline R2
 
-Data: 2026-08-01
+Data: 2026-08-02
 Branch operativo: `codex/realign-media`
 Worker corrente deployato: `2a3aa4de-5fa8-41ad-b396-386f4b1e39c2`
 Commit codice deployato: `4b3a351`
@@ -28,18 +28,23 @@ Cosa funziona oggi:
 - rendering delle immagini da metadata D1;
 - servizio pubblico degli asset da R2 tramite `/media/assets/:assetId/:filename`;
 - rollback delle sostituzioni immagine tramite `rollback_change`.
+Sul branch locale, non ancora deployato:
+
+- `upload_image_file` espone il file parameter ChatGPT e crea direttamente un asset `ready`;
+- il download temporaneo usa streaming verso R2, timeout, redirect limitati, blocco host locali/IP e limite 12 MB;
+- firma e dimensioni reali vengono estratte per JPEG, PNG, WebP e AVIF; R2 viene ripulito se la scrittura D1 atomica fallisce.
+
 
 Cosa non e' ancora completo:
 
-- ChatGPT supporta file parameter MCP, ma il descriptor corrente di `create_image_upload` non dichiara ancora `_meta["openai/fileParams"]`;
-- non esiste ancora il tool diretto `upload_image_file` che importi l'allegato temporaneo nel catalogo R2;
+- il Worker di produzione espone ancora 31 tool e non include `upload_image_file` finche il branch non viene deployato;
 - non esiste una UI asset manager tradizionale;
 - non ci sono ancora autore e data di scatto editoriali sugli asset;
 - non facciamo ancora strip EXIF/GPS lato server;
 - non facciamo ancora trasformazioni responsive o thumbnail generate;
 - non facciamo scansione malware dedicata;
-- non verifichiamo ancora magic bytes/decodificabilita del contenuto rispetto al MIME dichiarato;
-- non estraiamo ancora dal file le dimensioni reali: `width` e `height` sono metadata dichiarati e validati come interi positivi;
+- la validazione strutturale locale non equivale ancora a una decodifica completa dell'immagine;
+- il fallback browser continua a usare `width` e `height` dichiarati; il percorso diretto estrae invece le dimensioni reali.
 
 ## Capacita file corrente di ChatGPT
 
@@ -56,8 +61,9 @@ file_name: nome opzionale
 
 ChatGPT non inserisce il binario o il base64 nel JSON-RPC: consegna un riferimento
 temporaneo autorizzato. Il Worker puo scaricarlo con `fetch()` e passare il
-`ReadableStream` a `R2Bucket.put`. Questa capacita client e' disponibile; resta da
-implementare e verificare nel nostro tool MCP. Riferimenti: [OpenAI file inputs](https://developers.openai.com/plugins/reference#define-file-inputs) e [Cloudflare R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/).
+`ReadableStream` a `R2Bucket.put`. Il branch locale implementa questa capacita in
+`upload_image_file`; resta da deployarla e verificarla con un allegato ChatGPT reale.
+Riferimenti: [OpenAI file inputs](https://developers.openai.com/plugins/reference#define-file-inputs) e [Cloudflare R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/).
 
 
 ## Modello dati
@@ -135,7 +141,7 @@ Flusso tecnico standard:
 
 ## Flusso ChatGPT con pagina browser
 
-Questo resta il flusso attuale per ChatGPT finche il nostro descriptor MCP non espone un file parameter, ed e' il fallback permanente per i client che non lo supportano.
+Questo resta il flusso del Worker di produzione finche il branch con il file parameter non viene deployato, ed e' comunque il fallback permanente per i client che non lo supportano.
 
 1. ChatGPT deve chiamare comunque `create_image_upload`.
 2. ChatGPT deve mostrare all'utente `upload.uploadPageUrl`.
@@ -156,9 +162,9 @@ Dopo che carico l'immagine dal browser, chiama confirm_image_upload e poi attach
 ```
 
 
-## Flusso target: allegato ChatGPT diretto
+## Flusso implementato nel branch: allegato ChatGPT diretto
 
-Il prossimo incremento introduce `upload_image_file`, separato dai tool di
+Il branch introduce `upload_image_file`, separato dai tool di
 collegamento per permettere al cliente sia di caricare un'immagine nel catalogo
 senza usarla subito, sia di collegarla in un secondo momento.
 
@@ -168,11 +174,11 @@ senza usarla subito, sia di collegarla in un secondo momento.
    `mime_type`/`file_name`.
 3. Il Worker accetta soltanto il file parameter marcato dal descriptor, non un
    URL libero inserito nel prompt.
-4. Il Worker scarica il riferimento temporaneo con timeout, limiti di redirect e
-   limite massimo, verifica firma/formato e dimensioni reali, quindi scrive lo
-   stream in R2.
+4. Il Worker richiede HTTPS, blocca host locali e IP, applica timeout, massimo 3
+   redirect e limite 12 MB, verifica firma/formato e dimensioni reali, quindi
+   scrive lo stream in R2.
 5. D1 registra asset, metadata, ownership, audit e stato `ready` usando lo stesso
-   modello corrente.
+   modello corrente; un errore della scrittura atomica D1 elimina l'oggetto R2.
 6. ChatGPT usa `attach_image_to_section` o `replace_image` per il collegamento;
    rollback e `media_usages` restano separati dall'upload del catalogo.
 
@@ -188,8 +194,9 @@ Tool di lettura:
 
 Tool di upload:
 
-- `create_image_upload`: crea asset draft e sessione pending;
-- `confirm_image_upload`: promuove l'asset a ready dopo verifica R2.
+- `upload_image_file`: nel branch locale importa il file parameter in streaming e restituisce direttamente un asset `ready`;
+- `create_image_upload`: crea asset draft e sessione pending per il fallback browser;
+- `confirm_image_upload`: promuove l'asset del fallback a ready dopo verifica R2.
 
 Tool di collegamento:
 
@@ -211,9 +218,6 @@ Tool metadata:
 - `set_image_visibility`: nasconde o mostra una singola immagine gia collegata, senza rimuoverla dal CMS;
 - `update_text` su `items[].images[].enabled`: fallback compatibile per client conservativi.
 
-Tool non ancora implementati:
-
-- `upload_image_file`: importa un file parameter ChatGPT nel catalogo R2 e restituisce un asset `ready`; attach e replace restano tool separati.
 
 ## Sicurezza
 
@@ -222,6 +226,9 @@ Garanzie gia implementate:
 - niente `src` libero nei tool di modifica immagini;
 - collegamento solo tramite `assetId` esistente e `ready`;
 - MIME dichiarato e `Content-Type` limitati a `image/jpeg`, `image/png`, `image/webp`, `image/avif`;
+- nel percorso diretto il MIME effettivo deriva dalla firma JPEG/PNG/WebP/AVIF e le dimensioni sono estratte dall'header;
+- il download diretto richiede HTTPS, rifiuta host locali/IP, limita redirect, tempo e byte e non espone un campo URL libero;
+- catalogo e audit sono scritti insieme con D1 batch; in caso di errore l'oggetto R2 viene eliminato;
 - SVG non consentito;
 - dimensione massima upload: 12 MB;
 - filename normalizzato e ricostruito in base al MIME;
@@ -238,9 +245,8 @@ Garanzie gia implementate:
 
 Rischi residui o miglioramenti:
 
-- verificare firma/magic bytes e decodificabilita dell'immagine;
-- estrarre dimensioni reali e confrontarle con i metadata invece di fidarsi dei valori dichiarati;
-- proteggere il download temporaneo del file parameter con timeout, limiti di redirect/size e nessun URL arbitrario dal prompt;
+- verificare la decodificabilita completa oltre la firma e la struttura dimensionale dell'header;
+- valutare se portare estrazione dimensioni e firma anche nel fallback browser;
 - aggiungere strip EXIF/GPS prima della pubblicazione;
 - valutare antivirus se il sito viene aperto a molti utenti non fidati;
 - generare thumbnail e varianti responsive;
@@ -424,7 +430,7 @@ Smoke tool list:
 
 ## Prossimi passi consigliati
 
-1. Implementare `upload_image_file` con `_meta["openai/fileParams"]` e testarlo end-to-end con un allegato ChatGPT reale.
-2. Chiudere validazione della firma, dimensioni reali e strip EXIF/GPS nel percorso di ingestione.
+1. Deployare `upload_image_file`, verificare `tools/list` a 32 tool e testarlo end-to-end con un allegato ChatGPT reale.
+2. Chiudere decodificabilita completa e strip EXIF/GPS nel percorso di ingestione.
 3. Aggiungere thumbnail/preview e varianti responsive.
 4. Conservare e ritestare il fallback browser per i client MCP senza file parameter.

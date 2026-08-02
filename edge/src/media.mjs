@@ -1,4 +1,8 @@
 import { resolveEditableField } from "./page-contracts.mjs";
+import {
+  MAX_DIRECT_IMAGE_SIZE_BYTES,
+  prepareDirectImageUpload,
+} from "./direct-image-upload.mjs";
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
 const SECTION_KEY_PATTERN = /^[a-z0-9_-]{1,80}$/;
@@ -12,7 +16,7 @@ const ALLOWED_IMAGE_MIME_TYPES = new Map([
   ["image/webp", "webp"],
   ["image/avif", "avif"],
 ]);
-const MAX_UPLOAD_SIZE_BYTES = 12 * 1024 * 1024;
+const MAX_UPLOAD_SIZE_BYTES = MAX_DIRECT_IMAGE_SIZE_BYTES;
 const UPLOAD_TTL_MS = 15 * 60 * 1000;
 
 export async function createImageUpload(env, input) {
@@ -105,6 +109,126 @@ export async function createImageUpload(env, input) {
     },
     asset: serializeAsset(asset),
   };
+}
+
+export async function uploadImageFile(env, input, options = {}) {
+  const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
+  const actor = requiredString(input?.actor || "mcp");
+  const alt = normalizeAltText(input?.alt);
+  const caption = normalizeOptionalText(input?.caption, { maxLength: 120, name: "caption" }) || null;
+  const site = await loadSite(env, siteSlug);
+
+  if (!env?.MEDIA_BUCKET || typeof env.MEDIA_BUCKET.put !== "function" || typeof env.MEDIA_BUCKET.delete !== "function") {
+    throw new Error("R2 binding MEDIA_BUCKET is not configured for direct uploads.");
+  }
+  if (typeof env.DB?.batch !== "function") {
+    throw new Error("D1 batch support is required for direct uploads.");
+  }
+
+  const prepared = await prepareDirectImageUpload(input?.file, {
+    fetchImpl: options.fetchImpl,
+    maxSizeBytes: MAX_UPLOAD_SIZE_BYTES,
+  });
+  const mimeType = prepared.detectedMimeType;
+  const filename = normalizeUploadFilename(prepared.fileName || "chatgpt-image", mimeType);
+  const assetId = `asset_${crypto.randomUUID()}`;
+  const r2Key = `${site.slug}/uploads/${assetId}/${filename}`;
+  const publicUrl = `media/assets/${assetId}/${filename}`;
+  let storedObject = null;
+
+  try {
+    storedObject = await env.MEDIA_BUCKET.put(r2Key, prepared.stream, {
+      httpMetadata: {
+        contentType: mimeType,
+      },
+      customMetadata: {
+        assetId,
+        siteId: site.id,
+        source: "openai_file_param",
+      },
+    });
+
+    const sizeBytes = normalizeStoredObjectSize(storedObject?.size);
+    if (sizeBytes > MAX_UPLOAD_SIZE_BYTES) {
+      throw new Error(`Image upload exceeds max size ${MAX_UPLOAD_SIZE_BYTES}.`);
+    }
+    if (prepared.declaredSizeBytes != null && prepared.declaredSizeBytes !== sizeBytes) {
+      throw new Error("Downloaded image size does not match Content-Length.");
+    }
+
+    const asset = {
+      id: assetId,
+      r2_key: r2Key,
+      public_url: publicUrl,
+      alt,
+      caption,
+      width: prepared.width,
+      height: prepared.height,
+      mime_type: mimeType,
+      size_bytes: sizeBytes,
+      status: "ready",
+      created_at: null,
+      updated_at: null,
+    };
+    const serializedAsset = serializeAsset(asset);
+
+    const assetStatement = env.DB.prepare(
+      `INSERT INTO media_assets (
+         id, site_id, r2_key, public_url, alt, caption, width, height, mime_type, size_bytes, status, created_at, updated_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready', datetime('now'), datetime('now'))`,
+    ).bind(
+      assetId,
+      site.id,
+      r2Key,
+      publicUrl,
+      alt,
+      caption,
+      prepared.width,
+      prepared.height,
+      mimeType,
+      sizeBytes,
+    );
+    const auditStatement = env.DB.prepare(
+      `INSERT INTO change_log (
+         id, site_id, actor, action, target, before_json, after_json, created_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    ).bind(
+      crypto.randomUUID(),
+      site.id,
+      actor,
+      "upload_image_file",
+      `media/${assetId}`,
+      null,
+      JSON.stringify(serializedAsset),
+    );
+
+    await env.DB.batch([assetStatement, auditStatement]);
+
+    return {
+      site: site.slug,
+      source: {
+        fileId: prepared.fileId,
+        fileName: prepared.fileName,
+      },
+      asset: serializedAsset,
+      published: true,
+      nextAction: {
+        tools: ["attach_image_to_section", "replace_image"],
+        message: "The image is ready in the media catalog. Attach it to an image array or replace a contracted image field using asset.id.",
+      },
+    };
+  } catch (error) {
+    if (storedObject) {
+      try {
+        await env.MEDIA_BUCKET.delete(r2Key);
+      } catch (cleanupError) {
+        throw new Error(`Direct image upload failed and R2 cleanup also failed: ${cleanupError?.message || "unknown error"}`);
+      }
+    }
+    throw error;
+  }
 }
 
 export async function confirmImageUpload(env, input) {
@@ -1559,6 +1683,14 @@ function normalizeUploadSize(value) {
     throw new Error(`Image upload exceeds max size ${MAX_UPLOAD_SIZE_BYTES}.`);
   }
 
+  return sizeBytes;
+}
+
+function normalizeStoredObjectSize(value) {
+  const sizeBytes = Number(value);
+  if (!Number.isSafeInteger(sizeBytes) || sizeBytes < 1) {
+    throw new Error("R2 did not return a valid stored image size.");
+  }
   return sizeBytes;
 }
 

@@ -16,6 +16,7 @@ import {
   updateImageAlt,
   updateImageCaption,
   updateMediaAsset,
+  uploadImageFile,
 } from "../src/media.mjs";
 
 test("createImageUpload creates a pending upload session and draft media asset", async () => {
@@ -116,6 +117,102 @@ test("createImageUpload rejects unsupported formats, oversized files, and missin
       ),
     /Missing alt/,
   );
+});
+
+test("uploadImageFile streams a validated ChatGPT file into a ready catalog asset", async () => {
+  const db = createMediaDb();
+  const bucket = new FakeMediaBucket({});
+  const bytes = directPngHeader(640, 480);
+  const fetchCalls = [];
+
+  const result = await uploadImageFile(
+    { DB: db, MEDIA_BUCKET: bucket },
+    {
+      site: "ph",
+      file: {
+        download_url: "https://files.openai.example/download/signed",
+        file_id: "file_direct_png",
+        mime_type: "image/png",
+        file_name: "Nuovo Ritratto.PNG",
+      },
+      alt: "Ritratto caricato direttamente dalla chat",
+      caption: "Upload diretto",
+      actor: "tdd-suite",
+    },
+    {
+      fetchImpl: async (url, init) => {
+        fetchCalls.push({ url, init });
+        return new Response(bytes, {
+          headers: {
+            "content-type": "image/png",
+            "content-length": String(bytes.byteLength),
+          },
+        });
+      },
+    },
+  );
+
+  assert.equal(result.site, "ph");
+  assert.equal(result.source.fileId, "file_direct_png");
+  assert.equal(result.asset.status, "ready");
+  assert.equal(result.asset.mimeType, "image/png");
+  assert.equal(result.asset.width, 640);
+  assert.equal(result.asset.height, 480);
+  assert.equal(result.asset.sizeBytes, bytes.byteLength);
+  assert.match(result.asset.publicUrl, /^media\/assets\/asset_.*\/nuovo-ritratto\.png$/);
+  assert.deepEqual(result.nextAction.tools, ["attach_image_to_section", "replace_image"]);
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(bucket.puts.length, 1);
+  assert.deepEqual(bucket.puts[0].body, bytes);
+  assert.equal(bucket.puts[0].options.httpMetadata.contentType, "image/png");
+  assert.equal(db.mediaUploads.length, 0);
+
+  const asset = db.mediaAssets.find((item) => item.id === result.asset.id);
+  assert.equal(asset.status, "ready");
+  assert.equal(asset.width, 640);
+  assert.equal(asset.height, 480);
+  assert.equal(db.changeLog[0].action, "upload_image_file");
+  assert.equal(db.changeLog[0].target, `media/${result.asset.id}`);
+  assert.doesNotMatch(db.changeLog[0].after_json, /download_url|files\.openai/);
+});
+
+test("uploadImageFile removes the R2 object when the atomic D1 write fails", async () => {
+  const db = createMediaDb();
+  db.batch = async () => {
+    throw new Error("D1 unavailable");
+  };
+  const bucket = new FakeMediaBucket({});
+  const bytes = directPngHeader(320, 240);
+
+  await assert.rejects(
+    () => uploadImageFile(
+      { DB: db, MEDIA_BUCKET: bucket },
+      {
+        site: "ph",
+        file: {
+          download_url: "https://files.openai.example/download/cleanup",
+          file_id: "file_cleanup",
+          mime_type: "image/png",
+          file_name: "cleanup.png",
+        },
+        alt: "Immagine da ripulire",
+        actor: "tdd-suite",
+      },
+      {
+        fetchImpl: async () => new Response(bytes, {
+          headers: {
+            "content-type": "image/png",
+            "content-length": String(bytes.byteLength),
+          },
+        }),
+      },
+    ),
+    /D1 unavailable/,
+  );
+
+  assert.equal(bucket.puts.length, 1);
+  assert.deepEqual(bucket.deletedKeys, [bucket.puts[0].key]);
+  assert.equal(bucket.objects[bucket.puts[0].key], undefined);
 });
 
 test("confirmImageUpload promotes an uploaded R2 object to a ready media asset", async () => {
@@ -1229,6 +1326,15 @@ test("updateImageAlt rejects unsafe text", async () => {
   );
 });
 
+function directPngHeader(width, height) {
+  const bytes = new Uint8Array(24);
+  bytes.set([137, 80, 78, 71, 13, 10, 26, 10], 0);
+  bytes.set([0, 0, 0, 13, 73, 72, 68, 82], 8);
+  bytes.set([(width >>> 24) & 0xff, (width >>> 16) & 0xff, (width >>> 8) & 0xff, width & 0xff], 16);
+  bytes.set([(height >>> 24) & 0xff, (height >>> 16) & 0xff, (height >>> 8) & 0xff, height & 0xff], 20);
+  return bytes;
+}
+
 function createMediaDb() {
   return new FakeMediaD1Database({
     sites: [
@@ -1496,7 +1602,7 @@ class FakeMediaD1Database {
         height,
         mime_type: mimeType,
         size_bytes: sizeBytes,
-        status,
+        status: status ?? (query.includes("'ready'") ? "ready" : status),
         created_at: "2026-07-15 00:00:01",
         updated_at: "2026-07-15 00:00:01",
       });
@@ -1648,6 +1754,7 @@ class FakeMediaD1Database {
 class FakeMediaBucket {
   constructor(objects) {
     this.objects = objects;
+    this.puts = [];
     this.deletedKeys = [];
   }
 
@@ -1661,6 +1768,17 @@ class FakeMediaBucket {
       },
     });
   }
+  async put(key, body, options) {
+    const bytes = body instanceof Uint8Array ? body : new Uint8Array(await new Response(body).arrayBuffer());
+    this.puts.push({ key, body: bytes, options });
+    this.objects[key] = {
+      size: bytes.byteLength,
+      contentType: options?.httpMetadata?.contentType,
+      body: bytes,
+    };
+    return { key, size: bytes.byteLength };
+  }
+
   async delete(key) {
     if (this.deleteError) throw this.deleteError;
     this.deletedKeys.push(key);

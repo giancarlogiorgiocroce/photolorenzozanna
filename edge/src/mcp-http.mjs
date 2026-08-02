@@ -21,6 +21,7 @@ import {
   updateImageAlt,
   updateMediaAsset,
   updateImageCaption,
+  uploadImageFile,
 } from "./media.mjs";
 import {
   addFaqItem,
@@ -327,6 +328,97 @@ const TOOLS = [
         enabled: { type: "boolean", description: "Set false to hide this single contact channel." },
       },
       required: ["site", "page", "channel"],
+    },
+  },
+  {
+    name: "upload_image_file",
+    title: "Upload Image File",
+    description: "Import one ChatGPT file parameter into the managed R2 media catalog as a ready image. The tool validates the temporary HTTPS download, signature, actual dimensions, MIME type, and 12 MB size limit; use attach_image_to_section or replace_image afterwards.",
+    securitySchemes: WRITE_SECURITY_SCHEMES,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      $defs: {
+        OpenAIFile: {
+          type: "object",
+          properties: {
+            download_url: { type: "string", format: "uri" },
+            file_id: { type: "string" },
+            mime_type: {
+              type: "string",
+              enum: ["image/jpeg", "image/png", "image/webp", "image/avif"],
+            },
+            file_name: { type: "string" },
+          },
+          required: ["download_url", "file_id"],
+          additionalProperties: false,
+        },
+      },
+      properties: {
+        site: { type: "string", description: "Site slug, usually ph." },
+        file: { $ref: "#/$defs/OpenAIFile" },
+        alt: { type: "string", maxLength: 180, description: "Accessible alt text for the catalog asset." },
+        caption: { type: "string", maxLength: 120, description: "Optional caption." },
+      },
+      required: ["site", "file", "alt"],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        site: { type: "string" },
+        source: {
+          type: "object",
+          properties: {
+            fileId: { type: "string" },
+            fileName: { type: ["string", "null"] },
+          },
+          required: ["fileId", "fileName"],
+          additionalProperties: false,
+        },
+        asset: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            r2Key: { type: "string" },
+            publicUrl: { type: "string" },
+            title: { type: ["string", "null"] },
+            tags: { type: "array", items: { type: "string" } },
+            notes: { type: ["string", "null"] },
+            alt: { type: "string" },
+            caption: { type: ["string", "null"] },
+            width: { type: "integer", minimum: 1 },
+            height: { type: "integer", minimum: 1 },
+            mimeType: { type: "string" },
+            sizeBytes: { type: "integer", minimum: 1 },
+            status: { type: "string", const: "ready" },
+            createdAt: { type: ["string", "null"] },
+            updatedAt: { type: ["string", "null"] },
+          },
+          required: ["id", "r2Key", "publicUrl", "title", "tags", "notes", "alt", "caption", "width", "height", "mimeType", "sizeBytes", "status", "createdAt", "updatedAt"],
+          additionalProperties: false,
+        },
+        published: { type: "boolean", const: true },
+        nextAction: {
+          type: "object",
+          properties: {
+            tools: { type: "array", items: { type: "string" } },
+            message: { type: "string" },
+          },
+          required: ["tools", "message"],
+          additionalProperties: false,
+        },
+      },
+      required: ["site", "source", "asset", "published", "nextAction"],
+      additionalProperties: false,
+    },
+    _meta: {
+      "openai/fileParams": ["file"],
     },
   },
   {
@@ -979,6 +1071,26 @@ async function handleMcpMethod(method, params, env, auth) {
       copyOptionalArg(input, args, "enabled");
 
       const result = await updateContactChannel(env, input);
+      return toolResult(result);
+    }
+
+    if (name === "upload_image_file") {
+      if (!hasMcpPermission(auth, "content:write", args.site)) {
+        throw mcpError(-32003, "Permission denied for content:write.", {
+          permission: "content:write",
+          site: args.site,
+        });
+      }
+
+      const input = {
+        site: args.site,
+        file: args.file,
+        alt: args.alt,
+        actor: auth.actor,
+      };
+      copyOptionalArg(input, args, "caption");
+
+      const result = await uploadImageFile(env, input);
       return toolResult(result);
     }
 

@@ -11,6 +11,7 @@ Cloudflare Pages resta la sorgente degli asset statici; non e' la sorgente dell'
 - `src/mcp-http.mjs`: endpoint MCP remoto e superficie dei tool;
 - `src/page-contracts.mjs`: contratti dei campi modificabili;
 - `src/media.mjs`: upload, catalogo, usi e modifiche immagini;
+- `src/direct-image-upload.mjs`: download controllato, streaming e ispezione firma/dimensioni per il file parameter ChatGPT;
 - `migrations/0001`-`0011`: schema, seed, auth/OAuth, tabelle media e metadata editoriali;
 - `test/`: suite `node:test` del Worker e dei tool;
 - `.dev.vars.example`: esempio dei segreti locali;
@@ -73,7 +74,7 @@ Componenti:
 - MCP media live: `create_image_upload`, `confirm_image_upload`, `list_media_assets`, `update_media_asset`, `set_media_asset_archived`, `delete_media_asset`, `replace_image`, `attach_image_to_section`, `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`, `update_image_alt`, `set_image_focal_point`, `set_image_visibility`;
 - upload binario: `PUT /media/uploads/:uploadId` con upload token;
 - fallback browser: `GET /media/uploads/:uploadId/form`;
-- upload diretto ChatGPT: file parameter supportati dalla piattaforma, ma `upload_image_file` e `_meta["openai/fileParams"]` non sono ancora implementati nel Worker;
+- upload diretto ChatGPT nel branch locale: `upload_image_file` con `_meta["openai/fileParams"]`, HTTPS/redirect/timeout/size controllati, firma e dimensioni reali; il remoto di produzione resta a 31 tool fino al deploy;
 - serving pubblico: `GET/HEAD /media/assets/:assetId/:filename`.
 
 La route pubblica serve solo asset presenti in D1 con `status = ready`; R2 non e' esposto come bucket pubblico generico. Il dominio `ph.lorenzozanna.com` ha una route Worker dedicata per `media/assets/*`, altrimenti Pages risponderebbe con HTML invece dell'immagine.
@@ -368,8 +369,8 @@ Cloudflare Pages non supporta wildcard custom domains per Pages, quindi la wildc
 Il rendering dinamico e la pipeline R2 sono gia' in produzione. Le priorita media
 correnti sono:
 
-1. `upload_image_file` tramite `_meta["openai/fileParams"]`, con download temporaneo protetto e test ChatGPT reale;
-2. verifica firma/dimensioni reali e strip EXIF/GPS durante l'ingestione;
+1. deploy di `upload_image_file`, verifica `tools/list` a 32 tool e test ChatGPT reale;
+2. decodificabilita completa e strip EXIF/GPS durante l'ingestione;
 3. thumbnail/preview dedicate e varianti responsive;
 4. hardening e test del fallback browser per i client senza file parameter.
 

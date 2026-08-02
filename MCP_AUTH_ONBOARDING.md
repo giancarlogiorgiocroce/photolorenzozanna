@@ -1,6 +1,6 @@
 # MCP auth e onboarding Lorenzo
 
-Aggiornato: 2026-08-01
+Aggiornato: 2026-08-02
 
 ## Decisione fase 4
 
@@ -211,22 +211,24 @@ Il token deve vivere nel secret store del client, non nel testo della conversazi
 I token `editor` e gli access token OAuth con `content:write` possono usare i tool
 media senza ricevere accesso diretto a R2 o a path arbitrari:
 
-- upload: `create_image_upload`, `confirm_image_upload`;
+- upload fallback live: `create_image_upload`, `confirm_image_upload`;
+- upload diretto nel branch locale: `upload_image_file`, non ancora deployato;
 - catalogo: `list_media_assets`, `update_media_asset`;
 - collegamento: `attach_image_to_section`, `replace_image`;
 - ciclo gallery live: `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`;
 - metadata/layout: `update_image_alt`, `set_image_focal_point`;
-- visibilita reversibile: `set_image_visibility`.
+- visibilita reversibile: `set_image_visibility`;
 - lifecycle asset: `set_media_asset_archived`, `delete_media_asset`;
 
-Il remote MCP corrente non espone ancora file parameter, quindi deve mostrare
+Il remote MCP di produzione non espone ancora file parameter, quindi deve mostrare
 `upload.uploadPageUrl`. Lorenzo completa l'upload nel browser, poi il connector
 chiama `confirm_image_upload` e collega l'asset. Questo flusso e' stato verificato
 end-to-end e resta il fallback compatibile.
 
 ChatGPT supporta gia `_meta["openai/fileParams"]` e puo passare al tool un
-`download_url` temporaneo con `file_id`. Il prossimo incremento server e'
-`upload_image_file`; non richiede un nuovo canale di autenticazione.
+`download_url` temporaneo con `file_id`. Il branch locale implementa
+`upload_image_file` con lo stesso scope `content:write`; non richiede un nuovo
+canale di autenticazione e diventera disponibile dopo deploy.
 
 Nascondere una fotografia con `set_image_visibility` non elimina l'asset e non
 richiede un nuovo upload. I tool gallery rimuovono l'uso, riordinano l'array o
