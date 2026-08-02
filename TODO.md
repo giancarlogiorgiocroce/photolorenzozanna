@@ -16,7 +16,7 @@ Fonti confrontate: documentazione attiva e storica del progetto, task Codex prec
 
 Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine consigliato per il lavoro nuovo, senza duplicare le spunte:
 
-1. deployare e verificare con un allegato ChatGPT reale il nuovo `upload_image_file`, mantenendo il fallback browser;
+1. verificare con un allegato ChatGPT reale il nuovo `upload_image_file` live, mantenendo il fallback browser;
 2. chiudere decodificabilita completa, strip EXIF/GPS e hardening del file reale;
 3. completare l'asset manager con thumbnail, preview e varianti responsive;
 4. chiudere gli altri test MCP/client, performance, accessibilita e SEO strutturata.
@@ -26,10 +26,10 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Leggere tutti i file Markdown del progetto, inclusi audit, recap, roadmap, contratti e README.
 - [x] Leggere tutte le task Codex precedenti associate alla cartella `lorenzozanna`.
 - [x] Confrontare le spunte storiche con il codice effettivamente mantenuto.
-- [x] Confrontare le spunte storiche con la suite locale completa: `173/173` test verdi al 2026-08-01.
+- [x] Confrontare le spunte storiche con la suite locale completa: `185/185` test verdi al 2026-08-02.
 - [x] Verificare live le quattro route pubbliche principali: `/`, `/portfolio`, `/about`, `/contact` rispondono `200`.
 - [x] Verificare live `robots.txt`, `sitemap.xml` e redirect canonico di `/index.html`.
-- [x] Verificare live `tools/list`: 31 tool MCP esposti, incluso `delete_media_asset` oltre a metadata, lifecycle e tool gallery.
+- [x] Verificare live `tools/list`: 32 tool MCP esposti, incluso `upload_image_file` con file parameter oltre a metadata, lifecycle e tool gallery.
 - [x] Verificare live `set_media_asset_archived`: l'asset referenziato una volta viene rifiutato e resta `ready`; credenziale temporanea rimossa.
 - [x] Archiviare i registri TODO e le roadmap duplicate in `archive/docs/`, mantenendo solo questo file come checklist attiva.
 - [x] Mantenere gli snapshot in `.site-backups/` come archivio non operativo.
@@ -282,7 +282,7 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Deployare `set_media_asset_archived` nel Worker `9efc103f-465f-4994-b326-e427b475dcf5` e verificarlo live con il blocco di un asset referenziato.
 - [x] Implementare `delete_media_asset`: eliminazione fisica separata solo per asset `archived`, senza usi, nel namespace R2 del sito e con `confirm: true`; deploy `2a3aa4de-5fa8-41ad-b396-386f4b1e39c2`, smoke completo e cleanup senza residui.
 - [x] Verificare la specifica OpenAI Plugins corrente: ChatGPT puo passare file ai tool tramite `_meta["openai/fileParams"]` come `{ download_url, file_id, mime_type?, file_name? }`; verifica documentale del 2026-08-01.
-- [x] Esporre nel branch locale `upload_image_file` con file top-level conforme a `_meta["openai/fileParams"]` e schema completo `{ download_url, file_id, mime_type?, file_name? }`.
+- [x] Esporre `upload_image_file` con file top-level conforme a `_meta["openai/fileParams"]` e schema completo `{ download_url, file_id, mime_type?, file_name? }`.
 - [x] Scaricare il `download_url` temporaneo con HTTPS obbligatorio, blocco host locali/IP, timeout globale, massimo 3 redirect e limite 12 MB, trasferendo lo stream nel bucket R2.
 - [x] Verificare firma/magic bytes e struttura dimensionale per JPEG, PNG, WebP e AVIF, senza fidarsi di estensione, MIME dichiarato o `Content-Type`.
 - [ ] Verificare la decodificabilita completa dell'immagine oltre la validazione strutturale dell'header.
@@ -290,7 +290,7 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Riutilizzare catalogo D1, audit, ownership, stato `ready` e tool esistenti `attach_image_to_section`/`replace_image`, con cleanup R2 se la scrittura D1 atomica fallisce.
 - [x] Mantenere invariati `create_image_upload` + `uploadPageUrl` + `confirm_image_upload` come fallback per client MCP senza file parameter.
 - [x] Testare localmente descriptor, quattro formati, redirect, timeout, limiti, mismatch MIME/firma, streaming R2, cleanup D1 e chiamata MCP autenticata.
-- [ ] Deployare `upload_image_file`, verificare `tools/list` a 32 tool e fare uno smoke senza lasciare asset di prova.
+- [x] Deployare `upload_image_file` nel Worker `d82fbe3d-565b-4d92-bc71-7e16580ac4e7`, verificare `tools/list` a 32 tool e fare uno smoke read-only senza creare asset di prova.
 - [ ] Implementare strip EXIF/GPS prima della pubblicazione.
 - [ ] Decidere e implementare scansione antivirus/security se applicabile.
 - [ ] Testare rollback esplicito di `attach_image_to_section`.
@@ -440,9 +440,9 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Commit e push di `attach_image_to_section`.
 - [x] Valutare il branch dedicato e mantenere `main` per i deploy gia' eseguiti nel flusso storico.
 - [x] Documentare stato deploy e stato repository nei recap tecnici.
-- [x] Allineare `edge/README.md` alla superficie completa di 31 tool verificata live.
+- [x] Allineare `edge/README.md` alla superficie completa di 32 tool verificata live.
 - [x] Allineare `mcp/README.md` al sito live dinamico e distinguere MCP locale e remoto.
 - [x] Aggiornare esempi media, componenti e migrazioni `0009`-`0011` nel manuale template.
 - [x] Allineare contratti, onboarding e handoff al tool `set_image_visibility`.
-- [x] Allineare documentazione attiva al tool diretto implementato localmente, distinguendo branch da remoto di produzione ancora a 31 tool.
+- [x] Allineare la documentazione attiva al tool diretto live e alla superficie remota di 32 tool.
 - [x] Archiviare `NEXT_CHAT_RECAP.md`, `MCP_TDD_TODO.md`, `MCP_NEXT_PHASES_TODO.md` e `MCP_REMOTE_ROADMAP.md` in `archive/docs/`.

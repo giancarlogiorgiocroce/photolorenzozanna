@@ -23,7 +23,7 @@ Autenticazione supportata:
 - OAuth authorization-code + PKCE per ChatGPT e client compatibili;
 - `AI_API_TOKEN` solo per lettura/smoke sul canale MCP.
 
-La superficie remota verificata espone 31 tool, inclusi metadata, lifecycle asset,
+La superficie remota verificata espone 32 tool, inclusi upload diretto, metadata, lifecycle asset,
 rimozione, riordino e caption per le gallery. L'elenco corrente e' documentato in `../edge/README.md`;
 i contratti dei campi sono in
 `../MCP_SECTION_CONTRACTS.md`.
@@ -33,6 +33,7 @@ i contratti dei campi sono in
 La pipeline R2 espone:
 
 - `create_image_upload`;
+- `upload_image_file`;
 - `confirm_image_upload`;
 - `list_media_assets`;
 - `update_media_asset`;
@@ -47,13 +48,13 @@ La pipeline R2 espone:
 - `set_image_focal_point`;
 - `set_image_visibility`.
 
-Il remote MCP di produzione non dichiara ancora file parameter. Fino al prossimo
-deploy il client deve mostrare `upload.uploadPageUrl`; dopo l'upload browser chiama
-`confirm_image_upload` e poi `attach_image_to_section` o `replace_image`.
+Il remote MCP di produzione dichiara `upload_image_file` con
+`_meta["openai/fileParams"]`: ChatGPT associa l'allegato al campo `file`, il
+Worker importa il `download_url` temporaneo in streaming, valida firma e
+dimensioni reali e crea un asset `ready`. Il client collega poi l'asset con
+`attach_image_to_section` o `replace_image`.
 
-Il branch `codex/realign-media` implementa `upload_image_file` con
-`_meta["openai/fileParams"]`: importa il `download_url` temporaneo in streaming,
-valida firma e dimensioni reali e crea un asset `ready`. Il browser resta il
+`create_image_upload`, `uploadPageUrl` e `confirm_image_upload` restano il
 fallback per i client MCP che non supportano file input.
 
 Manuale operativo: `../MCP_MEDIA_PIPELINE.md`.

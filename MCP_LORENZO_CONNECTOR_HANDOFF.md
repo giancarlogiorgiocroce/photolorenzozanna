@@ -4,7 +4,7 @@ Aggiornato: 2026-08-02
 
 ## Stato
 
-La parte server e pronta per una prova reale con un client AI che supporta remote MCP con bearer token.
+La parte server, incluso l'upload diretto, e pronta per una prova reale con un client AI che supporta remote MCP.
 
 Endpoint MCP:
 
@@ -75,6 +75,7 @@ Non serve spiegare a Lorenzo guardrail tecnici, HTML o sicurezza dei campi: il s
 Il connector live espone i tool media:
 
 - `create_image_upload`;
+- `upload_image_file`;
 - `confirm_image_upload`;
 - `list_media_assets`;
 - `update_media_asset`;
@@ -88,35 +89,37 @@ Il connector live espone i tool media:
 - `update_image_alt`;
 - `set_image_focal_point`;
 - `set_image_visibility`.
-Il branch locale aggiunge un trentaduesimo tool, `upload_image_file`, con file
-parameter ChatGPT. Non va ancora presentato come disponibile al cliente finche
-non viene deployato e verificato sul connector reale.
+Il trentaduesimo tool, `upload_image_file`, e live con file parameter ChatGPT.
+Descriptor e superficie remota sono verificati; resta da provare l'invio di un
+allegato dal connector reale del cliente.
 
 
 Rimozione, riordino e caption sono live e verificati con rollback completo e
 riallineamento di `media_usages`.
 
-Flusso di produzione corrente quando Lorenzo chiede di aggiungere una nuova immagine:
+Flusso diretto quando Lorenzo allega una nuova immagine:
 
-1. Raccogliere filename, MIME, peso, dimensioni e alt text.
-2. Chiamare `create_image_upload`.
-3. Mostrare a Lorenzo `upload.uploadPageUrl`, perche il tool diretto con file parameter non e' ancora deployato.
-4. Lorenzo apre il link e carica il file dal browser.
-5. Quando Lorenzo conferma di aver caricato, chiamare `confirm_image_upload` con `upload.id`.
-6. Collegare l'asset pronto con `attach_image_to_section` oppure `replace_image`.
-7. Verificare la pagina con `get_page` o chiedere a Lorenzo di ricaricare il sito.
-8. Se Lorenzo vuole solo nascondere una fotografia senza perderla, usare
+1. Raccogliere alt text e caption opzionale; il file arriva nel campo `file`.
+2. Chiamare `upload_image_file` con `site: ph`, `file` e alt text.
+3. Usare l'`asset.id` restituito, gia `ready`, con
+   `attach_image_to_section` oppure `replace_image`.
+4. Verificare la pagina con `get_page` o chiedere a Lorenzo di ricaricare il sito.
+5. Se Lorenzo vuole solo nascondere una fotografia senza perderla, usare
    `set_image_visibility` con `enabled: false`; per mostrarla di nuovo usare
    `enabled: true`.
-9. Se Lorenzo vuole togliere davvero la foto dalla gallery ma conservarla nel
+6. Se Lorenzo vuole togliere davvero la foto dalla gallery ma conservarla nel
    catalogo, usare `remove_image_from_section` sul path
    concreto e offrire `rollback_change` se cambia idea.
-10. Per riordinare un gruppo usare `reorder_images_in_section` con l'array `order`
+7. Per riordinare un gruppo usare `reorder_images_in_section` con l'array `order`
     che contiene tutti gli indici correnti una sola volta.
-11. Per cambiare o togliere la didascalia usare `update_image_caption`; una stringa
+8. Per cambiare o togliere la didascalia usare `update_image_caption`; una stringa
     vuota rimuove la caption solo da quell'uso.
 
-Frase utile da usare nel client se il modello si blocca sul PUT binario:
+Fallback per client senza file parameter: chiamare `create_image_upload`, mostrare
+`upload.uploadPageUrl`, attendere il caricamento browser, chiamare
+`confirm_image_upload` e infine collegare l'asset.
+
+Frase utile da usare nel client quando serve il fallback browser:
 
 ```text
 Chiama create_image_upload anche se non puoi caricare direttamente il file.
@@ -141,13 +144,12 @@ Lo smoke remoto sul public URL ha risposto `200 image/png`, quindi le immagini R
 Il flusso ChatGPT con `uploadPageUrl` e' stato verificato end-to-end fino a R2 e
 all'attach nel portfolio e resta operativo come fallback.
 
-La specifica OpenAI Plugins corrente supporta gia file parameter tramite
-`_meta["openai/fileParams"]`: ChatGPT passa al tool `download_url`, `file_id` e
-gli eventuali `mime_type`/`file_name`. Il branch locale espone questo input con
-`upload_image_file`, importa il riferimento temporaneo in streaming, verifica
-firma e dimensioni reali e restituisce un asset `ready`. Il collegamento continua
-a usare `attach_image_to_section` o `replace_image`; produzione resta sul fallback
-browser fino al deploy.
+La produzione espone file parameter tramite `_meta["openai/fileParams"]`:
+ChatGPT passa a `upload_image_file` il `download_url`, `file_id` e gli eventuali
+`mime_type`/`file_name`. Il Worker importa il riferimento temporaneo in streaming,
+verifica firma e dimensioni reali e restituisce un asset `ready`. Il collegamento
+continua a usare `attach_image_to_section` o `replace_image`; il fallback browser
+resta disponibile per i client senza file input.
 
 ## Messaggio semplice per Lorenzo
 

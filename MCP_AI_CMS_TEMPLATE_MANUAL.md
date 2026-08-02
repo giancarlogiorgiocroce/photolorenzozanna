@@ -5,8 +5,8 @@ Aggiornato: 2026-08-02
 > Questo e' un manuale/template riusabile, non un registro operativo. Lo stato
 > corrente e l'unica checklist del progetto sono in `TODO.md`. La pipeline R2,
 > il fallback browser e i tool media descritti qui sono implementati. ChatGPT
-> supporta file parameter MCP e il branch locale implementa il tool diretto;
-> deploy e prova ChatGPT reale restano indicati tra i prossimi passi.
+> supporta file parameter MCP e la produzione espone il tool diretto;
+> la prova con un allegato ChatGPT reale resta indicata tra i prossimi passi.
 
 Questo documento descrive come abbiamo costruito il backend MCP per `ph.lorenzozanna.com` e come riapplicare la stessa architettura a un nuovo sito.
 
@@ -1128,7 +1128,7 @@ e resta non editabile.
 
 Funzionalita ancora aperte:
 
-- deploy e prova reale dell'upload diretto, mantenendo il fallback provider-neutral;
+- prova reale dell'upload diretto dal connector, mantenendo il fallback provider-neutral;
 - decodificabilita completa oltre la firma e le dimensioni reali gia verificate;
 - thumbnail e varianti responsive;
 - strip EXIF/GPS.
@@ -1367,7 +1367,7 @@ Non permettere `image.src` libero via AI. L'AI deve scegliere un `assetId` da `l
 
 ## Tool MCP disponibili
 
-La superficie MCP verificata live espone 31 tool. Le categorie sono:
+La superficie MCP verificata live espone 32 tool. Le categorie sono:
 
 - lettura: pagina, preset, change log e catalogo media;
 - contenuti: testo, rich text, CTA, contatti e sottosezioni;
@@ -1619,7 +1619,7 @@ list_media_assets
 update_media_asset
 set_media_asset_archived
 delete_media_asset
-upload_image_file (branch locale, non ancora deployato)
+upload_image_file
 create_image_upload
 confirm_image_upload
 ```
@@ -1637,24 +1637,27 @@ set_image_focal_point
 set_image_visibility
 ```
 
-Flusso attuale in produzione:
+Flusso diretto attuale in produzione:
 
-1. chiamare `create_image_upload` con filename, MIME, peso, dimensioni e alt;
-2. inviare i byte con `PUT /media/uploads/:uploadId` oppure mostrare
-   `upload.uploadPageUrl`;
-3. chiamare `confirm_image_upload`;
-4. collegare l'asset `ready` con `attach_image_to_section` o `replace_image`;
-5. verificare con `get_page` e con il rendering pubblico.
+1. associare l'allegato al campo `file` e chiamare `upload_image_file` con alt;
+2. ricevere l'asset gia `ready`;
+3. collegarlo con `attach_image_to_section` o `replace_image`;
+4. verificare con `get_page` e con il rendering pubblico.
+
+Fallback per client senza file parameter:
+
+1. chiamare `create_image_upload` e mostrare `upload.uploadPageUrl`;
+2. caricare i byte dal browser e chiamare `confirm_image_upload`;
+3. collegare l'asset `ready` con attach/replace.
 
 La specifica OpenAI Plugins corrente consente inoltre di dichiarare un campo
 file top-level in `_meta["openai/fileParams"]`. ChatGPT passa
 `download_url`, `file_id` e gli eventuali `mime_type`/`file_name`, non il base64
-nel JSON-RPC. Il branch locale implementa `upload_image_file`: download HTTPS
+nel JSON-RPC. La produzione implementa `upload_image_file`: download HTTPS
 controllato, massimo 3 redirect, timeout, limite 12 MB, firma e dimensioni reali,
 streaming R2 e scrittura atomica catalogo/audit con cleanup. Restituisce un asset
 `ready`; attach e replace restano operazioni separate. Il fallback browser resta
-necessario finche il tool non e' deployato e continuera a servire i client senza
-file parameter.
+disponibile per i client senza file parameter.
 Riferimento: https://developers.openai.com/plugins/reference#define-file-inputs
 
 Esempio visibilita reversibile:
@@ -2038,7 +2041,7 @@ Tool implementati:
 list_media_assets
 update_media_asset
 set_media_asset_archived
-upload_image_file (branch locale, non ancora deployato)
+upload_image_file
 delete_media_asset
 create_image_upload
 confirm_image_upload
@@ -2058,10 +2061,10 @@ scade dopo 15 minuti ed e' salvato nel database solo come hash. Questo flusso e'
 stato verificato end-to-end fino a R2 e all'attach nel portfolio.
 
 ChatGPT supporta ora file parameter MCP tramite `_meta["openai/fileParams"]` e
-passa un URL temporaneo con `file_id`. Il branch locale implementa
+passa un URL temporaneo con `file_id`. La produzione implementa
 `upload_image_file`, valida download, firma e dimensioni e trasferisce lo stream
-in R2; resta da deployarlo e provarlo con ChatGPT. Il fallback browser non va
-rimosso perche mantiene la compatibilita provider-neutral.
+in R2; resta da provarlo con un allegato ChatGPT reale. Il fallback browser non
+va rimosso perche mantiene la compatibilita provider-neutral.
 
 Regole:
 
@@ -2102,7 +2105,7 @@ Shape gallery corrente:
 
 Evoluzioni ancora aperte:
 
-- deploy e test connector reale dell'upload diretto con file parameter ChatGPT;
+- test connector reale dell'upload diretto con file parameter ChatGPT;
 - verifica di decodificabilita completa oltre magic bytes e dimensioni reali;
 - strip EXIF/GPS;
 - thumbnail e varianti responsive AVIF/WebP/JPG;

@@ -2,8 +2,8 @@
 
 Data: 2026-08-02
 Branch operativo: `codex/realign-media`
-Worker corrente deployato: `2a3aa4de-5fa8-41ad-b396-386f4b1e39c2`
-Commit codice deployato: `4b3a351`
+Worker corrente deployato: `d82fbe3d-565b-4d92-bc71-7e16580ac4e7`
+Commit codice deployato: `ec3e3aa`
 
 Questo documento descrive la pipeline immagini/media del CMS MCP Cloudflare per `ph.lorenzozanna.com`. La checklist unica delle attivita completate e aperte resta `TODO.md`.
 
@@ -28,7 +28,7 @@ Cosa funziona oggi:
 - rendering delle immagini da metadata D1;
 - servizio pubblico degli asset da R2 tramite `/media/assets/:assetId/:filename`;
 - rollback delle sostituzioni immagine tramite `rollback_change`.
-Sul branch locale, non ancora deployato:
+Upload diretto live dal deploy `d82fbe3d-565b-4d92-bc71-7e16580ac4e7`:
 
 - `upload_image_file` espone il file parameter ChatGPT e crea direttamente un asset `ready`;
 - il download temporaneo usa streaming verso R2, timeout, redirect limitati, blocco host locali/IP e limite 12 MB;
@@ -37,13 +37,12 @@ Sul branch locale, non ancora deployato:
 
 Cosa non e' ancora completo:
 
-- il Worker di produzione espone ancora 31 tool e non include `upload_image_file` finche il branch non viene deployato;
 - non esiste una UI asset manager tradizionale;
 - non ci sono ancora autore e data di scatto editoriali sugli asset;
 - non facciamo ancora strip EXIF/GPS lato server;
 - non facciamo ancora trasformazioni responsive o thumbnail generate;
 - non facciamo scansione malware dedicata;
-- la validazione strutturale locale non equivale ancora a una decodifica completa dell'immagine;
+- la validazione strutturale in produzione non equivale ancora a una decodifica completa dell'immagine;
 - il fallback browser continua a usare `width` e `height` dichiarati; il percorso diretto estrae invece le dimensioni reali.
 
 ## Capacita file corrente di ChatGPT
@@ -61,8 +60,8 @@ file_name: nome opzionale
 
 ChatGPT non inserisce il binario o il base64 nel JSON-RPC: consegna un riferimento
 temporaneo autorizzato. Il Worker puo scaricarlo con `fetch()` e passare il
-`ReadableStream` a `R2Bucket.put`. Il branch locale implementa questa capacita in
-`upload_image_file`; resta da deployarla e verificarla con un allegato ChatGPT reale.
+`ReadableStream` a `R2Bucket.put`. Il Worker live implementa questa capacita in
+`upload_image_file`; resta da verificarla con un allegato ChatGPT reale.
 Riferimenti: [OpenAI file inputs](https://developers.openai.com/plugins/reference#define-file-inputs) e [Cloudflare R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/).
 
 
@@ -141,7 +140,7 @@ Flusso tecnico standard:
 
 ## Flusso ChatGPT con pagina browser
 
-Questo resta il flusso del Worker di produzione finche il branch con il file parameter non viene deployato, ed e' comunque il fallback permanente per i client che non lo supportano.
+Questo resta il fallback permanente per i client che non supportano file parameter o quando l'upload diretto non e' disponibile.
 
 1. ChatGPT deve chiamare comunque `create_image_upload`.
 2. ChatGPT deve mostrare all'utente `upload.uploadPageUrl`.
@@ -162,9 +161,9 @@ Dopo che carico l'immagine dal browser, chiama confirm_image_upload e poi attach
 ```
 
 
-## Flusso implementato nel branch: allegato ChatGPT diretto
+## Flusso live: allegato ChatGPT diretto
 
-Il branch introduce `upload_image_file`, separato dai tool di
+Il Worker espone `upload_image_file`, separato dai tool di
 collegamento per permettere al cliente sia di caricare un'immagine nel catalogo
 senza usarla subito, sia di collegarla in un secondo momento.
 
@@ -194,7 +193,7 @@ Tool di lettura:
 
 Tool di upload:
 
-- `upload_image_file`: nel branch locale importa il file parameter in streaming e restituisce direttamente un asset `ready`;
+- `upload_image_file`: importa il file parameter in streaming e restituisce direttamente un asset `ready`;
 - `create_image_upload`: crea asset draft e sessione pending per il fallback browser;
 - `confirm_image_upload`: promuove l'asset del fallback a ready dopo verifica R2.
 
@@ -334,6 +333,14 @@ Cancellazione fisica sicura:
 - smoke completo: eliminati oggetto R2, asset D1 e sessione `media_uploads` in cascade; audit verificato;
 - credenziale, audit e risorse temporanee dello smoke rimossi senza residui.
 
+Upload diretto ChatGPT:
+
+- commit codice: `ec3e3aa Implement direct MCP image uploads`;
+- deploy: `d82fbe3d-565b-4d92-bc71-7e16580ac4e7`;
+- suite pre-deploy: `185/185`;
+- smoke `tools/list`: 32 tool live, `upload_image_file` con file parameter `file`, output `ready` e scope `content:write`;
+- smoke read-only: health e MCP `200`, nessun asset di prova creato.
+
 Uso consigliato per il plugin:
 
 ```json
@@ -430,7 +437,7 @@ Smoke tool list:
 
 ## Prossimi passi consigliati
 
-1. Deployare `upload_image_file`, verificare `tools/list` a 32 tool e testarlo end-to-end con un allegato ChatGPT reale.
+1. Testare end-to-end `upload_image_file` con un allegato ChatGPT reale e collegare l'asset con attach/replace.
 2. Chiudere decodificabilita completa e strip EXIF/GPS nel percorso di ingestione.
 3. Aggiungere thumbnail/preview e varianti responsive.
 4. Conservare e ritestare il fallback browser per i client MCP senza file parameter.

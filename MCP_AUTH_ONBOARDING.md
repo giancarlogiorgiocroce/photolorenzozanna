@@ -212,7 +212,7 @@ I token `editor` e gli access token OAuth con `content:write` possono usare i to
 media senza ricevere accesso diretto a R2 o a path arbitrari:
 
 - upload fallback live: `create_image_upload`, `confirm_image_upload`;
-- upload diretto nel branch locale: `upload_image_file`, non ancora deployato;
+- upload diretto live: `upload_image_file`;
 - catalogo: `list_media_assets`, `update_media_asset`;
 - collegamento: `attach_image_to_section`, `replace_image`;
 - ciclo gallery live: `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`;
@@ -220,15 +220,16 @@ media senza ricevere accesso diretto a R2 o a path arbitrari:
 - visibilita reversibile: `set_image_visibility`;
 - lifecycle asset: `set_media_asset_archived`, `delete_media_asset`;
 
-Il remote MCP di produzione non espone ancora file parameter, quindi deve mostrare
-`upload.uploadPageUrl`. Lorenzo completa l'upload nel browser, poi il connector
-chiama `confirm_image_upload` e collega l'asset. Questo flusso e' stato verificato
-end-to-end e resta il fallback compatibile.
+Il remote MCP di produzione espone `_meta["openai/fileParams"]` su
+`upload_image_file`. ChatGPT puo passare al tool un `download_url` temporaneo con
+`file_id`; il Worker crea un asset `ready` e il connector lo collega con
+`attach_image_to_section` o `replace_image`. Il tool usa lo stesso scope
+`content:write` e non richiede un nuovo canale di autenticazione.
 
-ChatGPT supporta gia `_meta["openai/fileParams"]` e puo passare al tool un
-`download_url` temporaneo con `file_id`. Il branch locale implementa
-`upload_image_file` con lo stesso scope `content:write`; non richiede un nuovo
-canale di autenticazione e diventera disponibile dopo deploy.
+Se il client non supporta file parameter, mostrare `upload.uploadPageUrl`.
+Lorenzo completa l'upload nel browser, poi il connector chiama
+`confirm_image_upload` e collega l'asset. Questo flusso e' stato verificato
+end-to-end e resta il fallback compatibile.
 
 Nascondere una fotografia con `set_image_visibility` non elimina l'asset e non
 richiede un nuovo upload. I tool gallery rimuovono l'uso, riordinano l'array o
