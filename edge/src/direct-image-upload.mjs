@@ -58,6 +58,19 @@ export async function prepareDirectImageUpload(fileValue, options = {}) {
   }
 }
 
+export async function prepareImageResponseUpload(response, options = {}) {
+  const expectedMimeType = options.expectedMimeType == null || options.expectedMimeType === ""
+    ? null
+    : normalizeAllowedMimeType(options.expectedMimeType);
+
+  return inspectImageResponse(response, {
+    expectedMimeType,
+    maxSizeBytes: normalizeMaxSize(options.maxSizeBytes ?? MAX_DIRECT_IMAGE_SIZE_BYTES),
+    onStreamDone: options.onStreamDone,
+    signal: options.signal,
+  });
+}
+
 function normalizeOpenAiFile(value) {
   if (!isObjectRecord(value)) {
     throw new Error("Missing direct image file parameter.");

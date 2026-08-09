@@ -424,25 +424,16 @@ const TOOLS = [
   {
     name: "create_image_upload",
     title: "Create Image Upload",
-    description: "Create a short-lived upload session and draft media asset for a new image. If the client cannot send image bytes directly, still call this tool and show upload.uploadPageUrl to the user so they can upload the file in a browser; after they finish, call confirm_image_upload.",
+    description: "Create a short-lived browser upload session. The user selects the file on upload.uploadPageUrl; the Worker derives MIME type, byte size, width, and height from the uploaded bytes instead of accepting model estimates. After upload, call confirm_image_upload.",
     securitySchemes: WRITE_SECURITY_SCHEMES,
     inputSchema: {
       type: "object",
       properties: {
         site: { type: "string", description: "Site slug, usually ph." },
-        filename: { type: "string", description: "Original image filename." },
-        mimeType: {
-          type: "string",
-          enum: ["image/jpeg", "image/png", "image/webp", "image/avif"],
-          description: "Allowed image MIME type.",
-        },
-        sizeBytes: { type: "integer", description: "Image file size in bytes." },
-        width: { type: "integer", description: "Image pixel width." },
-        height: { type: "integer", description: "Image pixel height." },
         alt: { type: "string", description: "Accessible alt text. Required for non-decorative images." },
         caption: { type: "string", description: "Optional caption." },
       },
-      required: ["site", "filename", "mimeType", "sizeBytes", "width", "height", "alt"],
+      required: ["site", "alt"],
     },
   },
   {
@@ -1104,11 +1095,6 @@ async function handleMcpMethod(method, params, env, auth) {
 
       const result = await createImageUpload(env, {
         site: args.site,
-        filename: args.filename,
-        mimeType: args.mimeType,
-        sizeBytes: args.sizeBytes,
-        width: args.width,
-        height: args.height,
         alt: args.alt,
         caption: args.caption,
         actor: auth.actor,

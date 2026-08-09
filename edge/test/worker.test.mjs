@@ -617,7 +617,8 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.equal(uploadImageFile.annotations.openWorldHint, true);
   assert.equal(uploadImageFile.outputSchema.properties.asset.properties.status.const, "ready");
   assert.match(createImageUpload.description, /upload\.uploadPageUrl/);
-  assert.equal(createImageUpload.inputSchema.properties.mimeType.enum.includes("image/jpeg"), true);
+  assert.deepEqual(createImageUpload.inputSchema.required, ["site", "alt"]);
+  assert.equal(createImageUpload.inputSchema.properties.sizeBytes, undefined);
   assert.equal(listMediaAssets.inputSchema.properties.query.maxLength, 120);
   assert.equal(updateMediaAsset.inputSchema.properties.title.maxLength, 120);
   assert.equal(updateMediaAsset.inputSchema.properties.tags.maxItems, 20);
@@ -1250,8 +1251,7 @@ test("POST /mcp tools/call create_image_upload creates a pending media upload", 
   assert.equal(db.mediaAssets.find((asset) => asset.id === payload.result.structuredContent.asset.id).status, "draft");
   assert.equal(db.changeLog[0].action, "create_image_upload");
 });
-
-test("POST /mcp tools/call confirm_image_upload promotes an uploaded object to ready media", async () => {
+test("POST /mcp tools/call confirm_image_upload promotes bytes measured by the browser upload", async () => {
   const db = await createEditorDb();
   const createResponse = await fetchWorker("/mcp", {
     db,
@@ -1266,27 +1266,40 @@ test("POST /mcp tools/call confirm_image_upload promotes an uploaded object to r
         name: "create_image_upload",
         arguments: {
           site: "ph",
-          filename: "ritratto.jpg",
-          mimeType: "image/jpeg",
-          sizeBytes: 456789,
-          width: 1800,
-          height: 1200,
           alt: "Ritratto caricato via MCP",
         },
       },
     },
   });
   const created = (await createResponse.json()).result.structuredContent;
+  const bytes = directPngHeader(1800, 1200);
+  const bucket = new FakeMediaBucket({});
+
+  const uploadResponse = await fetchWorker(created.upload.uploadUrl, {
+    db,
+    mediaBucket: bucket,
+    host: "api.lorenzozanna.com",
+    method: "PUT",
+    bearerToken: created.upload.uploadToken,
+    headers: {
+      "content-type": "image/png",
+      "content-length": String(bytes.byteLength),
+      "x-file-name": encodeURIComponent("Ritratto reale.PNG"),
+    },
+    rawBody: bytes,
+  });
+  const uploaded = await uploadResponse.json();
+  assert.equal(uploadResponse.status, 200);
+  assert.equal(uploaded.file.sizeBytes, bytes.byteLength);
+  assert.equal(uploaded.file.width, 1800);
+  assert.equal(uploaded.file.height, 1200);
+  assert.equal(db.mediaUploads[0].size_bytes, bytes.byteLength);
+  assert.equal(db.mediaAssets.find((asset) => asset.id === created.asset.id).width, 1800);
   db.changeLog = [];
 
   const response = await fetchWorker("/mcp", {
     db,
-    mediaBucket: new FakeMediaBucket({
-      [created.upload.r2Key]: {
-        size: 456789,
-        contentType: "image/jpeg",
-      },
-    }),
+    mediaBucket: bucket,
     host: "mcp.lorenzozanna.com",
     method: "POST",
     bearerToken: USER_TOKEN,
@@ -1308,11 +1321,12 @@ test("POST /mcp tools/call confirm_image_upload promotes an uploaded object to r
   assert.equal(response.status, 200);
   assert.equal(payload.result.structuredContent.upload.status, "uploaded");
   assert.equal(payload.result.structuredContent.asset.status, "ready");
+  assert.equal(payload.result.structuredContent.asset.sizeBytes, bytes.byteLength);
+  assert.equal(payload.result.structuredContent.asset.width, 1800);
   assert.equal(db.mediaUploads[0].status, "uploaded");
   assert.equal(db.mediaAssets.find((asset) => asset.id === created.asset.id).status, "ready");
   assert.equal(db.changeLog[0].action, "confirm_image_upload");
 });
-
 test("GET /media/uploads/:uploadId/form renders a browser upload helper without exposing the token", async () => {
   const db = await createEditorDb();
   const createResponse = await fetchWorker("/mcp", {
@@ -1354,8 +1368,7 @@ test("GET /media/uploads/:uploadId/form renders a browser upload helper without 
   assert.match(html, /type="file"/);
   assert.doesNotMatch(html, /mu_[A-Za-z0-9]/);
 });
-
-test("PUT /media/uploads/:uploadId stores an image object in R2 using the upload token", async () => {
+test("PUT /media/uploads/:uploadId derives image metadata from the selected file bytes", async () => {
   const db = await createEditorDb();
   const createResponse = await fetchWorker("/mcp", {
     db,
@@ -1370,11 +1383,6 @@ test("PUT /media/uploads/:uploadId stores an image object in R2 using the upload
         name: "create_image_upload",
         arguments: {
           site: "ph",
-          filename: "ritratto.jpg",
-          mimeType: "image/jpeg",
-          sizeBytes: 5,
-          width: 1800,
-          height: 1200,
           alt: "Ritratto caricato via endpoint",
         },
       },
@@ -1382,6 +1390,7 @@ test("PUT /media/uploads/:uploadId stores an image object in R2 using the upload
   });
   const created = (await createResponse.json()).result.structuredContent;
   const bucket = new FakeMediaBucket({});
+  const bytes = directPngHeader(1024, 768);
 
   const response = await fetchWorker(created.upload.uploadUrl, {
     db,
@@ -1390,23 +1399,28 @@ test("PUT /media/uploads/:uploadId stores an image object in R2 using the upload
     method: "PUT",
     bearerToken: created.upload.uploadToken,
     headers: {
-      "content-type": "image/jpeg",
-      "content-length": "5",
+      "content-type": "image/png",
+      "content-length": String(bytes.byteLength),
+      "x-file-name": encodeURIComponent("Ritratto selezionato.PNG"),
     },
-    rawBody: new Uint8Array([1, 2, 3, 4, 5]),
+    rawBody: bytes,
   });
   const payload = await response.json();
 
   assert.equal(response.status, 200);
   assert.equal(payload.uploadId, created.upload.id);
   assert.equal(payload.status, "stored");
-  assert.equal(payload.r2Key, created.upload.r2Key);
+  assert.equal(payload.file.name, "ritratto-selezionato.png");
+  assert.equal(payload.file.sizeBytes, bytes.byteLength);
+  assert.equal(payload.file.width, 1024);
+  assert.equal(payload.file.height, 768);
   assert.equal(bucket.puts.length, 1);
-  assert.equal(bucket.puts[0].key, created.upload.r2Key);
-  assert.equal(bucket.puts[0].body.byteLength, 5);
-  assert.equal(bucket.puts[0].options.httpMetadata.contentType, "image/jpeg");
+  assert.equal(bucket.puts[0].key, payload.r2Key);
+  assert.deepEqual(bucket.puts[0].body, bytes);
+  assert.equal(bucket.puts[0].options.httpMetadata.contentType, "image/png");
+  assert.equal(db.mediaUploads[0].size_bytes, bytes.byteLength);
+  assert.equal(db.mediaAssets.find((asset) => asset.id === created.asset.id).width, 1024);
 });
-
 test("GET /media/assets/:assetId/:filename serves a ready R2 media asset", async () => {
   const db = createSeededDb({
     mediaAssets: [
@@ -1475,8 +1489,7 @@ test("GET /media/assets/:assetId/:filename does not serve draft or unknown media
   assert.equal(response.status, 404);
   assert.equal(payload.error, "media_asset_not_found");
 });
-
-test("PUT /media/uploads/:uploadId rejects invalid tokens and invalid image payloads", async () => {
+test("PUT /media/uploads/:uploadId rejects invalid tokens, signatures, and byte counts", async () => {
   const db = await createEditorDb();
   const createResponse = await fetchWorker("/mcp", {
     db,
@@ -1491,17 +1504,13 @@ test("PUT /media/uploads/:uploadId rejects invalid tokens and invalid image payl
         name: "create_image_upload",
         arguments: {
           site: "ph",
-          filename: "ritratto.jpg",
-          mimeType: "image/jpeg",
-          sizeBytes: 5,
-          width: 1800,
-          height: 1200,
           alt: "Ritratto caricato via endpoint",
         },
       },
     },
   });
   const created = (await createResponse.json()).result.structuredContent;
+  const bytes = directPngHeader(640, 480);
 
   const badToken = await fetchWorker(created.upload.uploadUrl, {
     db,
@@ -1510,17 +1519,15 @@ test("PUT /media/uploads/:uploadId rejects invalid tokens and invalid image payl
     method: "PUT",
     bearerToken: "mu_wrong",
     headers: {
-      "content-type": "image/jpeg",
-      "content-length": "5",
+      "content-type": "image/png",
+      "content-length": String(bytes.byteLength),
     },
-    rawBody: new Uint8Array([1, 2, 3, 4, 5]),
+    rawBody: bytes,
   });
-  const badTokenPayload = await badToken.json();
-
   assert.equal(badToken.status, 401);
-  assert.equal(badTokenPayload.error, "invalid_upload_token");
+  assert.equal((await badToken.json()).error, "invalid_upload_token");
 
-  const badType = await fetchWorker(created.upload.uploadUrl, {
+  const badSignature = await fetchWorker(created.upload.uploadUrl, {
     db,
     mediaBucket: new FakeMediaBucket({}),
     host: "api.lorenzozanna.com",
@@ -1532,29 +1539,26 @@ test("PUT /media/uploads/:uploadId rejects invalid tokens and invalid image payl
     },
     rawBody: new Uint8Array([1, 2, 3, 4, 5]),
   });
-  const badTypePayload = await badType.json();
+  assert.equal(badSignature.status, 415);
+  assert.equal((await badSignature.json()).error, "invalid_image");
 
-  assert.equal(badType.status, 415);
-  assert.equal(badTypePayload.error, "invalid_content_type");
-
+  const bucket = new FakeMediaBucket({});
   const badSize = await fetchWorker(created.upload.uploadUrl, {
     db,
-    mediaBucket: new FakeMediaBucket({}),
+    mediaBucket: bucket,
     host: "api.lorenzozanna.com",
     method: "PUT",
     bearerToken: created.upload.uploadToken,
     headers: {
-      "content-type": "image/jpeg",
-      "content-length": "6",
+      "content-type": "image/png",
+      "content-length": String(bytes.byteLength - 1),
     },
-    rawBody: new Uint8Array([1, 2, 3, 4, 5, 6]),
+    rawBody: bytes,
   });
-  const badSizePayload = await badSize.json();
-
   assert.equal(badSize.status, 413);
-  assert.equal(badSizePayload.error, "invalid_upload_size");
+  assert.equal((await badSize.json()).error, "browser_upload_failed");
+  assert.equal(bucket.deletedKeys.length, 1);
 });
-
 test("PUT /media/uploads/:uploadId rejects expired upload sessions", async () => {
   const db = await createEditorDb();
   const mediaBucket = new FakeMediaBucket({});
@@ -3471,6 +3475,10 @@ class FakeD1Database {
     if (query.includes("FROM sites WHERE slug = ?")) {
       return { results: this.sites.filter((site) => site.slug === params[0]) };
     }
+    if (query.includes("FROM sites WHERE id = ?")) {
+      return { results: this.sites.filter((site) => site.id === params[0]) };
+    }
+
 
     if (query.includes("FROM pages") && query.includes("site_id = ?") && query.includes("slug = ?")) {
       return {
@@ -3815,6 +3823,21 @@ class FakeD1Database {
     }
 
     if (query.includes("UPDATE media_assets")) {
+      if (query.includes("r2_key = ?") && query.includes("public_url = ?")) {
+        const [r2Key, publicUrl, width, height, mimeType, sizeBytes, assetId] = params;
+        const asset = this.mediaAssets.find((item) => item.id === assetId);
+        if (asset) {
+          asset.r2_key = r2Key;
+          asset.public_url = publicUrl;
+          asset.width = width;
+          asset.height = height;
+          asset.mime_type = mimeType;
+          asset.size_bytes = sizeBytes;
+          asset.updated_at = "2026-07-13 00:00:01";
+        }
+        return { success: true };
+      }
+
       if (query.includes("title = ?")) {
         const [title, tagsJson, notes, assetId] = params;
         const asset = this.mediaAssets.find((item) => item.id === assetId);
@@ -3847,6 +3870,19 @@ class FakeD1Database {
     }
 
     if (query.includes("UPDATE media_uploads")) {
+      if (query.includes("r2_key = ?")) {
+        const [r2Key, filename, mimeType, sizeBytes, uploadId] = params;
+        const upload = this.mediaUploads.find((item) => item.id === uploadId);
+        if (upload) {
+          upload.r2_key = r2Key;
+          upload.filename = filename;
+          upload.mime_type = mimeType;
+          upload.size_bytes = sizeBytes;
+          upload.updated_at = "2026-07-13 00:00:01";
+        }
+        return { success: true };
+      }
+
       const [status, uploadId] = params;
       const upload = this.mediaUploads.find((item) => item.id === uploadId);
       if (upload) {

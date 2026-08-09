@@ -26,11 +26,6 @@ test("createImageUpload creates a pending upload session and draft media asset",
     { DB: db },
     {
       site: "ph",
-      filename: "Nuovo Ritratto.JPG",
-      mimeType: "image/jpeg",
-      sizeBytes: 456789,
-      width: 1800,
-      height: 1200,
       alt: "Ritratto caricato dalla sessione media",
       caption: "Nuovo ritratto",
       actor: "tdd-suite",
@@ -43,18 +38,18 @@ test("createImageUpload creates a pending upload session and draft media asset",
   assert.equal(result.upload.method, "PUT");
   assert.match(result.upload.uploadUrl, /^\/media\/uploads\/upload_/);
   assert.match(result.upload.uploadToken, /^mu_/);
-  assert.equal(result.upload.headers["content-type"], "image/jpeg");
+  assert.equal(result.upload.headers["content-type"], undefined);
   assert.equal(result.upload.maxSizeBytes, 12582912);
   assert.equal(result.asset.status, "draft");
-  assert.equal(result.asset.publicUrl, `media/assets/${result.asset.id}/nuovo-ritratto.jpg`);
+  assert.equal(result.asset.publicUrl, `media/assets/${result.asset.id}/pending-browser-upload.png`);
   assert.equal(result.asset.alt, "Ritratto caricato dalla sessione media");
 
   const upload = db.mediaUploads[0];
   const asset = db.mediaAssets.find((item) => item.id === result.asset.id);
   assert.equal(upload.asset_id, result.asset.id);
-  assert.equal(upload.filename, "nuovo-ritratto.jpg");
-  assert.equal(upload.mime_type, "image/jpeg");
-  assert.equal(upload.size_bytes, 456789);
+  assert.equal(upload.filename, "pending-browser-upload.png");
+  assert.equal(upload.mime_type, "image/png");
+  assert.equal(upload.size_bytes, 1);
   assert.equal(upload.status, "pending");
   assert.equal(upload.upload_token_hash.length, 64);
   assert.notEqual(upload.upload_token_hash, result.upload.uploadToken);
@@ -63,55 +58,13 @@ test("createImageUpload creates a pending upload session and draft media asset",
   assert.equal(db.changeLog[0].action, "create_image_upload");
   assert.equal(db.changeLog[0].target, `media/${result.asset.id}`);
 });
-
-test("createImageUpload rejects unsupported formats, oversized files, and missing alt", async () => {
+test("createImageUpload requires alt while deferring file metadata to the browser upload", async () => {
   await assert.rejects(
     () =>
       createImageUpload(
         { DB: createMediaDb() },
         {
           site: "ph",
-          filename: "script.svg",
-          mimeType: "image/svg+xml",
-          sizeBytes: 10,
-          width: 100,
-          height: 100,
-          alt: "Svg",
-          actor: "tdd-suite",
-        },
-      ),
-    /Unsupported image format/,
-  );
-
-  await assert.rejects(
-    () =>
-      createImageUpload(
-        { DB: createMediaDb() },
-        {
-          site: "ph",
-          filename: "huge.jpg",
-          mimeType: "image/jpeg",
-          sizeBytes: 12582913,
-          width: 100,
-          height: 100,
-          alt: "Troppo grande",
-          actor: "tdd-suite",
-        },
-      ),
-    /exceeds max size/,
-  );
-
-  await assert.rejects(
-    () =>
-      createImageUpload(
-        { DB: createMediaDb() },
-        {
-          site: "ph",
-          filename: "no-alt.jpg",
-          mimeType: "image/jpeg",
-          sizeBytes: 1000,
-          width: 100,
-          height: 100,
           actor: "tdd-suite",
         },
       ),
@@ -221,20 +174,17 @@ test("confirmImageUpload promotes an uploaded R2 object to a ready media asset",
     { DB: db },
     {
       site: "ph",
-      filename: "ritratto.jpg",
-      mimeType: "image/jpeg",
-      sizeBytes: 456789,
-      width: 1800,
-      height: 1200,
       alt: "Ritratto confermato",
       actor: "tdd-suite",
     },
   );
   db.changeLog = [];
+  db.mediaUploads[0].size_bytes = 456789;
+  db.mediaAssets.find((item) => item.id === created.asset.id).size_bytes = 456789;
   const bucket = new FakeMediaBucket({
     [created.upload.r2Key]: {
       size: 456789,
-      contentType: "image/jpeg",
+      contentType: "image/png",
     },
   });
 

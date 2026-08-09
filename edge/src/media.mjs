@@ -2,6 +2,7 @@ import { resolveEditableField } from "./page-contracts.mjs";
 import {
   MAX_DIRECT_IMAGE_SIZE_BYTES,
   prepareDirectImageUpload,
+  prepareImageResponseUpload,
 } from "./direct-image-upload.mjs";
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
@@ -22,13 +23,13 @@ const UPLOAD_TTL_MS = 15 * 60 * 1000;
 export async function createImageUpload(env, input) {
   const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
   const actor = requiredString(input?.actor || "mcp");
-  const mimeType = normalizeImageMimeType(input?.mimeType);
-  const sizeBytes = normalizeUploadSize(input?.sizeBytes);
-  const width = positiveInteger(input?.width, "width");
-  const height = positiveInteger(input?.height, "height");
   const alt = normalizeAltText(input?.alt);
   const caption = normalizeOptionalText(input?.caption, { maxLength: 120, name: "caption" }) || null;
-  const filename = normalizeUploadFilename(input?.filename, mimeType);
+  const mimeType = "image/png";
+  const sizeBytes = 1;
+  const width = 1;
+  const height = 1;
+  const filename = "pending-browser-upload.png";
   const site = await loadSite(env, siteSlug);
   const uploadId = `upload_${crypto.randomUUID()}`;
   const assetId = `asset_${crypto.randomUUID()}`;
@@ -95,7 +96,6 @@ export async function createImageUpload(env, input) {
       uploadToken,
       headers: {
         authorization: `Bearer ${uploadToken}`,
-        "content-type": mimeType,
       },
       r2Key,
       expiresAt,
@@ -103,7 +103,8 @@ export async function createImageUpload(env, input) {
     },
     nextAction: {
       type: "user_browser_upload",
-      message: "If you cannot upload image bytes directly, show upload.uploadPageUrl to the user. After the user uploads the file in the browser, call confirm_image_upload with upload.id, then attach or replace the ready asset.",
+      message: "Show upload.uploadPageUrl to the user. The browser sends the selected file bytes and real metadata; after the upload finishes, call confirm_image_upload with upload.id, then attach or replace the ready asset.",
+      metadataSource: "uploaded_file",
       confirmTool: "confirm_image_upload",
       attachTools: ["attach_image_to_section", "replace_image"],
     },
@@ -358,32 +359,132 @@ export async function handleMediaUploadRequest(request, env, segments) {
     return json({ error: "invalid_upload_token", message: "Invalid upload token." }, 401);
   }
 
+  return storeBrowserImageUpload(request, env, upload);
+}
+
+async function storeBrowserImageUpload(request, env, upload) {
+  if (!request.body) {
+    return json({ error: "missing_upload_body", message: "Upload body is required." }, 400);
+  }
+
   const contentType = normalizeHeaderContentType(request.headers.get("content-type"));
-  if (contentType !== upload.mime_type) {
-    return json({ error: "invalid_content_type", message: "Upload content type does not match the session." }, 415);
+  const expectedMimeType = ALLOWED_IMAGE_MIME_TYPES.has(contentType) ? contentType : null;
+  if (contentType && contentType !== "application/octet-stream" && !expectedMimeType) {
+    return json({ error: "invalid_content_type", message: "Unsupported image content type." }, 415);
   }
 
-  const uploadBody = await readValidatedUploadBody(request, upload.size_bytes);
-  if (uploadBody.error) {
-    return json(uploadBody.error, uploadBody.status);
+  let prepared;
+  try {
+    prepared = await prepareImageResponseUpload(
+      new Response(request.body, { headers: request.headers }),
+      {
+        expectedMimeType,
+        maxSizeBytes: MAX_UPLOAD_SIZE_BYTES,
+      },
+    );
+  } catch (error) {
+    return json({ error: "invalid_image", message: error?.message || "Invalid image upload." }, 415);
   }
 
-  await env.MEDIA_BUCKET.put(upload.r2_key, uploadBody.body, {
-    httpMetadata: {
-      contentType,
-    },
-    customMetadata: {
+  let sourceFilename;
+  try {
+    const encodedFilename = request.headers.get("x-file-name") || "browser-image";
+    sourceFilename = decodeURIComponent(encodedFilename);
+  } catch {
+    return json({ error: "invalid_filename", message: "Invalid image filename." }, 400);
+  }
+
+  let filename;
+  try {
+    filename = normalizeUploadFilename(sourceFilename, prepared.detectedMimeType);
+  } catch (error) {
+    return json({ error: "invalid_filename", message: error?.message || "Invalid image filename." }, 400);
+  }
+
+  const siteSlug = await loadSiteSlugById(env, upload.site_id);
+  const r2Key = `${siteSlug}/uploads/${upload.asset_id}/${filename}`;
+  const publicUrl = `media/assets/${upload.asset_id}/${filename}`;
+  let storedObject = null;
+
+  try {
+    storedObject = await env.MEDIA_BUCKET.put(r2Key, prepared.stream, {
+      httpMetadata: {
+        contentType: prepared.detectedMimeType,
+      },
+      customMetadata: {
+        uploadId: upload.id,
+        assetId: upload.asset_id,
+        siteId: upload.site_id,
+        source: "browser_fallback",
+      },
+    });
+
+    const sizeBytes = normalizeStoredObjectSize(storedObject?.size);
+    if (prepared.declaredSizeBytes != null && prepared.declaredSizeBytes !== sizeBytes) {
+      throw new Error("Uploaded image size does not match Content-Length.");
+    }
+    if (typeof env.DB.batch !== "function") {
+      throw new Error("D1 batch support is required for browser uploads.");
+    }
+
+    const uploadStatement = env.DB.prepare(
+      `UPDATE media_uploads
+       SET r2_key = ?, filename = ?, mime_type = ?, size_bytes = ?, updated_at = datetime('now')
+       WHERE id = ?`,
+    ).bind(r2Key, filename, prepared.detectedMimeType, sizeBytes, upload.id);
+    const assetStatement = env.DB.prepare(
+      `UPDATE media_assets
+       SET r2_key = ?, public_url = ?, width = ?, height = ?, mime_type = ?, size_bytes = ?, updated_at = datetime('now')
+       WHERE id = ?`,
+    ).bind(
+      r2Key,
+      publicUrl,
+      prepared.width,
+      prepared.height,
+      prepared.detectedMimeType,
+      sizeBytes,
+      upload.asset_id,
+    );
+
+    await env.DB.batch([uploadStatement, assetStatement]);
+
+    return json({
       uploadId: upload.id,
-      assetId: upload.asset_id,
-      siteId: upload.site_id,
-    },
-  });
+      status: "stored",
+      r2Key,
+      file: {
+        name: filename,
+        mimeType: prepared.detectedMimeType,
+        sizeBytes,
+        width: prepared.width,
+        height: prepared.height,
+      },
+    });
+  } catch (error) {
+    if (storedObject) {
+      try {
+        await env.MEDIA_BUCKET.delete(r2Key);
+      } catch {
+        // The primary upload failure remains the useful error for this one-shot fallback.
+      }
+    }
+    const message = error?.message || "Browser image upload failed.";
+    const status = /exceeds max size|Content-Length/.test(message) ? 413 : 500;
+    return json({ error: "browser_upload_failed", message }, status);
+  }
+}
 
-  return json({
-    uploadId: upload.id,
-    status: "stored",
-    r2Key: upload.r2_key,
-  });
+async function loadSiteSlugById(env, siteId) {
+  const site = await env.DB.prepare(
+    `SELECT slug FROM sites WHERE id = ? LIMIT 1`,
+  )
+    .bind(siteId)
+    .first();
+
+  if (!site?.slug) {
+    throw new Error("Media upload site not found.");
+  }
+  return site.slug;
 }
 
 async function handleMediaAssetRequest(request, env, segments) {
@@ -451,39 +552,6 @@ function handleMediaUploadFormRequest(request, uploadId) {
   }
 
   return html(renderMediaUploadForm(uploadId), 200, { head: request.method === "HEAD" });
-}
-
-async function readValidatedUploadBody(request, expectedSizeBytes) {
-  if (!request.body) {
-    return {
-      status: 400,
-      error: { error: "missing_upload_body", message: "Upload body is required." },
-    };
-  }
-
-  const expectedSize = Number(expectedSizeBytes);
-  const contentLengthHeader = request.headers.get("content-length");
-  if (contentLengthHeader != null && contentLengthHeader !== "") {
-    const contentLength = Number(contentLengthHeader);
-    if (!Number.isInteger(contentLength) || contentLength !== expectedSize) {
-      return {
-        status: 413,
-        error: { error: "invalid_upload_size", message: "Upload size does not match the session." },
-      };
-    }
-
-    return { body: request.body };
-  }
-
-  const body = await request.arrayBuffer();
-  if (body.byteLength !== expectedSize) {
-    return {
-      status: 413,
-      error: { error: "invalid_upload_size", message: "Upload size does not match the session." },
-    };
-  }
-
-  return { body };
 }
 
 function renderMediaUploadForm(uploadId) {
@@ -556,6 +624,7 @@ function renderMediaUploadForm(uploadId) {
           headers: {
             authorization: "Bearer " + token,
             "content-type": file.type || "application/octet-stream",
+            "x-file-name": encodeURIComponent(file.name || "browser-image"),
           },
           body: file,
         });
@@ -1663,27 +1732,6 @@ function normalizeLimit(value) {
     throw new Error("Invalid limit.");
   }
   return number;
-}
-
-function normalizeImageMimeType(value) {
-  const mimeType = requiredString(value).toLowerCase();
-  if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType)) {
-    throw new Error("Unsupported image format.");
-  }
-  return mimeType;
-}
-
-function normalizeUploadSize(value) {
-  const sizeBytes = Number(value);
-  if (!Number.isInteger(sizeBytes) || sizeBytes < 1) {
-    throw new Error("Invalid upload size.");
-  }
-
-  if (sizeBytes > MAX_UPLOAD_SIZE_BYTES) {
-    throw new Error(`Image upload exceeds max size ${MAX_UPLOAD_SIZE_BYTES}.`);
-  }
-
-  return sizeBytes;
 }
 
 function normalizeStoredObjectSize(value) {
