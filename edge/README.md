@@ -72,7 +72,7 @@ Componenti:
 - R2: bucket privato `lorenzozanna-media` tramite binding `MEDIA_BUCKET`;
 - MCP media live: `upload_image_file`, `list_media_assets`, `update_media_asset`, `set_media_asset_archived`, `delete_media_asset`, `replace_image`, `attach_image_to_section`, `remove_image_from_section`, `reorder_images_in_section`, `update_image_caption`, `update_image_alt`, `set_image_focal_point`, `set_image_visibility`;
 - nessuna route pubblica `/media/uploads/*`; il fallback corretto e' conservato solo nel kit locale git-ignorato;
-- upload diretto ChatGPT live: `upload_image_file` con `_meta["openai/fileParams"]`, HTTPS/redirect/timeout/size controllati, firma e dimensioni reali;
+- upload diretto ChatGPT live: `upload_image_file` con `_meta["openai/fileParams"]`, `file_id` opaco, HTTPS/redirect/timeout/size controllati, firma e dimensioni reali;
 - serving pubblico: `GET/HEAD /media/assets/:assetId/:filename`.
 
 La route pubblica serve solo asset presenti in D1 con `status = ready`; R2 non e' esposto come bucket pubblico generico. Il dominio `ph.lorenzozanna.com` ha una route Worker dedicata per `media/assets/*`, altrimenti Pages risponderebbe con HTML invece dell'immagine.

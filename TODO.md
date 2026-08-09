@@ -283,6 +283,7 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Implementare `delete_media_asset`: eliminazione fisica separata solo per asset `archived`, senza usi, nel namespace R2 del sito e con `confirm: true`; deploy `2a3aa4de-5fa8-41ad-b396-386f4b1e39c2`, smoke completo e cleanup senza residui.
 - [x] Verificare la specifica OpenAI Plugins corrente: ChatGPT puo passare file ai tool tramite `_meta["openai/fileParams"]` come `{ download_url, file_id, mime_type?, file_name? }`; verifica documentale del 2026-08-01.
 - [x] Esporre `upload_image_file` con file top-level conforme a `_meta["openai/fileParams"]` e schema completo `{ download_url, file_id, mime_type?, file_name? }`.
+- [x] Trattare `file_id` come identificatore opaco senza regex di formato proprietaria; limitare solo lunghezza e caratteri di controllo, lasciando la sicurezza a URL HTTPS e verifica dei byte.
 - [x] Scaricare il `download_url` temporaneo con HTTPS obbligatorio, blocco host locali/IP, timeout globale, massimo 3 redirect e limite 12 MB, trasferendo lo stream nel bucket R2.
 - [x] Verificare firma/magic bytes e struttura dimensionale per JPEG, PNG, WebP e AVIF, senza fidarsi di estensione, MIME dichiarato o `Content-Type`.
 - [ ] Verificare la decodificabilita completa dell'immagine oltre la validazione strutturale dell'header.

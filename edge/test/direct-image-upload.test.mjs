@@ -102,6 +102,40 @@ test("prepareDirectImageUpload follows controlled HTTPS redirects", async () => 
   ]);
 });
 
+test("prepareDirectImageUpload treats file_id as an opaque host identifier", async () => {
+  const bytes = pngHeader(320, 240);
+  const fileId = "file-service://attachments/opaque+identifier==/hero contact";
+  const prepared = await prepareDirectImageUpload(
+    {
+      download_url: "https://files.openai.example/download/opaque",
+      file_id: fileId,
+      mime_type: "image/png",
+      file_name: "hero-contatti.png",
+    },
+    {
+      fetchImpl: async () => imageResponse(bytes, "image/png"),
+    },
+  );
+
+  await new Response(prepared.stream).arrayBuffer();
+  assert.equal(prepared.fileId, fileId);
+});
+
+test("prepareDirectImageUpload rejects oversized or control-character file_id values", async () => {
+  for (const fileId of ["x".repeat(2049), "file_bad\nidentifier"]) {
+    await assert.rejects(
+      () => prepareDirectImageUpload(
+        {
+          download_url: "https://files.openai.example/download/invalid-id",
+          file_id: fileId,
+        },
+        { fetchImpl: async () => imageResponse(pngHeader(1, 1), "image/png") },
+      ),
+      /Invalid direct image file_id/,
+    );
+  }
+});
+
 test("prepareDirectImageUpload rejects redirects beyond the configured limit", async () => {
   let calls = 0;
   await assert.rejects(

@@ -423,7 +423,7 @@ function isForbiddenHostname(hostname) {
 
 function normalizeFileId(value) {
   const fileId = requiredString(value, "file_id");
-  if (!/^[A-Za-z0-9._:-]{1,256}$/.test(fileId)) {
+  if ([...fileId].length > 2048 || /[\u0000-\u001f\u007f]/.test(fileId)) {
     throw new Error("Invalid direct image file_id.");
   }
   return fileId;

@@ -50,7 +50,7 @@ tool MCP. Il campo file deve essere top-level, deve essere elencato in
 
 ```text
 download_url: URL temporaneo, required
-file_id: identificatore ChatGPT, required
+file_id: identificatore opaco fornito da ChatGPT, required
 mime_type: MIME opzionale
 file_name: nome opzionale
 ```
@@ -59,6 +59,10 @@ ChatGPT non inserisce il binario o il base64 nel JSON-RPC: consegna un riferimen
 temporaneo autorizzato. Il Worker puo scaricarlo con `fetch()` e passare il
 `ReadableStream` a `R2Bucket.put`. Il Worker live implementa questa capacita in
 `upload_image_file`; resta da verificarla con un allegato ChatGPT reale.
+Il `file_id` non ha una sintassi applicativa da interpretare: il Worker lo tratta
+come valore opaco e basa la sicurezza sul `download_url` HTTPS controllato e sui
+byte effettivamente scaricati. Un percorso locale come `/mnt/data/...` non e'
+invece un URL scaricabile dal Worker e non sostituisce il file parameter.
 Riferimenti: [OpenAI file inputs](https://developers.openai.com/plugins/reference#define-file-inputs) e [Cloudflare R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/).
 
 
@@ -152,14 +156,16 @@ senza usarla subito, sia di collegarla in un secondo momento.
    `_meta["openai/fileParams"]: ["file"]`.
 2. ChatGPT associa l'allegato e passa `download_url`, `file_id` e gli eventuali
    `mime_type`/`file_name`.
-3. Il Worker accetta soltanto il file parameter marcato dal descriptor, non un
+3. Il Worker tratta `file_id` come identificatore opaco, senza imporre prefissi o
+   alfabeti proprietari.
+4. Il Worker accetta soltanto il file parameter marcato dal descriptor, non un
    URL libero inserito nel prompt.
-4. Il Worker richiede HTTPS, blocca host locali e IP, applica timeout, massimo 3
+5. Il Worker richiede HTTPS, blocca host locali e IP, applica timeout, massimo 3
    redirect e limite 12 MB, verifica firma/formato e dimensioni reali, quindi
    scrive lo stream in R2.
-5. D1 registra asset, metadata, ownership, audit e stato `ready` usando lo stesso
+6. D1 registra asset, metadata, ownership, audit e stato `ready` usando lo stesso
    modello corrente; un errore della scrittura atomica D1 elimina l'oggetto R2.
-6. ChatGPT usa `attach_image_to_section` o `replace_image` per il collegamento;
+7. ChatGPT usa `attach_image_to_section` o `replace_image` per il collegamento;
    rollback e `media_usages` restano separati dall'upload del catalogo.
 
 Il Worker pubblico non espone `create_image_upload`, `confirm_image_upload` o
