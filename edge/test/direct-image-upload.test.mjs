@@ -71,6 +71,25 @@ for (const format of FORMAT_CASES) {
   });
 }
 
+test("prepareDirectImageUpload preserves the platform fetch receiver", async (t) => {
+  const bytes = pngHeader(320, 240);
+  t.mock.method(globalThis, "fetch", function platformFetch() {
+    assert.equal(this, globalThis);
+    return imageResponse(bytes, "image/png");
+  });
+
+  const prepared = await prepareDirectImageUpload({
+    download_url: "https://files.openai.example/download/platform-fetch",
+    file_id: "file_platform_fetch",
+    mime_type: "image/png",
+    file_name: "platform-fetch.png",
+  });
+
+  await new Response(prepared.stream).arrayBuffer();
+  assert.equal(prepared.width, 320);
+  assert.equal(prepared.height, 240);
+});
+
 test("prepareDirectImageUpload follows controlled HTTPS redirects", async () => {
   const bytes = pngHeader(320, 240);
   const calls = [];

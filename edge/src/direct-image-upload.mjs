@@ -24,7 +24,7 @@ const MAX_IMAGE_DIMENSION = 100_000;
 export async function prepareDirectImageUpload(fileValue, options = {}) {
   const file = normalizeOpenAiFile(fileValue);
   const maxSizeBytes = normalizeMaxSize(options.maxSizeBytes ?? MAX_DIRECT_IMAGE_SIZE_BYTES);
-  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const fetchImpl = options.fetchImpl ?? ((resource, init) => globalThis.fetch(resource, init));
   if (typeof fetchImpl !== "function") {
     throw new Error("Direct image download is not available.");
   }

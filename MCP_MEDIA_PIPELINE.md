@@ -160,9 +160,10 @@ senza usarla subito, sia di collegarla in un secondo momento.
    alfabeti proprietari.
 4. Il Worker accetta soltanto il file parameter marcato dal descriptor, non un
    URL libero inserito nel prompt.
-5. Il Worker richiede HTTPS, blocca host locali e IP, applica timeout, massimo 3
-   redirect e limite 12 MB, verifica firma/formato e dimensioni reali, quindi
-   scrive lo stream in R2.
+5. Il Worker invoca il `fetch` nativo conservando il receiver Cloudflare,
+   richiede HTTPS, blocca host locali e IP, applica timeout, massimo 3 redirect e
+   limite 12 MB, verifica firma/formato e dimensioni reali, quindi scrive lo
+   stream in R2.
 6. D1 registra asset, metadata, ownership, audit e stato `ready` usando lo stesso
    modello corrente; un errore della scrittura atomica D1 elimina l'oggetto R2.
 7. ChatGPT usa `attach_image_to_section` o `replace_image` per il collegamento;
