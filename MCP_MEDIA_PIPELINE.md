@@ -1,9 +1,8 @@
 # MCP media pipeline R2
 
-Data: 2026-08-02
+Data: 2026-08-09
 Branch operativo: `codex/realign-media`
-Worker corrente deployato: `d82fbe3d-565b-4d92-bc71-7e16580ac4e7`
-Commit codice deployato: `ec3e3aa`
+Stato del codice: pipeline pubblica direct-only; gli identificativi del deploy verificato restano nel resoconto operativo.
 
 Questo documento descrive la pipeline immagini/media del CMS MCP Cloudflare per `ph.lorenzozanna.com`. La checklist unica delle attivita completate e aperte resta `TODO.md`.
 
@@ -13,9 +12,7 @@ La pipeline immagini e' attiva in produzione.
 
 Cosa funziona oggi:
 
-- upload sicuro su R2 tramite sessione temporanea;
-- fallback browser `uploadPageUrl` per i client che non possono inviare byte binari;
-- conferma upload e promozione asset da `draft` a `ready`;
+- upload diretto e sicuro su R2 tramite file parameter ChatGPT, con asset creato `ready`;
 - elenco asset media pronti;
 - metadata editoriali ricercabili con `update_media_asset`;
 - archiviazione reversibile ed eliminazione fisica sicura con `set_media_asset_archived` e `delete_media_asset`;
@@ -43,7 +40,7 @@ Cosa non e' ancora completo:
 - non facciamo ancora trasformazioni responsive o thumbnail generate;
 - non facciamo scansione malware dedicata;
 - la validazione strutturale in produzione non equivale ancora a una decodifica completa dell'immagine;
-- il fallback browser continua a usare `width` e `height` dichiarati; il percorso diretto estrae invece le dimensioni reali.
+- resta da verificare il percorso diretto con un allegato ChatGPT reale nel connector del cliente.
 
 ## Capacita file corrente di ChatGPT
 
@@ -76,7 +73,7 @@ Le migration coinvolte sono:
 Tabelle principali:
 
 - `media_assets`: catalogo asset, metadata pubblici, stato `draft|ready|archived`;
-- `media_uploads`: sessioni upload temporanee, token salvato solo come hash;
+- `media_uploads`: tabella legacy conservata per compatibilita dei dati storici, non alimentata dalla pipeline pubblica;
 - `media_usages`: dove un asset viene usato, per pagina/sezione/path.
 
 Un asset pronto ha almeno:
@@ -128,40 +125,24 @@ X-Content-Type-Options: nosniff
 
 ## Flusso upload attuale in produzione
 
-Flusso tecnico standard:
+1. Il cliente allega l'immagine nella chat.
+2. ChatGPT associa l'allegato al campo top-level `file` di `upload_image_file`.
+3. Il Worker riceve `download_url` temporaneo e `file_id`, scarica lo stream e verifica firma, MIME, dimensioni e limite 12 MB.
+4. R2 salva i byte; D1 registra l'asset gia `ready` e l'audit con una scrittura atomica.
+5. ChatGPT collega l'asset con `attach_image_to_section` o `replace_image`.
 
-1. Il client chiama `create_image_upload` con `site`, `filename`, `mimeType`, `sizeBytes`, `width`, `height`, `alt` e opzionalmente `caption`.
-2. Il server crea un asset `draft` e una sessione `pending`.
-3. Il server restituisce `upload.id`, `upload.uploadUrl`, `upload.uploadToken`, `upload.uploadPageUrl`, `upload.r2Key` e `asset.id`.
-4. Il file viene caricato con `PUT /media/uploads/:uploadId` e header `Authorization: Bearer <uploadToken>`.
-5. Il client chiama `confirm_image_upload` con `upload.id`.
-6. Il server verifica R2 con `MEDIA_BUCKET.head`, confronta byte size e `Content-Type` con la sessione e promuove l'asset a `ready`.
-7. Il client collega l'asset con `attach_image_to_section` oppure `replace_image`.
+Non esiste un passaggio in cui ChatGPT debba stimare il peso del file, ne una seconda schermata di upload.
 
-## Flusso ChatGPT con pagina browser
+## Fallback browser ritirato
 
-Questo resta il fallback permanente per i client che non supportano file parameter o quando l'upload diretto non e' disponibile.
+La formula `conservare uploadPageUrl esclusivamente come fallback esplicito per client senza file parameter` significava: esporre il vecchio flusso `create_image_upload -> pagina browser -> confirm_image_upload` soltanto quando un client MCP non sa fornire il campo `file`. Non significava usarlo nel normale flusso ChatGPT.
 
-1. ChatGPT deve chiamare comunque `create_image_upload`.
-2. ChatGPT deve mostrare all'utente `upload.uploadPageUrl`.
-3. L'utente apre il link nel browser.
-4. La pagina legge il token dal fragment URL `#token=...`, quindi il token non viene inviato nella richiesta `GET` e non viene scritto nell'HTML.
-5. L'utente seleziona il JPG/PNG/WebP/AVIF.
-6. La pagina esegue il `PUT` binario verso `/media/uploads/:uploadId`.
-7. L'utente torna in ChatGPT e scrive che l'upload e' completato.
-8. ChatGPT chiama `confirm_image_upload`.
-9. ChatGPT chiama `attach_image_to_section` o `replace_image`.
+Questa opzione e' stata scartata per la superficie pubblica: due pipeline online rendevano ambiguo il tool da scegliere e il vecchio contratto obbligava il modello a stimare `sizeBytes`, `width` e `height` prima che il browser leggesse il file.
 
-Prompt consigliato per forzare il flusso corretto:
-
-```text
-Chiama create_image_upload anche se non puoi caricare direttamente il file.
-Mostrami upload.uploadPageUrl.
-Dopo che carico l'immagine dal browser, chiama confirm_image_upload e poi attach_image_to_section.
-```
+Prima del ritiro il fallback e' stato corretto nel commit `ee1344f`: la pagina invia il file selezionato e il Worker deriva firma, MIME, dimensioni e peso dai byte reali. La versione corretta non e' inclusa nel Worker pubblico. Il kit di ripristino resta soltanto in `.local-only/media-browser-fallback/`, percorso git-ignorato; il codice corretto rimane inoltre recuperabile dalla cronologia Git.
 
 
-## Flusso live: allegato ChatGPT diretto
+## Dettaglio tecnico: allegato ChatGPT diretto
 
 Il Worker espone `upload_image_file`, separato dai tool di
 collegamento per permettere al cliente sia di caricare un'immagine nel catalogo
@@ -181,9 +162,8 @@ senza usarla subito, sia di collegarla in un secondo momento.
 6. ChatGPT usa `attach_image_to_section` o `replace_image` per il collegamento;
    rollback e `media_usages` restano separati dall'upload del catalogo.
 
-Il vecchio flusso `create_image_upload` -> browser/PUT ->
-`confirm_image_upload` non viene rimosso: resta il percorso compatibile per gli
-altri client MCP.
+Il Worker pubblico non espone `create_image_upload`, `confirm_image_upload` o
+route `/media/uploads/*`.
 
 ## Tool MCP media
 
@@ -191,11 +171,9 @@ Tool di lettura:
 
 - `list_media_assets`: lista asset pronti, o filtrati per status se il ruolo lo permette; `query` cerca su titolo, tag, note, alt, caption e filename.
 
-Tool di upload:
+Tool di upload pubblico:
 
-- `upload_image_file`: importa il file parameter in streaming e restituisce direttamente un asset `ready`;
-- `create_image_upload`: crea asset draft e sessione pending per il fallback browser;
-- `confirm_image_upload`: promuove l'asset del fallback a ready dopo verifica R2.
+- `upload_image_file`: importa il file parameter in streaming e restituisce direttamente un asset `ready`.
 
 Tool di collegamento:
 
@@ -231,11 +209,8 @@ Garanzie gia implementate:
 - SVG non consentito;
 - dimensione massima upload: 12 MB;
 - filename normalizzato e ricostruito in base al MIME;
-- asset id e upload id generati con UUID;
+- asset id generato con UUID;
 - nessuna sovrascrittura di oggetti R2;
-- token upload usa-e-getta, breve e salvato solo come hash;
-- scadenza upload: 15 minuti;
-- pubblicazione asset solo dopo `confirm_image_upload`;
 - route pubblica serve solo asset `ready` presenti in D1;
 - `X-Content-Type-Options: nosniff` sugli asset;
 - HTML non accettato in alt/caption/testi;
@@ -245,7 +220,6 @@ Garanzie gia implementate:
 Rischi residui o miglioramenti:
 
 - verificare la decodificabilita completa oltre la firma e la struttura dimensionale dell'header;
-- valutare se portare estrazione dimensioni e firma anche nel fallback browser;
 - aggiungere strip EXIF/GPS prima della pubblicazione;
 - valutare antivirus se il sito viene aperto a molti utenti non fidati;
 - generare thumbnail e varianti responsive;
@@ -274,13 +248,13 @@ publicUrl: media/assets/asset_.../favicon-1.png
 
 ## Verifiche produzione 2026-07-30
 
-Upload helper:
+Upload helper storico, ora ritirato:
 
 - commit: `0b8fa21 Add browser media upload helper`;
 - deploy: `881bffdd-bcf3-45e4-bd50-63aefe835e8f`;
 - smoke: `GET /media/uploads/:uploadId/form` -> `200 text/html`, token non presente nell'HTML.
 
-Chiarimento tool per ChatGPT:
+Chiarimento tool storico, ora ritirato:
 
 - commit: `36e3dff Clarify browser image upload flow`;
 - deploy: `df178c8c-305d-4a09-806c-0e941f0363a0`;
@@ -440,4 +414,4 @@ Smoke tool list:
 1. Testare end-to-end `upload_image_file` con un allegato ChatGPT reale e collegare l'asset con attach/replace.
 2. Chiudere decodificabilita completa e strip EXIF/GPS nel percorso di ingestione.
 3. Aggiungere thumbnail/preview e varianti responsive.
-4. Conservare e ritestare il fallback browser per i client MCP senza file parameter.
+4. Tenere il kit fallback locale aggiornato solo se nasce un requisito concreto per client privi di file parameter.

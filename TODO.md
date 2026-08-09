@@ -1,6 +1,6 @@
 # TODO unico del progetto
 
-Aggiornato: 2026-08-02
+Aggiornato: 2026-08-09
 
 Questo e' l'unico registro operativo dei TODO di `ph.lorenzozanna.com` e del relativo AI CMS via MCP. I precedenti registri e roadmap sono conservati in `archive/docs/` solo come cronologia.
 
@@ -16,7 +16,7 @@ Fonti confrontate: documentazione attiva e storica del progetto, task Codex prec
 
 Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine consigliato per il lavoro nuovo, senza duplicare le spunte:
 
-1. verificare con un allegato ChatGPT reale il nuovo `upload_image_file` live, mantenendo il fallback browser;
+1. verificare con un allegato ChatGPT reale il nuovo `upload_image_file` live, senza passaggi browser esterni;
 2. chiudere decodificabilita completa, strip EXIF/GPS e hardening del file reale;
 3. completare l'asset manager con thumbnail, preview e varianti responsive;
 4. chiudere gli altri test MCP/client, performance, accessibilita e SEO strutturata.
@@ -29,7 +29,7 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Confrontare le spunte storiche con la suite locale completa: `185/185` test verdi al 2026-08-02.
 - [x] Verificare live le quattro route pubbliche principali: `/`, `/portfolio`, `/about`, `/contact` rispondono `200`.
 - [x] Verificare live `robots.txt`, `sitemap.xml` e redirect canonico di `/index.html`.
-- [x] Verificare live `tools/list`: 32 tool MCP esposti, incluso `upload_image_file` con file parameter oltre a metadata, lifecycle e tool gallery.
+- [x] Verificare lo storico deploy diretto: 32 tool MCP erano esposti quando convivevano `upload_image_file` e il fallback browser.
 - [x] Verificare live `set_media_asset_archived`: l'asset referenziato una volta viene rifiutato e resta `ready`; credenziale temporanea rimossa.
 - [x] Archiviare i registri TODO e le roadmap duplicate in `archive/docs/`, mantenendo solo questo file come checklist attiva.
 - [x] Mantenere gli snapshot in `.site-backups/` come archivio non operativo.
@@ -246,9 +246,9 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 
 - [x] Scegliere R2 puro come storage v1.
 - [x] Creare `media_assets` e `media_usages`.
-- [x] Implementare `create_image_upload`.
-- [x] Implementare `PUT /media/uploads/:uploadId`.
-- [x] Implementare `confirm_image_upload`.
+- [x] Implementare e verificare storicamente `create_image_upload`, `PUT /media/uploads/:uploadId` e `confirm_image_upload`.
+- [x] Correggere il fallback browser eliminando `sizeBytes`, `width` e `height` stimati dal modello: firma, MIME, dimensioni e peso derivano dal file realmente selezionato; commit `ee1344f`, suite completa `185/185`.
+- [x] Ritirare il fallback dalla build pubblica: nessun tool `create_image_upload`/`confirm_image_upload` e nessuna route `/media/uploads/*`; mantenere un kit di ripristino locale sotto `.local-only/media-browser-fallback/`, escluso da Git.
 - [x] Implementare `list_media_assets`.
 - [x] Implementare `replace_image` senza accettare `src` libero.
 - [x] Implementare `attach_image_to_section` per array contrattualizzati.
@@ -258,20 +258,20 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Implementare `set_image_visibility` per nascondere/mostrare una singola immagine senza cancellarla.
 - [x] Esporre `items[].images[].enabled` nel contratto `portfolio.gallery` come fallback controllato.
 - [x] Escludere dal renderer e dalle cover Home derivate le immagini con `enabled: false`.
-- [x] Implementare il fallback browser `GET/HEAD /media/uploads/:uploadId/form` tramite `uploadPageUrl`.
+- [x] Implementare e testare storicamente il fallback browser `uploadPageUrl`, poi ritirarlo dalla superficie pubblica dopo l'arrivo del file parameter.
 - [x] Servire pubblicamente solo asset `ready` tramite `GET/HEAD /media/assets/:assetId/:filename`.
-- [x] Validare MIME dichiarato e `Content-Type` rispetto alla allowlist JPEG/PNG/WebP/AVIF.
-- [x] Validare dimensione massima del file.
-- [x] Validare `width` e `height` dichiarate come interi positivi.
+- [x] Validare firma e MIME effettivi rispetto alla allowlist JPEG/PNG/WebP/AVIF.
+- [x] Validare la dimensione effettiva del file con limite 12 MB.
+- [x] Estrarre `width` e `height` effettive dall'header immagine.
 - [x] Rendere alt text obbligatorio per immagini informative.
 - [x] Validare ownership dell'asset per sito.
 - [x] Risolvere `assetId` in metadata renderizzabili.
 - [x] Registrare `media_usages`.
 - [x] Testare rollback di `replace_image` e riallineamento `media_usages`.
-- [x] Eseguire smoke remoto create/upload/confirm con cleanup D1 e R2.
+- [x] Eseguire storicamente smoke remoto create/upload/confirm con cleanup D1 e R2.
 - [x] Deployare `attach_image_to_section` e verificarlo in `tools/list` live.
 - [x] Verificare in produzione `set_image_visibility` tramite `tools/list` e rendering.
-- [x] Completare un flusso reale ChatGPT -> `uploadPageUrl` -> R2 -> confirm -> attach.
+- [x] Completare storicamente un flusso reale ChatGPT -> `uploadPageUrl` -> R2 -> confirm -> attach prima del ritiro.
 - [x] Implementare `remove_image_from_section` con revisione, audit e riallineamento completo di `media_usages`.
 - [x] Deployare `remove_image_from_section`, `reorder_images_in_section` e `update_image_caption`; verificarli in `tools/list` e con smoke live seguito da rollback.
 - [x] Implementare `reorder_images_in_section` con permutazione completa, audit, rollback e riallineamento `media_usages`.
@@ -288,9 +288,9 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [ ] Verificare la decodificabilita completa dell'immagine oltre la validazione strutturale dell'header.
 - [x] Estrarre `width` e `height` reali dal contenuto nel percorso diretto.
 - [x] Riutilizzare catalogo D1, audit, ownership, stato `ready` e tool esistenti `attach_image_to_section`/`replace_image`, con cleanup R2 se la scrittura D1 atomica fallisce.
-- [x] Mantenere invariati `create_image_upload` + `uploadPageUrl` + `confirm_image_upload` come fallback per client MCP senza file parameter.
+- [x] Scegliere una sola pipeline pubblica: `upload_image_file` con file parameter; il fallback browser corretto resta solo locale e git-ignorato.
 - [x] Testare localmente descriptor, quattro formati, redirect, timeout, limiti, mismatch MIME/firma, streaming R2, cleanup D1 e chiamata MCP autenticata.
-- [x] Deployare `upload_image_file` nel Worker `d82fbe3d-565b-4d92-bc71-7e16580ac4e7`, verificare `tools/list` a 32 tool e fare uno smoke read-only senza creare asset di prova.
+- [x] Deployare `upload_image_file` nel Worker `d82fbe3d-565b-4d92-bc71-7e16580ac4e7`, verificare lo storico `tools/list` a 32 tool e fare uno smoke read-only senza creare asset di prova.
 - [ ] Implementare strip EXIF/GPS prima della pubblicazione.
 - [ ] Decidere e implementare scansione antivirus/security se applicabile.
 - [ ] Testare rollback esplicito di `attach_image_to_section`.
@@ -332,11 +332,11 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Documentare onboarding per Claude.
 - [x] Documentare prompt naturali e rollback per Lorenzo.
 - [x] Documentare che i segreti non vanno incollati in chat.
-- [x] Testare il flusso immagini con un connector ChatGPT reale usando `uploadPageUrl`.
+- [x] Testare storicamente il flusso immagini con un connector ChatGPT reale usando `uploadPageUrl` prima del suo ritiro.
 - [ ] Testare esplicitamente con MCP Inspector CLI, non solo con client equivalente.
 - [ ] Testare un Claude custom connector reale.
 - [ ] Testare in un connector ChatGPT reale il nuovo `upload_image_file` con `_meta["openai/fileParams"]` dopo implementazione e deploy.
-- [x] Verificare e documentare i requisiti correnti dei client prima del rilascio pubblico: file parameter ChatGPT documentati; fallback browser conservato per client generici.
+- [x] Verificare e documentare i requisiti correnti: il plugin pubblico richiede client con file parameter; client generici privi di tale capacita non ricevono un fallback online.
 - [ ] Documentare i limiti correnti dei piani Free/Pro dove incidono sul connector.
 
 ## 13. Sicurezza e osservabilita'
@@ -348,7 +348,7 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Bloccare URL `javascript:`, `data:` e path ambigui.
 - [x] Rifiutare modifiche fuori contratto.
 - [x] Salvare token personali, OAuth code, OAuth token e upload token solo come hash.
-- [x] Ignorare `.secrets/`, `.dev.vars` e artefatti locali in Git.
+- [x] Ignorare `.secrets/`, `.dev.vars`, `.local-only/` e artefatti locali in Git.
 - [ ] Aggiungere rate limit per token e/o actor.
 - [ ] Restringere e validare `Origin` per l'endpoint MCP remoto.
 - [ ] Aggiungere test di redazione segreti nei log.
@@ -440,9 +440,9 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Commit e push di `attach_image_to_section`.
 - [x] Valutare il branch dedicato e mantenere `main` per i deploy gia' eseguiti nel flusso storico.
 - [x] Documentare stato deploy e stato repository nei recap tecnici.
-- [x] Allineare `edge/README.md` alla superficie completa di 32 tool verificata live.
+- [x] Allineare `edge/README.md` alla superficie storica di 32 tool verificata live.
 - [x] Allineare `mcp/README.md` al sito live dinamico e distinguere MCP locale e remoto.
 - [x] Aggiornare esempi media, componenti e migrazioni `0009`-`0011` nel manuale template.
 - [x] Allineare contratti, onboarding e handoff al tool `set_image_visibility`.
-- [x] Allineare la documentazione attiva al tool diretto live e alla superficie remota di 32 tool.
+- [x] Allineare la documentazione attiva alla superficie direct-only di 30 tool e al ritiro del fallback browser.
 - [x] Archiviare `NEXT_CHAT_RECAP.md`, `MCP_TDD_TODO.md`, `MCP_NEXT_PHASES_TODO.md` e `MCP_REMOTE_ROADMAP.md` in `archive/docs/`.

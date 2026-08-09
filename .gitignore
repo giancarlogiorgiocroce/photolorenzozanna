@@ -1,5 +1,6 @@
 .codex-audit/
 .secrets/
+.local-only/
 
 
 .site-backups/

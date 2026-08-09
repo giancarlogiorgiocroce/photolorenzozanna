@@ -8,8 +8,6 @@ import {
 } from "./sections.mjs";
 import {
   attachImageToSection,
-  confirmImageUpload,
-  createImageUpload,
   deleteMediaAsset,
   listMediaAssets,
   removeImageFromSection,
@@ -419,35 +417,6 @@ const TOOLS = [
     },
     _meta: {
       "openai/fileParams": ["file"],
-    },
-  },
-  {
-    name: "create_image_upload",
-    title: "Create Image Upload",
-    description: "Create a short-lived browser upload session. The user selects the file on upload.uploadPageUrl; the Worker derives MIME type, byte size, width, and height from the uploaded bytes instead of accepting model estimates. After upload, call confirm_image_upload.",
-    securitySchemes: WRITE_SECURITY_SCHEMES,
-    inputSchema: {
-      type: "object",
-      properties: {
-        site: { type: "string", description: "Site slug, usually ph." },
-        alt: { type: "string", description: "Accessible alt text. Required for non-decorative images." },
-        caption: { type: "string", description: "Optional caption." },
-      },
-      required: ["site", "alt"],
-    },
-  },
-  {
-    name: "confirm_image_upload",
-    title: "Confirm Image Upload",
-    description: "Confirm that a pending upload exists in R2 and promote the draft media asset to ready.",
-    securitySchemes: WRITE_SECURITY_SCHEMES,
-    inputSchema: {
-      type: "object",
-      properties: {
-        site: { type: "string", description: "Site slug, usually ph." },
-        uploadId: { type: "string", description: "Upload session id returned by create_image_upload." },
-      },
-      required: ["site", "uploadId"],
     },
   },
   {
@@ -1082,39 +1051,6 @@ async function handleMcpMethod(method, params, env, auth) {
       copyOptionalArg(input, args, "caption");
 
       const result = await uploadImageFile(env, input);
-      return toolResult(result);
-    }
-
-    if (name === "create_image_upload") {
-      if (!hasMcpPermission(auth, "content:write", args.site)) {
-        throw mcpError(-32003, "Permission denied for content:write.", {
-          permission: "content:write",
-          site: args.site,
-        });
-      }
-
-      const result = await createImageUpload(env, {
-        site: args.site,
-        alt: args.alt,
-        caption: args.caption,
-        actor: auth.actor,
-      });
-      return toolResult(result);
-    }
-
-    if (name === "confirm_image_upload") {
-      if (!hasMcpPermission(auth, "content:write", args.site)) {
-        throw mcpError(-32003, "Permission denied for content:write.", {
-          permission: "content:write",
-          site: args.site,
-        });
-      }
-
-      const result = await confirmImageUpload(env, {
-        site: args.site,
-        uploadId: args.uploadId,
-        actor: auth.actor,
-      });
       return toolResult(result);
     }
 

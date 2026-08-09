@@ -1,6 +1,6 @@
 import { renderPageHtml } from "./rendering.mjs";
 import { handleMcpHttpRequest } from "./mcp-http.mjs";
-import { handleMediaUploadRequest } from "./media.mjs";
+import { handleMediaRequest } from "./media.mjs";
 import { handleOAuthRequest } from "./oauth.mjs";
 import {
   getAuthorizationServerMetadata,
@@ -107,7 +107,7 @@ async function routeRequest(request, env, url) {
     }
 
     if (segments[0] === "media") {
-      return handleMediaUploadRequest(request, env, segments);
+      return handleMediaRequest(request, env, segments);
     }
 
     return handlePageRoute(request, env, url, segments);

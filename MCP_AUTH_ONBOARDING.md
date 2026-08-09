@@ -211,7 +211,6 @@ Il token deve vivere nel secret store del client, non nel testo della conversazi
 I token `editor` e gli access token OAuth con `content:write` possono usare i tool
 media senza ricevere accesso diretto a R2 o a path arbitrari:
 
-- upload fallback live: `create_image_upload`, `confirm_image_upload`;
 - upload diretto live: `upload_image_file`;
 - catalogo: `list_media_assets`, `update_media_asset`;
 - collegamento: `attach_image_to_section`, `replace_image`;
@@ -226,10 +225,9 @@ Il remote MCP di produzione espone `_meta["openai/fileParams"]` su
 `attach_image_to_section` o `replace_image`. Il tool usa lo stesso scope
 `content:write` e non richiede un nuovo canale di autenticazione.
 
-Se il client non supporta file parameter, mostrare `upload.uploadPageUrl`.
-Lorenzo completa l'upload nel browser, poi il connector chiama
-`confirm_image_upload` e collega l'asset. Questo flusso e' stato verificato
-end-to-end e resta il fallback compatibile.
+Il caricamento immagini richiede un client capace di fornire il file parameter.
+I client privi di questa capacita possono usare gli altri tool MCP, ma non hanno
+un percorso di upload browser esposto dal Worker pubblico.
 
 Nascondere una fotografia con `set_image_visibility` non elimina l'asset e non
 richiede un nuovo upload. I tool gallery rimuovono l'uso, riordinano l'array o

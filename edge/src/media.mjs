@@ -2,7 +2,6 @@ import { resolveEditableField } from "./page-contracts.mjs";
 import {
   MAX_DIRECT_IMAGE_SIZE_BYTES,
   prepareDirectImageUpload,
-  prepareImageResponseUpload,
 } from "./direct-image-upload.mjs";
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
@@ -18,99 +17,7 @@ const ALLOWED_IMAGE_MIME_TYPES = new Map([
   ["image/avif", "avif"],
 ]);
 const MAX_UPLOAD_SIZE_BYTES = MAX_DIRECT_IMAGE_SIZE_BYTES;
-const UPLOAD_TTL_MS = 15 * 60 * 1000;
 
-export async function createImageUpload(env, input) {
-  const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
-  const actor = requiredString(input?.actor || "mcp");
-  const alt = normalizeAltText(input?.alt);
-  const caption = normalizeOptionalText(input?.caption, { maxLength: 120, name: "caption" }) || null;
-  const mimeType = "image/png";
-  const sizeBytes = 1;
-  const width = 1;
-  const height = 1;
-  const filename = "pending-browser-upload.png";
-  const site = await loadSite(env, siteSlug);
-  const uploadId = `upload_${crypto.randomUUID()}`;
-  const assetId = `asset_${crypto.randomUUID()}`;
-  const uploadToken = `mu_${crypto.randomUUID().replaceAll("-", "")}`;
-  const uploadTokenHash = await sha256Hex(uploadToken);
-  const r2Key = `${site.slug}/uploads/${assetId}/${filename}`;
-  const publicUrl = `media/assets/${assetId}/${filename}`;
-  const expiresAt = new Date(Date.now() + UPLOAD_TTL_MS).toISOString();
-
-  const asset = {
-    id: assetId,
-    r2_key: r2Key,
-    public_url: publicUrl,
-    alt,
-    caption,
-    width,
-    height,
-    mime_type: mimeType,
-    size_bytes: sizeBytes,
-    status: "draft",
-    created_at: null,
-    updated_at: null,
-  };
-
-  await env.DB.prepare(
-    `INSERT INTO media_assets (
-       id, site_id, r2_key, public_url, alt, caption, width, height, mime_type, size_bytes, status, created_at, updated_at
-     )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-  )
-    .bind(assetId, site.id, r2Key, publicUrl, alt, caption, width, height, mimeType, sizeBytes, "draft")
-    .run();
-
-  await env.DB.prepare(
-    `INSERT INTO media_uploads (
-       id, site_id, asset_id, r2_key, filename, mime_type, size_bytes, upload_token_hash, status, expires_at, created_at, updated_at
-     )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'), datetime('now'))`,
-  )
-    .bind(uploadId, site.id, assetId, r2Key, filename, mimeType, sizeBytes, uploadTokenHash, expiresAt)
-    .run();
-
-  await insertChangeLog(env, {
-    siteId: site.id,
-    actor,
-    action: "create_image_upload",
-    target: `media/${assetId}`,
-    before: null,
-    after: {
-      uploadId,
-      asset: serializeAsset(asset),
-      status: "pending",
-    },
-  });
-
-  return {
-    site: site.slug,
-    upload: {
-      id: uploadId,
-      status: "pending",
-      method: "PUT",
-      uploadUrl: `/media/uploads/${uploadId}`,
-      uploadPageUrl: buildMediaUploadPageUrl(env, uploadId, uploadToken),
-      uploadToken,
-      headers: {
-        authorization: `Bearer ${uploadToken}`,
-      },
-      r2Key,
-      expiresAt,
-      maxSizeBytes: MAX_UPLOAD_SIZE_BYTES,
-    },
-    nextAction: {
-      type: "user_browser_upload",
-      message: "Show upload.uploadPageUrl to the user. The browser sends the selected file bytes and real metadata; after the upload finishes, call confirm_image_upload with upload.id, then attach or replace the ready asset.",
-      metadataSource: "uploaded_file",
-      confirmTool: "confirm_image_upload",
-      attachTools: ["attach_image_to_section", "replace_image"],
-    },
-    asset: serializeAsset(asset),
-  };
-}
 
 export async function uploadImageFile(env, input, options = {}) {
   const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
@@ -232,259 +139,13 @@ export async function uploadImageFile(env, input, options = {}) {
   }
 }
 
-export async function confirmImageUpload(env, input) {
-  const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
-  const uploadId = requiredPattern(input?.uploadId, "uploadId", ID_PATTERN);
-  const actor = requiredString(input?.actor || "mcp");
-  const site = await loadSite(env, siteSlug);
-  const upload = await loadMediaUpload(env, site.id, uploadId);
 
-  if (upload.upload_status !== "pending") {
-    throw new Error(`Media upload is not pending: ${uploadId}`);
-  }
-
-  if (!env?.MEDIA_BUCKET || typeof env.MEDIA_BUCKET.head !== "function") {
-    throw new Error("R2 binding MEDIA_BUCKET is not configured.");
-  }
-
-  const object = await env.MEDIA_BUCKET.head(upload.upload_r2_key);
-  if (!object) {
-    throw new Error("Uploaded object not found in R2.");
-  }
-
-  const objectSize = Number(object.size);
-  if (objectSize !== Number(upload.upload_size_bytes)) {
-    throw new Error("Uploaded object size mismatch.");
-  }
-
-  const objectMimeType = object.httpMetadata?.contentType || object.customMetadata?.mime_type || "";
-  if (objectMimeType && objectMimeType !== upload.upload_mime_type) {
-    throw new Error("Uploaded object MIME type mismatch.");
-  }
-
-  const before = serializeUploadAsset(upload);
-
-  await env.DB.prepare(
-    `UPDATE media_assets
-     SET status = ?, updated_at = datetime('now')
-     WHERE id = ?`,
-  )
-    .bind("ready", upload.asset_id)
-    .run();
-
-  await env.DB.prepare(
-    `UPDATE media_uploads
-     SET status = ?, uploaded_at = datetime('now'), updated_at = datetime('now')
-     WHERE id = ?`,
-  )
-    .bind("uploaded", upload.upload_id)
-    .run();
-
-  const after = {
-    ...before,
-    status: "ready",
-  };
-
-  await insertChangeLog(env, {
-    siteId: site.id,
-    actor,
-    action: "confirm_image_upload",
-    target: `media/${upload.asset_id}`,
-    before,
-    after,
-  });
-
-  return {
-    site: site.slug,
-    upload: {
-      id: upload.upload_id,
-      status: "uploaded",
-      r2Key: upload.upload_r2_key,
-    },
-    asset: after,
-    published: true,
-  };
-}
-
-export async function handleMediaUploadRequest(request, env, segments) {
+export async function handleMediaRequest(request, env, segments) {
   const isAssetRoute = segments.length === 4 && segments[1] === "assets";
-  const isUploadObjectRoute = segments.length === 3 && segments[1] === "uploads";
-  const isUploadFormRoute = segments.length === 4 && segments[1] === "uploads" && segments[3] === "form";
-
-  if (!isAssetRoute && !isUploadObjectRoute && !isUploadFormRoute) {
+  if (!isAssetRoute) {
     return json({ error: "not_found", message: "Media route not found." }, 404);
   }
-
-  if (isAssetRoute) {
-    return handleMediaAssetRequest(request, env, segments);
-  }
-
-  const uploadId = String(segments[2] ?? "").trim();
-  if (!ID_PATTERN.test(uploadId)) {
-    return json({ error: "invalid_upload", message: "Invalid upload id." }, 400);
-  }
-
-  if (isUploadFormRoute) {
-    return handleMediaUploadFormRequest(request, uploadId);
-  }
-
-  if (request.method !== "PUT") {
-    return json({ error: "method_not_allowed", message: "Use PUT for media uploads." }, 405);
-  }
-
-  if (!env?.DB) {
-    return json({ error: "missing_db", message: "D1 binding DB is not configured." }, 500);
-  }
-
-  if (!env?.MEDIA_BUCKET || typeof env.MEDIA_BUCKET.put !== "function") {
-    return json({ error: "missing_media_bucket", message: "R2 binding MEDIA_BUCKET is not configured." }, 500);
-  }
-
-  const upload = await loadMediaUploadById(env, uploadId);
-  if (!upload) {
-    return json({ error: "upload_not_found", message: "Upload session not found." }, 404);
-  }
-
-  if (upload.status !== "pending") {
-    return json({ error: "upload_not_pending", message: "Upload session is not pending." }, 409);
-  }
-
-  if (isExpiredUpload(upload.expires_at)) {
-    return json({ error: "upload_expired", message: "Upload session has expired." }, 410);
-  }
-
-  const authHeader = request.headers.get("authorization") ?? "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
-  if (!token || !await timingSafeHashEqual(token, upload.upload_token_hash)) {
-    return json({ error: "invalid_upload_token", message: "Invalid upload token." }, 401);
-  }
-
-  return storeBrowserImageUpload(request, env, upload);
-}
-
-async function storeBrowserImageUpload(request, env, upload) {
-  if (!request.body) {
-    return json({ error: "missing_upload_body", message: "Upload body is required." }, 400);
-  }
-
-  const contentType = normalizeHeaderContentType(request.headers.get("content-type"));
-  const expectedMimeType = ALLOWED_IMAGE_MIME_TYPES.has(contentType) ? contentType : null;
-  if (contentType && contentType !== "application/octet-stream" && !expectedMimeType) {
-    return json({ error: "invalid_content_type", message: "Unsupported image content type." }, 415);
-  }
-
-  let prepared;
-  try {
-    prepared = await prepareImageResponseUpload(
-      new Response(request.body, { headers: request.headers }),
-      {
-        expectedMimeType,
-        maxSizeBytes: MAX_UPLOAD_SIZE_BYTES,
-      },
-    );
-  } catch (error) {
-    return json({ error: "invalid_image", message: error?.message || "Invalid image upload." }, 415);
-  }
-
-  let sourceFilename;
-  try {
-    const encodedFilename = request.headers.get("x-file-name") || "browser-image";
-    sourceFilename = decodeURIComponent(encodedFilename);
-  } catch {
-    return json({ error: "invalid_filename", message: "Invalid image filename." }, 400);
-  }
-
-  let filename;
-  try {
-    filename = normalizeUploadFilename(sourceFilename, prepared.detectedMimeType);
-  } catch (error) {
-    return json({ error: "invalid_filename", message: error?.message || "Invalid image filename." }, 400);
-  }
-
-  const siteSlug = await loadSiteSlugById(env, upload.site_id);
-  const r2Key = `${siteSlug}/uploads/${upload.asset_id}/${filename}`;
-  const publicUrl = `media/assets/${upload.asset_id}/${filename}`;
-  let storedObject = null;
-
-  try {
-    storedObject = await env.MEDIA_BUCKET.put(r2Key, prepared.stream, {
-      httpMetadata: {
-        contentType: prepared.detectedMimeType,
-      },
-      customMetadata: {
-        uploadId: upload.id,
-        assetId: upload.asset_id,
-        siteId: upload.site_id,
-        source: "browser_fallback",
-      },
-    });
-
-    const sizeBytes = normalizeStoredObjectSize(storedObject?.size);
-    if (prepared.declaredSizeBytes != null && prepared.declaredSizeBytes !== sizeBytes) {
-      throw new Error("Uploaded image size does not match Content-Length.");
-    }
-    if (typeof env.DB.batch !== "function") {
-      throw new Error("D1 batch support is required for browser uploads.");
-    }
-
-    const uploadStatement = env.DB.prepare(
-      `UPDATE media_uploads
-       SET r2_key = ?, filename = ?, mime_type = ?, size_bytes = ?, updated_at = datetime('now')
-       WHERE id = ?`,
-    ).bind(r2Key, filename, prepared.detectedMimeType, sizeBytes, upload.id);
-    const assetStatement = env.DB.prepare(
-      `UPDATE media_assets
-       SET r2_key = ?, public_url = ?, width = ?, height = ?, mime_type = ?, size_bytes = ?, updated_at = datetime('now')
-       WHERE id = ?`,
-    ).bind(
-      r2Key,
-      publicUrl,
-      prepared.width,
-      prepared.height,
-      prepared.detectedMimeType,
-      sizeBytes,
-      upload.asset_id,
-    );
-
-    await env.DB.batch([uploadStatement, assetStatement]);
-
-    return json({
-      uploadId: upload.id,
-      status: "stored",
-      r2Key,
-      file: {
-        name: filename,
-        mimeType: prepared.detectedMimeType,
-        sizeBytes,
-        width: prepared.width,
-        height: prepared.height,
-      },
-    });
-  } catch (error) {
-    if (storedObject) {
-      try {
-        await env.MEDIA_BUCKET.delete(r2Key);
-      } catch {
-        // The primary upload failure remains the useful error for this one-shot fallback.
-      }
-    }
-    const message = error?.message || "Browser image upload failed.";
-    const status = /exceeds max size|Content-Length/.test(message) ? 413 : 500;
-    return json({ error: "browser_upload_failed", message }, status);
-  }
-}
-
-async function loadSiteSlugById(env, siteId) {
-  const site = await env.DB.prepare(
-    `SELECT slug FROM sites WHERE id = ? LIMIT 1`,
-  )
-    .bind(siteId)
-    .first();
-
-  if (!site?.slug) {
-    throw new Error("Media upload site not found.");
-  }
-  return site.slug;
+  return handleMediaAssetRequest(request, env, segments);
 }
 
 async function handleMediaAssetRequest(request, env, segments) {
@@ -546,101 +207,6 @@ function mediaAssetResponseHeaders(object, asset) {
   return headers;
 }
 
-function handleMediaUploadFormRequest(request, uploadId) {
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return json({ error: "method_not_allowed", message: "Use GET for the media upload form." }, 405);
-  }
-
-  return html(renderMediaUploadForm(uploadId), 200, { head: request.method === "HEAD" });
-}
-
-function renderMediaUploadForm(uploadId) {
-  const escapedUploadId = escapeHtml(uploadId);
-  const escapedUploadIdAttribute = escapeAttribute(uploadId);
-
-  return `<!doctype html>
-<html lang="it">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Lorenzo Zanna Media Upload</title>
-  <style>
-    :root { color-scheme: light; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: system-ui, sans-serif; background: #f7f6f2; color: #171717; }
-    main { width: min(92vw, 460px); border: 1px solid #d8d4ca; background: #fff; padding: 28px; }
-    h1 { margin: 0 0 12px; font-size: 24px; line-height: 1.15; }
-    p { margin: 0 0 16px; line-height: 1.5; }
-    code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
-    input { display: block; width: 100%; margin: 18px 0; font: inherit; }
-    button { width: 100%; min-height: 44px; border: 0; background: #171717; color: #fff; font: inherit; cursor: pointer; }
-    button:disabled { opacity: .55; cursor: wait; }
-    output { display: block; min-height: 22px; margin-top: 14px; line-height: 1.45; }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Lorenzo Zanna Media Upload</h1>
-    <p>Seleziona il file immagine richiesto nella chat. Questa pagina puo caricare solo la sessione <code>${escapedUploadId}</code>.</p>
-    <input id="file" type="file" accept="image/jpeg,image/png,image/webp,image/avif" />
-    <button id="upload" type="button">Carica immagine</button>
-    <output id="status" role="status"></output>
-  </main>
-  <script>
-    const uploadId = "${escapedUploadIdAttribute}";
-    const fileInput = document.getElementById("file");
-    const uploadButton = document.getElementById("upload");
-    const statusOutput = document.getElementById("status");
-
-    function uploadToken() {
-      const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
-      const params = new URLSearchParams(hash);
-      return params.get("token") || hash;
-    }
-
-    function setStatus(message) {
-      statusOutput.textContent = message;
-    }
-
-    uploadButton.addEventListener("click", async () => {
-      const token = uploadToken();
-      const file = fileInput.files && fileInput.files[0];
-
-      if (!token) {
-        setStatus("Token upload mancante. Torna in chat e apri il link completo.");
-        return;
-      }
-
-      if (!file) {
-        setStatus("Scegli prima un file immagine.");
-        return;
-      }
-
-      uploadButton.disabled = true;
-      setStatus("Upload in corso...");
-
-      try {
-        const response = await fetch("/media/uploads/" + encodeURIComponent(uploadId), {
-          method: "PUT",
-          headers: {
-            authorization: "Bearer " + token,
-            "content-type": file.type || "application/octet-stream",
-            "x-file-name": encodeURIComponent(file.name || "browser-image"),
-          },
-          body: file,
-        });
-        const text = await response.text();
-        if (!response.ok) throw new Error(text || "HTTP " + response.status);
-        setStatus("Upload completato. Torna in chat e chiedi di confermare e collegare l'immagine.");
-      } catch (error) {
-        setStatus("Upload non riuscito: " + error.message);
-      } finally {
-        uploadButton.disabled = false;
-      }
-    });
-  </script>
-</body>
-</html>`;
-}
 export async function listMediaAssets(env, input) {
   const siteSlug = requiredPattern(input?.site, "site", SLUG_PATTERN);
   const status = normalizeStatus(input?.status ?? "ready");
@@ -1601,56 +1167,6 @@ async function loadReadyMediaAssetByPublicPath(env, publicPath, assetId) {
     .bind(publicPath, assetId)
     .first();
 }
-async function loadMediaUpload(env, siteId, uploadId) {
-  const upload = await env.DB.prepare(
-    `SELECT
-       u.id AS upload_id,
-       u.status AS upload_status,
-       u.r2_key AS upload_r2_key,
-       u.filename AS upload_filename,
-       u.mime_type AS upload_mime_type,
-       u.size_bytes AS upload_size_bytes,
-       u.expires_at AS upload_expires_at,
-       a.id AS asset_id,
-       a.r2_key AS asset_r2_key,
-       a.public_url AS asset_public_url,
-       a.alt AS asset_alt,
-       a.caption AS asset_caption,
-       a.width AS asset_width,
-       a.height AS asset_height,
-       a.mime_type AS asset_mime_type,
-       a.size_bytes AS asset_size_bytes,
-       a.status AS asset_status,
-       a.created_at AS asset_created_at,
-       a.updated_at AS asset_updated_at
-     FROM media_uploads u
-     JOIN media_assets a ON a.id = u.asset_id
-     WHERE u.site_id = ? AND u.id = ?
-     LIMIT 1`,
-  )
-    .bind(siteId, uploadId)
-    .first();
-
-  if (!upload) {
-    throw new Error(`Media upload not found: ${uploadId}`);
-  }
-
-  return upload;
-}
-
-async function loadMediaUploadById(env, uploadId) {
-  const upload = await env.DB.prepare(
-    `SELECT id, site_id, asset_id, r2_key, filename, mime_type, size_bytes, upload_token_hash, status, expires_at
-     FROM media_uploads
-     WHERE id = ?
-     LIMIT 1`,
-  )
-    .bind(uploadId)
-    .first();
-
-  return upload ?? null;
-}
-
 async function insertChangeLog(env, options) {
   await env.DB.prepare(
     `INSERT INTO change_log (
@@ -1807,11 +1323,6 @@ function normalizeHeaderContentType(value) {
     .split(";")[0]
     .trim()
     .toLowerCase();
-}
-
-function isExpiredUpload(value) {
-  const expiresAt = Date.parse(String(value ?? ""));
-  return !Number.isFinite(expiresAt) || Date.now() > expiresAt;
 }
 
 function normalizeImageObjectPath(path) {
@@ -2122,25 +1633,6 @@ function hasOwn(object, key) {
   return Object.prototype.hasOwnProperty.call(Object(object), key);
 }
 
-function buildMediaUploadPageUrl(env, uploadId, uploadToken) {
-  const path = `/media/uploads/${encodeURIComponent(uploadId)}/form#token=${encodeURIComponent(uploadToken)}`;
-  const rootDomain = String(env?.ROOT_DOMAIN ?? "").trim();
-  if (!rootDomain) return path;
-  return `https://api.${rootDomain}${path}`;
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function escapeAttribute(value) {
-  return escapeHtml(value);
-}
 function safeJson(value) {
   if (value == null) return null;
   try {
@@ -2148,33 +1640,6 @@ function safeJson(value) {
   } catch {
     return null;
   }
-}
-
-async function sha256Hex(value) {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function timingSafeHashEqual(token, expectedHash) {
-  const actualHash = await sha256Hex(token);
-  if (actualHash.length !== String(expectedHash ?? "").length) return false;
-
-  let diff = 0;
-  for (let index = 0; index < actualHash.length; index += 1) {
-    diff |= actualHash.charCodeAt(index) ^ String(expectedHash).charCodeAt(index);
-  }
-  return diff === 0;
-}
-
-function html(payload, status = 200, options = {}) {
-  return new Response(options.head ? null : payload, {
-    status,
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store",
-    },
-  });
 }
 
 function json(payload, status = 200) {

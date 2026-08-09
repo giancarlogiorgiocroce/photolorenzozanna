@@ -23,7 +23,7 @@ Autenticazione supportata:
 - OAuth authorization-code + PKCE per ChatGPT e client compatibili;
 - `AI_API_TOKEN` solo per lettura/smoke sul canale MCP.
 
-La superficie remota verificata espone 32 tool, inclusi upload diretto, metadata, lifecycle asset,
+La superficie remota direct-only espone 30 tool, inclusi upload diretto, metadata, lifecycle asset,
 rimozione, riordino e caption per le gallery. L'elenco corrente e' documentato in `../edge/README.md`;
 i contratti dei campi sono in
 `../MCP_SECTION_CONTRACTS.md`.
@@ -32,9 +32,7 @@ i contratti dei campi sono in
 
 La pipeline R2 espone:
 
-- `create_image_upload`;
 - `upload_image_file`;
-- `confirm_image_upload`;
 - `list_media_assets`;
 - `update_media_asset`;
 - `set_media_asset_archived`;
@@ -54,8 +52,9 @@ Worker importa il `download_url` temporaneo in streaming, valida firma e
 dimensioni reali e crea un asset `ready`. Il client collega poi l'asset con
 `attach_image_to_section` o `replace_image`.
 
-`create_image_upload`, `uploadPageUrl` e `confirm_image_upload` restano il
-fallback per i client MCP che non supportano file input.
+Il Worker pubblico non espone fallback browser o route `/media/uploads/*`.
+I client senza file input non possono caricare immagini in produzione; il
+fallback corretto resta soltanto nel kit locale git-ignorato.
 
 Manuale operativo: `../MCP_MEDIA_PIPELINE.md`.
 

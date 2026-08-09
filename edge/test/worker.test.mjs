@@ -529,7 +529,6 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   const toolNames = payload.result.tools.map((tool) => tool.name);
   const getPage = payload.result.tools.find((tool) => tool.name === "get_page");
   const listMediaAssets = payload.result.tools.find((tool) => tool.name === "list_media_assets");
-  const createImageUpload = payload.result.tools.find((tool) => tool.name === "create_image_upload");
   const uploadImageFile = payload.result.tools.find((tool) => tool.name === "upload_image_file");
   const updateMediaAsset = payload.result.tools.find((tool) => tool.name === "update_media_asset");
   const setMediaAssetArchived = payload.result.tools.find((tool) => tool.name === "set_media_asset_archived");
@@ -564,8 +563,6 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
     "update_cta",
     "update_contact_channel",
     "upload_image_file",
-    "create_image_upload",
-    "confirm_image_upload",
     "update_image_alt",
     "update_media_asset",
     "set_media_asset_archived",
@@ -585,7 +582,6 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.deepEqual(updateText.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(updateContactChannel.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(uploadImageFile.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
-  assert.deepEqual(createImageUpload.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(updateMediaAsset.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(setMediaAssetArchived.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
   assert.deepEqual(deleteMediaAsset.securitySchemes, [{ type: "oauth2", scopes: ["content:write"] }]);
@@ -616,9 +612,8 @@ test("POST /mcp tools/list exposes page read and section visibility tools", asyn
   assert.equal(uploadImageFile.inputSchema.required.includes("file"), true);
   assert.equal(uploadImageFile.annotations.openWorldHint, true);
   assert.equal(uploadImageFile.outputSchema.properties.asset.properties.status.const, "ready");
-  assert.match(createImageUpload.description, /upload\.uploadPageUrl/);
-  assert.deepEqual(createImageUpload.inputSchema.required, ["site", "alt"]);
-  assert.equal(createImageUpload.inputSchema.properties.sizeBytes, undefined);
+  assert.equal(toolNames.includes("create_image_upload"), false);
+  assert.equal(toolNames.includes("confirm_image_upload"), false);
   assert.equal(listMediaAssets.inputSchema.properties.query.maxLength, 120);
   assert.equal(updateMediaAsset.inputSchema.properties.title.maxLength, 120);
   assert.equal(updateMediaAsset.inputSchema.properties.tags.maxItems, 20);
@@ -1208,218 +1203,15 @@ test("POST /mcp tools/call upload_image_file imports a ChatGPT file parameter in
   assert.equal(db.changeLog.at(-1).actor, "lorenzo");
 });
 
-test("POST /mcp tools/call create_image_upload creates a pending media upload", async () => {
-  const db = await createEditorDb();
-  const response = await fetchWorker("/mcp", {
-    db,
-    host: "mcp.lorenzozanna.com",
-    method: "POST",
-    bearerToken: USER_TOKEN,
-    body: {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: {
-        name: "create_image_upload",
-        arguments: {
-          site: "ph",
-          filename: "Nuovo Ritratto.JPG",
-          mimeType: "image/jpeg",
-          sizeBytes: 456789,
-          width: 1800,
-          height: 1200,
-          alt: "Ritratto caricato via MCP",
-        },
-      },
-    },
+test("browser upload fallback routes are not exposed", async () => {
+  const response = await fetchWorker("/media/uploads/upload_removed/form", {
+    db: createSeededDb(),
+    host: "api.lorenzozanna.com",
   });
   const payload = await response.json();
 
-  assert.equal(response.status, 200);
-  assert.equal(payload.result.structuredContent.upload.status, "pending");
-  assert.match(payload.result.structuredContent.upload.uploadToken, /^mu_/);
-  assert.match(
-    payload.result.structuredContent.upload.uploadPageUrl,
-    /^https:\/\/api\.lorenzozanna\.com\/media\/uploads\/upload_[^/]+\/form#token=mu_/,
-  );
-  assert.equal(payload.result.structuredContent.nextAction.type, "user_browser_upload");
-  assert.equal(payload.result.structuredContent.nextAction.confirmTool, "confirm_image_upload");
-  assert.equal(payload.result.structuredContent.nextAction.attachTools.includes("attach_image_to_section"), true);
-  assert.match(payload.result.content[0].text, /uploadPageUrl/);
-  assert.equal(payload.result.structuredContent.asset.status, "draft");
-  assert.equal(db.mediaUploads.length, 1);
-  assert.equal(db.mediaAssets.find((asset) => asset.id === payload.result.structuredContent.asset.id).status, "draft");
-  assert.equal(db.changeLog[0].action, "create_image_upload");
-});
-test("POST /mcp tools/call confirm_image_upload promotes bytes measured by the browser upload", async () => {
-  const db = await createEditorDb();
-  const createResponse = await fetchWorker("/mcp", {
-    db,
-    host: "mcp.lorenzozanna.com",
-    method: "POST",
-    bearerToken: USER_TOKEN,
-    body: {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: {
-        name: "create_image_upload",
-        arguments: {
-          site: "ph",
-          alt: "Ritratto caricato via MCP",
-        },
-      },
-    },
-  });
-  const created = (await createResponse.json()).result.structuredContent;
-  const bytes = directPngHeader(1800, 1200);
-  const bucket = new FakeMediaBucket({});
-
-  const uploadResponse = await fetchWorker(created.upload.uploadUrl, {
-    db,
-    mediaBucket: bucket,
-    host: "api.lorenzozanna.com",
-    method: "PUT",
-    bearerToken: created.upload.uploadToken,
-    headers: {
-      "content-type": "image/png",
-      "content-length": String(bytes.byteLength),
-      "x-file-name": encodeURIComponent("Ritratto reale.PNG"),
-    },
-    rawBody: bytes,
-  });
-  const uploaded = await uploadResponse.json();
-  assert.equal(uploadResponse.status, 200);
-  assert.equal(uploaded.file.sizeBytes, bytes.byteLength);
-  assert.equal(uploaded.file.width, 1800);
-  assert.equal(uploaded.file.height, 1200);
-  assert.equal(db.mediaUploads[0].size_bytes, bytes.byteLength);
-  assert.equal(db.mediaAssets.find((asset) => asset.id === created.asset.id).width, 1800);
-  db.changeLog = [];
-
-  const response = await fetchWorker("/mcp", {
-    db,
-    mediaBucket: bucket,
-    host: "mcp.lorenzozanna.com",
-    method: "POST",
-    bearerToken: USER_TOKEN,
-    body: {
-      jsonrpc: "2.0",
-      id: 2,
-      method: "tools/call",
-      params: {
-        name: "confirm_image_upload",
-        arguments: {
-          site: "ph",
-          uploadId: created.upload.id,
-        },
-      },
-    },
-  });
-  const payload = await response.json();
-
-  assert.equal(response.status, 200);
-  assert.equal(payload.result.structuredContent.upload.status, "uploaded");
-  assert.equal(payload.result.structuredContent.asset.status, "ready");
-  assert.equal(payload.result.structuredContent.asset.sizeBytes, bytes.byteLength);
-  assert.equal(payload.result.structuredContent.asset.width, 1800);
-  assert.equal(db.mediaUploads[0].status, "uploaded");
-  assert.equal(db.mediaAssets.find((asset) => asset.id === created.asset.id).status, "ready");
-  assert.equal(db.changeLog[0].action, "confirm_image_upload");
-});
-test("GET /media/uploads/:uploadId/form renders a browser upload helper without exposing the token", async () => {
-  const db = await createEditorDb();
-  const createResponse = await fetchWorker("/mcp", {
-    db,
-    host: "mcp.lorenzozanna.com",
-    method: "POST",
-    bearerToken: USER_TOKEN,
-    body: {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: {
-        name: "create_image_upload",
-        arguments: {
-          site: "ph",
-          filename: "ritratto.jpg",
-          mimeType: "image/jpeg",
-          sizeBytes: 456789,
-          width: 1800,
-          height: 1200,
-          alt: "Ritratto caricato via browser",
-        },
-      },
-    },
-  });
-  const created = (await createResponse.json()).result.structuredContent;
-  const helperPath = new URL(created.upload.uploadPageUrl).pathname;
-
-  const response = await fetchWorker(helperPath, {
-    db,
-    host: "api.lorenzozanna.com",
-  });
-  const html = await response.text();
-
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type"), /text\/html/);
-  assert.match(html, /Lorenzo Zanna Media Upload/);
-  assert.match(html, new RegExp(created.upload.id));
-  assert.match(html, /type="file"/);
-  assert.doesNotMatch(html, /mu_[A-Za-z0-9]/);
-});
-test("PUT /media/uploads/:uploadId derives image metadata from the selected file bytes", async () => {
-  const db = await createEditorDb();
-  const createResponse = await fetchWorker("/mcp", {
-    db,
-    host: "mcp.lorenzozanna.com",
-    method: "POST",
-    bearerToken: USER_TOKEN,
-    body: {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: {
-        name: "create_image_upload",
-        arguments: {
-          site: "ph",
-          alt: "Ritratto caricato via endpoint",
-        },
-      },
-    },
-  });
-  const created = (await createResponse.json()).result.structuredContent;
-  const bucket = new FakeMediaBucket({});
-  const bytes = directPngHeader(1024, 768);
-
-  const response = await fetchWorker(created.upload.uploadUrl, {
-    db,
-    mediaBucket: bucket,
-    host: "api.lorenzozanna.com",
-    method: "PUT",
-    bearerToken: created.upload.uploadToken,
-    headers: {
-      "content-type": "image/png",
-      "content-length": String(bytes.byteLength),
-      "x-file-name": encodeURIComponent("Ritratto selezionato.PNG"),
-    },
-    rawBody: bytes,
-  });
-  const payload = await response.json();
-
-  assert.equal(response.status, 200);
-  assert.equal(payload.uploadId, created.upload.id);
-  assert.equal(payload.status, "stored");
-  assert.equal(payload.file.name, "ritratto-selezionato.png");
-  assert.equal(payload.file.sizeBytes, bytes.byteLength);
-  assert.equal(payload.file.width, 1024);
-  assert.equal(payload.file.height, 768);
-  assert.equal(bucket.puts.length, 1);
-  assert.equal(bucket.puts[0].key, payload.r2Key);
-  assert.deepEqual(bucket.puts[0].body, bytes);
-  assert.equal(bucket.puts[0].options.httpMetadata.contentType, "image/png");
-  assert.equal(db.mediaUploads[0].size_bytes, bytes.byteLength);
-  assert.equal(db.mediaAssets.find((asset) => asset.id === created.asset.id).width, 1024);
+  assert.equal(response.status, 404);
+  assert.equal(payload.error, "not_found");
 });
 test("GET /media/assets/:assetId/:filename serves a ready R2 media asset", async () => {
   const db = createSeededDb({
@@ -1489,124 +1281,6 @@ test("GET /media/assets/:assetId/:filename does not serve draft or unknown media
   assert.equal(response.status, 404);
   assert.equal(payload.error, "media_asset_not_found");
 });
-test("PUT /media/uploads/:uploadId rejects invalid tokens, signatures, and byte counts", async () => {
-  const db = await createEditorDb();
-  const createResponse = await fetchWorker("/mcp", {
-    db,
-    host: "mcp.lorenzozanna.com",
-    method: "POST",
-    bearerToken: USER_TOKEN,
-    body: {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: {
-        name: "create_image_upload",
-        arguments: {
-          site: "ph",
-          alt: "Ritratto caricato via endpoint",
-        },
-      },
-    },
-  });
-  const created = (await createResponse.json()).result.structuredContent;
-  const bytes = directPngHeader(640, 480);
-
-  const badToken = await fetchWorker(created.upload.uploadUrl, {
-    db,
-    mediaBucket: new FakeMediaBucket({}),
-    host: "api.lorenzozanna.com",
-    method: "PUT",
-    bearerToken: "mu_wrong",
-    headers: {
-      "content-type": "image/png",
-      "content-length": String(bytes.byteLength),
-    },
-    rawBody: bytes,
-  });
-  assert.equal(badToken.status, 401);
-  assert.equal((await badToken.json()).error, "invalid_upload_token");
-
-  const badSignature = await fetchWorker(created.upload.uploadUrl, {
-    db,
-    mediaBucket: new FakeMediaBucket({}),
-    host: "api.lorenzozanna.com",
-    method: "PUT",
-    bearerToken: created.upload.uploadToken,
-    headers: {
-      "content-type": "image/png",
-      "content-length": "5",
-    },
-    rawBody: new Uint8Array([1, 2, 3, 4, 5]),
-  });
-  assert.equal(badSignature.status, 415);
-  assert.equal((await badSignature.json()).error, "invalid_image");
-
-  const bucket = new FakeMediaBucket({});
-  const badSize = await fetchWorker(created.upload.uploadUrl, {
-    db,
-    mediaBucket: bucket,
-    host: "api.lorenzozanna.com",
-    method: "PUT",
-    bearerToken: created.upload.uploadToken,
-    headers: {
-      "content-type": "image/png",
-      "content-length": String(bytes.byteLength - 1),
-    },
-    rawBody: bytes,
-  });
-  assert.equal(badSize.status, 413);
-  assert.equal((await badSize.json()).error, "browser_upload_failed");
-  assert.equal(bucket.deletedKeys.length, 1);
-});
-test("PUT /media/uploads/:uploadId rejects expired upload sessions", async () => {
-  const db = await createEditorDb();
-  const mediaBucket = new FakeMediaBucket({});
-  const createResponse = await fetchWorker("/mcp", {
-    db,
-    host: "mcp.lorenzozanna.com",
-    method: "POST",
-    bearerToken: USER_TOKEN,
-    body: {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: {
-        name: "create_image_upload",
-        arguments: {
-          site: "ph",
-          filename: "expired.jpg",
-          mimeType: "image/jpeg",
-          sizeBytes: 5,
-          width: 800,
-          height: 600,
-          alt: "Upload scaduto",
-        },
-      },
-    },
-  });
-  const created = (await createResponse.json()).result.structuredContent;
-  db.mediaUploads[0].expires_at = "2000-01-01T00:00:00.000Z";
-
-  const response = await fetchWorker(created.upload.uploadUrl, {
-    db,
-    mediaBucket,
-    host: "api.lorenzozanna.com",
-    method: "PUT",
-    bearerToken: created.upload.uploadToken,
-    headers: {
-      "content-type": "image/jpeg",
-      "content-length": "5",
-    },
-    rawBody: new Uint8Array([1, 2, 3, 4, 5]),
-  });
-  const payload = await response.json();
-
-  assert.equal(response.status, 410);
-  assert.equal(payload.error, "upload_expired");
-  assert.equal(mediaBucket.puts.length, 0);
-});
-
 test("POST /mcp tools/call replace_image updates a contracted image from the media library", async () => {
   const db = await createEditorDb({
     mediaAssets: [
@@ -3475,11 +3149,6 @@ class FakeD1Database {
     if (query.includes("FROM sites WHERE slug = ?")) {
       return { results: this.sites.filter((site) => site.slug === params[0]) };
     }
-    if (query.includes("FROM sites WHERE id = ?")) {
-      return { results: this.sites.filter((site) => site.id === params[0]) };
-    }
-
-
     if (query.includes("FROM pages") && query.includes("site_id = ?") && query.includes("slug = ?")) {
       return {
         results: this.pages.filter(
@@ -3621,43 +3290,6 @@ class FakeD1Database {
       };
     }
 
-    if (query.includes("FROM media_uploads") && query.includes("u.id = ?")) {
-      return {
-        results: this.mediaUploads
-          .filter((upload) => upload.site_id === params[0] && upload.id === params[1])
-          .map((upload) => {
-            const asset = this.mediaAssets.find((item) => item.id === upload.asset_id);
-            return {
-              upload_id: upload.id,
-              upload_status: upload.status,
-              upload_r2_key: upload.r2_key,
-              upload_filename: upload.filename,
-              upload_mime_type: upload.mime_type,
-              upload_size_bytes: upload.size_bytes,
-              upload_expires_at: upload.expires_at,
-              asset_id: asset?.id,
-              asset_r2_key: asset?.r2_key,
-              asset_public_url: asset?.public_url,
-              asset_alt: asset?.alt,
-              asset_caption: asset?.caption,
-              asset_width: asset?.width,
-              asset_height: asset?.height,
-              asset_mime_type: asset?.mime_type,
-              asset_size_bytes: asset?.size_bytes,
-              asset_status: asset?.status,
-              asset_created_at: asset?.created_at,
-              asset_updated_at: asset?.updated_at,
-            };
-          }),
-      };
-    }
-
-    if (query.includes("FROM media_uploads") && query.includes("WHERE id = ?")) {
-      return {
-        results: this.mediaUploads.filter((upload) => upload.id === params[0]),
-      };
-    }
-
     if (query.includes("FROM auth_tokens") && query.includes("token_hash = ?")) {
       return {
         results: this.authTokens
@@ -3743,26 +3375,6 @@ class FakeD1Database {
       return { success: true };
     }
 
-    if (query.includes("INSERT INTO media_uploads")) {
-      const [id, siteId, assetId, r2Key, filename, mimeType, sizeBytes, tokenHash, expiresAt] = params;
-      this.mediaUploads.push({
-        id,
-        site_id: siteId,
-        asset_id: assetId,
-        r2_key: r2Key,
-        filename,
-        mime_type: mimeType,
-        size_bytes: sizeBytes,
-        upload_token_hash: tokenHash,
-        status: "pending",
-        expires_at: expiresAt,
-        uploaded_at: null,
-        created_at: "2026-07-13 00:00:01",
-        updated_at: "2026-07-13 00:00:01",
-      });
-      return { success: true };
-    }
-
     if (query.includes("INSERT INTO content_entries")) {
       const [id, siteId, collection, key, data, status] = params;
       const existing = this.contentEntries.find(
@@ -3823,21 +3435,6 @@ class FakeD1Database {
     }
 
     if (query.includes("UPDATE media_assets")) {
-      if (query.includes("r2_key = ?") && query.includes("public_url = ?")) {
-        const [r2Key, publicUrl, width, height, mimeType, sizeBytes, assetId] = params;
-        const asset = this.mediaAssets.find((item) => item.id === assetId);
-        if (asset) {
-          asset.r2_key = r2Key;
-          asset.public_url = publicUrl;
-          asset.width = width;
-          asset.height = height;
-          asset.mime_type = mimeType;
-          asset.size_bytes = sizeBytes;
-          asset.updated_at = "2026-07-13 00:00:01";
-        }
-        return { success: true };
-      }
-
       if (query.includes("title = ?")) {
         const [title, tagsJson, notes, assetId] = params;
         const asset = this.mediaAssets.find((item) => item.id === assetId);
@@ -3869,29 +3466,6 @@ class FakeD1Database {
       return { success: true };
     }
 
-    if (query.includes("UPDATE media_uploads")) {
-      if (query.includes("r2_key = ?")) {
-        const [r2Key, filename, mimeType, sizeBytes, uploadId] = params;
-        const upload = this.mediaUploads.find((item) => item.id === uploadId);
-        if (upload) {
-          upload.r2_key = r2Key;
-          upload.filename = filename;
-          upload.mime_type = mimeType;
-          upload.size_bytes = sizeBytes;
-          upload.updated_at = "2026-07-13 00:00:01";
-        }
-        return { success: true };
-      }
-
-      const [status, uploadId] = params;
-      const upload = this.mediaUploads.find((item) => item.id === uploadId);
-      if (upload) {
-        upload.status = status;
-        upload.uploaded_at = status === "uploaded" ? "2026-07-13 00:00:01" : upload.uploaded_at;
-        upload.updated_at = "2026-07-13 00:00:01";
-      }
-      return { success: true };
-    }
 
     if (query.includes("DELETE FROM media_usages")) {
       const [pageId, sectionId] = params;

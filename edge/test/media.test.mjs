@@ -3,8 +3,6 @@ import test from "node:test";
 
 import {
   attachImageToSection,
-  confirmImageUpload,
-  createImageUpload,
   deleteMediaAsset,
   listMediaAssets,
   removeImageFromSection,
@@ -18,59 +16,6 @@ import {
   updateMediaAsset,
   uploadImageFile,
 } from "../src/media.mjs";
-
-test("createImageUpload creates a pending upload session and draft media asset", async () => {
-  const db = createMediaDb();
-
-  const result = await createImageUpload(
-    { DB: db },
-    {
-      site: "ph",
-      alt: "Ritratto caricato dalla sessione media",
-      caption: "Nuovo ritratto",
-      actor: "tdd-suite",
-    },
-  );
-
-  assert.equal(result.site, "ph");
-  assert.match(result.upload.id, /^upload_/);
-  assert.equal(result.upload.status, "pending");
-  assert.equal(result.upload.method, "PUT");
-  assert.match(result.upload.uploadUrl, /^\/media\/uploads\/upload_/);
-  assert.match(result.upload.uploadToken, /^mu_/);
-  assert.equal(result.upload.headers["content-type"], undefined);
-  assert.equal(result.upload.maxSizeBytes, 12582912);
-  assert.equal(result.asset.status, "draft");
-  assert.equal(result.asset.publicUrl, `media/assets/${result.asset.id}/pending-browser-upload.png`);
-  assert.equal(result.asset.alt, "Ritratto caricato dalla sessione media");
-
-  const upload = db.mediaUploads[0];
-  const asset = db.mediaAssets.find((item) => item.id === result.asset.id);
-  assert.equal(upload.asset_id, result.asset.id);
-  assert.equal(upload.filename, "pending-browser-upload.png");
-  assert.equal(upload.mime_type, "image/png");
-  assert.equal(upload.size_bytes, 1);
-  assert.equal(upload.status, "pending");
-  assert.equal(upload.upload_token_hash.length, 64);
-  assert.notEqual(upload.upload_token_hash, result.upload.uploadToken);
-  assert.equal(asset.status, "draft");
-  assert.equal(asset.r2_key, upload.r2_key);
-  assert.equal(db.changeLog[0].action, "create_image_upload");
-  assert.equal(db.changeLog[0].target, `media/${result.asset.id}`);
-});
-test("createImageUpload requires alt while deferring file metadata to the browser upload", async () => {
-  await assert.rejects(
-    () =>
-      createImageUpload(
-        { DB: createMediaDb() },
-        {
-          site: "ph",
-          actor: "tdd-suite",
-        },
-      ),
-    /Missing alt/,
-  );
-});
 
 test("uploadImageFile streams a validated ChatGPT file into a ready catalog asset", async () => {
   const db = createMediaDb();
@@ -166,102 +111,6 @@ test("uploadImageFile removes the R2 object when the atomic D1 write fails", asy
   assert.equal(bucket.puts.length, 1);
   assert.deepEqual(bucket.deletedKeys, [bucket.puts[0].key]);
   assert.equal(bucket.objects[bucket.puts[0].key], undefined);
-});
-
-test("confirmImageUpload promotes an uploaded R2 object to a ready media asset", async () => {
-  const db = createMediaDb();
-  const created = await createImageUpload(
-    { DB: db },
-    {
-      site: "ph",
-      alt: "Ritratto confermato",
-      actor: "tdd-suite",
-    },
-  );
-  db.changeLog = [];
-  db.mediaUploads[0].size_bytes = 456789;
-  db.mediaAssets.find((item) => item.id === created.asset.id).size_bytes = 456789;
-  const bucket = new FakeMediaBucket({
-    [created.upload.r2Key]: {
-      size: 456789,
-      contentType: "image/png",
-    },
-  });
-
-  const result = await confirmImageUpload(
-    { DB: db, MEDIA_BUCKET: bucket },
-    {
-      site: "ph",
-      uploadId: created.upload.id,
-      actor: "tdd-suite",
-    },
-  );
-
-  assert.equal(result.site, "ph");
-  assert.equal(result.upload.id, created.upload.id);
-  assert.equal(result.upload.status, "uploaded");
-  assert.equal(result.asset.id, created.asset.id);
-  assert.equal(result.asset.status, "ready");
-  assert.equal(result.asset.publicUrl, created.asset.publicUrl);
-
-  const upload = db.mediaUploads.find((item) => item.id === created.upload.id);
-  const asset = db.mediaAssets.find((item) => item.id === created.asset.id);
-  assert.equal(upload.status, "uploaded");
-  assert.equal(upload.uploaded_at, "2026-07-15 00:00:01");
-  assert.equal(asset.status, "ready");
-  assert.equal(db.changeLog[0].action, "confirm_image_upload");
-  assert.equal(db.changeLog[0].target, `media/${created.asset.id}`);
-});
-
-test("confirmImageUpload rejects missing R2 objects and size mismatches", async () => {
-  const db = createMediaDb();
-  const created = await createImageUpload(
-    { DB: db },
-    {
-      site: "ph",
-      filename: "ritratto.jpg",
-      mimeType: "image/jpeg",
-      sizeBytes: 456789,
-      width: 1800,
-      height: 1200,
-      alt: "Ritratto",
-      actor: "tdd-suite",
-    },
-  );
-
-  await assert.rejects(
-    () =>
-      confirmImageUpload(
-        { DB: db, MEDIA_BUCKET: new FakeMediaBucket({}) },
-        {
-          site: "ph",
-          uploadId: created.upload.id,
-          actor: "tdd-suite",
-        },
-      ),
-    /Uploaded object not found/,
-  );
-
-  await assert.rejects(
-    () =>
-      confirmImageUpload(
-        {
-          DB: db,
-          MEDIA_BUCKET: new FakeMediaBucket({
-            [created.upload.r2Key]: {
-              size: 123,
-              contentType: "image/jpeg",
-            },
-          }),
-        },
-        {
-          site: "ph",
-          uploadId: created.upload.id,
-          actor: "tdd-suite",
-        },
-      ),
-    /Uploaded object size mismatch/,
-  );
 });
 
 test("listMediaAssets returns ready media assets for a site without exposing other statuses", async () => {
@@ -1492,37 +1341,6 @@ class FakeMediaD1Database {
       };
     }
 
-    if (query.includes("FROM media_uploads") && query.includes("u.id = ?")) {
-      return {
-        results: this.mediaUploads
-          .filter((upload) => upload.site_id === params[0] && upload.id === params[1])
-          .map((upload) => {
-            const asset = this.mediaAssets.find((item) => item.id === upload.asset_id);
-            return {
-              upload_id: upload.id,
-              upload_status: upload.status,
-              upload_r2_key: upload.r2_key,
-              upload_filename: upload.filename,
-              upload_mime_type: upload.mime_type,
-              upload_size_bytes: upload.size_bytes,
-              upload_expires_at: upload.expires_at,
-              asset_id: asset?.id,
-              asset_r2_key: asset?.r2_key,
-              asset_public_url: asset?.public_url,
-              asset_alt: asset?.alt,
-              asset_caption: asset?.caption,
-              asset_width: asset?.width,
-              asset_height: asset?.height,
-              asset_mime_type: asset?.mime_type,
-              asset_size_bytes: asset?.size_bytes,
-              asset_status: asset?.status,
-              asset_created_at: asset?.created_at,
-              asset_updated_at: asset?.updated_at,
-            };
-          }),
-      };
-    }
-
     throw new Error(`Unhandled fake D1 all/first query: ${query}`);
   }
 
@@ -1559,26 +1377,6 @@ class FakeMediaD1Database {
       return { success: true };
     }
 
-    if (query.includes("INSERT INTO media_uploads")) {
-      const [id, siteId, assetId, r2Key, filename, mimeType, sizeBytes, tokenHash, expiresAt] = params;
-      this.mediaUploads.push({
-        id,
-        site_id: siteId,
-        asset_id: assetId,
-        r2_key: r2Key,
-        filename,
-        mime_type: mimeType,
-        size_bytes: sizeBytes,
-        upload_token_hash: tokenHash,
-        status: "pending",
-        expires_at: expiresAt,
-        uploaded_at: null,
-        created_at: "2026-07-15 00:00:01",
-        updated_at: "2026-07-15 00:00:01",
-      });
-      return { success: true };
-    }
-
     if (query.includes("UPDATE media_assets")) {
       if (query.includes("title = ?")) {
         const [title, tagsJson, notes, assetId] = params;
@@ -1602,15 +1400,6 @@ class FakeMediaD1Database {
       const asset = this.mediaAssets.find((item) => item.id === assetId);
       asset.alt = alt;
       asset.updated_at = "2026-07-15 00:00:01";
-      return { success: true };
-    }
-
-    if (query.includes("UPDATE media_uploads")) {
-      const [status, uploadId] = params;
-      const upload = this.mediaUploads.find((item) => item.id === uploadId);
-      upload.status = status;
-      upload.uploaded_at = status === "uploaded" ? "2026-07-15 00:00:01" : upload.uploaded_at;
-      upload.updated_at = "2026-07-15 00:00:01";
       return { success: true };
     }
 

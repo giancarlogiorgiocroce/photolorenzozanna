@@ -74,9 +74,7 @@ Non serve spiegare a Lorenzo guardrail tecnici, HTML o sicurezza dei campi: il s
 
 Il connector live espone i tool media:
 
-- `create_image_upload`;
 - `upload_image_file`;
-- `confirm_image_upload`;
 - `list_media_assets`;
 - `update_media_asset`;
 - `set_media_asset_archived`;
@@ -89,9 +87,9 @@ Il connector live espone i tool media:
 - `update_image_alt`;
 - `set_image_focal_point`;
 - `set_image_visibility`.
-Il trentaduesimo tool, `upload_image_file`, e live con file parameter ChatGPT.
-Descriptor e superficie remota sono verificati; resta da provare l'invio di un
-allegato dal connector reale del cliente.
+La superficie direct-only espone 30 tool. `upload_image_file` e' live con file
+parameter ChatGPT; descriptor e superficie remota sono verificati, mentre resta
+da provare l'invio di un allegato dal connector reale del cliente.
 
 
 Rimozione, riordino e caption sono live e verificati con rollback completo e
@@ -115,18 +113,9 @@ Flusso diretto quando Lorenzo allega una nuova immagine:
 8. Per cambiare o togliere la didascalia usare `update_image_caption`; una stringa
     vuota rimuove la caption solo da quell'uso.
 
-Fallback per client senza file parameter: chiamare `create_image_upload`, mostrare
-`upload.uploadPageUrl`, attendere il caricamento browser, chiamare
-`confirm_image_upload` e infine collegare l'asset.
-
-Frase utile da usare nel client quando serve il fallback browser:
-
-```text
-Chiama create_image_upload anche se non puoi caricare direttamente il file.
-Mostrami upload.uploadPageUrl.
-Dopo che carico l'immagine dal browser, chiama confirm_image_upload e poi attach_image_to_section.
-```
-
+Non esiste un fallback browser online. Se il client non supporta file parameter,
+puo usare gli altri tool MCP ma non caricare una nuova immagine; il kit corretto
+resta locale e git-ignorato per un'eventuale futura riattivazione.
 Esempio reale verificato il 2026-07-30:
 
 ```text
@@ -141,15 +130,15 @@ alt: Logo con diaframma fotografico arancione su sfondo nero
 
 Lo smoke remoto sul public URL ha risposto `200 image/png`, quindi le immagini R2 sono servite dal Worker e non da file locali/GitHub.
 
-Il flusso ChatGPT con `uploadPageUrl` e' stato verificato end-to-end fino a R2 e
-all'attach nel portfolio e resta operativo come fallback.
+Il vecchio flusso ChatGPT con `uploadPageUrl` era stato verificato end-to-end fino
+a R2 e all'attach nel portfolio, ma non e' piu esposto in produzione.
 
 La produzione espone file parameter tramite `_meta["openai/fileParams"]`:
 ChatGPT passa a `upload_image_file` il `download_url`, `file_id` e gli eventuali
 `mime_type`/`file_name`. Il Worker importa il riferimento temporaneo in streaming,
 verifica firma e dimensioni reali e restituisce un asset `ready`. Il collegamento
-continua a usare `attach_image_to_section` o `replace_image`; il fallback browser
-resta disponibile per i client senza file input.
+continua a usare `attach_image_to_section` o `replace_image`. Non sono esposti
+tool o route di fallback browser.
 
 ## Messaggio semplice per Lorenzo
 
