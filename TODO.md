@@ -285,6 +285,7 @@ Le checklist dettagliate restano nelle sezioni sotto; questo e' solo l'ordine co
 - [x] Esporre `upload_image_file` con file top-level conforme a `_meta["openai/fileParams"]` e schema completo `{ download_url, file_id, mime_type?, file_name? }`.
 - [x] Trattare `file_id` come identificatore opaco senza regex di formato proprietaria; limitare solo lunghezza e caratteri di controllo, lasciando la sicurezza a URL HTTPS e verifica dei byte.
 - [x] Preservare il receiver del `fetch` nativo Cloudflare nel download diretto, evitando `Illegal invocation` quando il metodo di piattaforma viene passato al downloader.
+- [x] Fornire a R2 un `FixedLengthStream` basato sul `Content-Length` reale; se l'upstream non dichiara la lunghezza, materializzare solo il flusso gia limitato a 12 MB prima del `put`.
 - [x] Scaricare il `download_url` temporaneo con HTTPS obbligatorio, blocco host locali/IP, timeout globale, massimo 3 redirect e limite 12 MB, trasferendo lo stream nel bucket R2.
 - [x] Verificare firma/magic bytes e struttura dimensionale per JPEG, PNG, WebP e AVIF, senza fidarsi di estensione, MIME dichiarato o `Content-Type`.
 - [ ] Verificare la decodificabilita completa dell'immagine oltre la validazione strutturale dell'header.

@@ -45,7 +45,8 @@ export async function uploadImageFile(env, input, options = {}) {
   let storedObject = null;
 
   try {
-    storedObject = await env.MEDIA_BUCKET.put(r2Key, prepared.stream, {
+    const r2Body = await prepareR2UploadBody(prepared, options.fixedLengthStreamCtor);
+    storedObject = await env.MEDIA_BUCKET.put(r2Key, r2Body, {
       httpMetadata: {
         contentType: mimeType,
       },
@@ -137,6 +138,18 @@ export async function uploadImageFile(env, input, options = {}) {
     }
     throw error;
   }
+}
+
+async function prepareR2UploadBody(prepared, FixedLengthStreamCtor = globalThis.FixedLengthStream) {
+  if (prepared.declaredSizeBytes != null && typeof FixedLengthStreamCtor === "function") {
+    return prepared.stream.pipeThrough(new FixedLengthStreamCtor(prepared.declaredSizeBytes));
+  }
+
+  const bytes = new Uint8Array(await new Response(prepared.stream).arrayBuffer());
+  if (bytes.byteLength > MAX_UPLOAD_SIZE_BYTES) {
+    throw new Error(`Image upload exceeds max size ${MAX_UPLOAD_SIZE_BYTES}.`);
+  }
+  return bytes;
 }
 
 

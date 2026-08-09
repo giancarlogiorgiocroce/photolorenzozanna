@@ -74,6 +74,75 @@ test("uploadImageFile streams a validated ChatGPT file into a ready catalog asse
   assert.doesNotMatch(db.changeLog[0].after_json, /download_url|files\.openai/);
 });
 
+test("uploadImageFile gives R2 a fixed-length stream when Content-Length is available", async () => {
+  const db = createMediaDb();
+  const bucket = new FakeMediaBucket({});
+  const bytes = directPngHeader(800, 600);
+
+  await uploadImageFile(
+    { DB: db, MEDIA_BUCKET: bucket },
+    {
+      site: "ph",
+      file: {
+        download_url: "https://files.openai.example/download/known-length",
+        file_id: "file_known_length",
+        mime_type: "image/png",
+        file_name: "known-length.png",
+      },
+      alt: "Immagine con lunghezza dichiarata",
+      actor: "tdd-suite",
+    },
+    {
+      fetchImpl: async () => new Response(bytes, {
+        headers: {
+          "content-type": "image/png",
+          "content-length": String(bytes.byteLength),
+        },
+      }),
+      fixedLengthStreamCtor: FakeFixedLengthStream,
+    },
+  );
+
+  assert.equal(bucket.puts.length, 1);
+  assert.equal(bucket.puts[0].inputWasUint8Array, false);
+  assert.equal(bucket.puts[0].knownLength, bytes.byteLength);
+  assert.deepEqual(bucket.puts[0].body, bytes);
+});
+
+test("uploadImageFile buffers the bounded stream when Content-Length is unavailable", async () => {
+  const db = createMediaDb();
+  const bucket = new FakeMediaBucket({});
+  const bytes = directPngHeader(1024, 768);
+
+  await uploadImageFile(
+    { DB: db, MEDIA_BUCKET: bucket },
+    {
+      site: "ph",
+      file: {
+        download_url: "https://files.openai.example/download/unknown-length",
+        file_id: "file_unknown_length",
+        mime_type: "image/png",
+        file_name: "unknown-length.png",
+      },
+      alt: "Immagine senza lunghezza dichiarata",
+      actor: "tdd-suite",
+    },
+    {
+      fetchImpl: async () => new Response(bytes, {
+        headers: {
+          "content-type": "image/png",
+        },
+      }),
+      fixedLengthStreamCtor: FakeFixedLengthStream,
+    },
+  );
+
+  assert.equal(bucket.puts.length, 1);
+  assert.equal(bucket.puts[0].inputWasUint8Array, true);
+  assert.equal(bucket.puts[0].knownLength, null);
+  assert.deepEqual(bucket.puts[0].body, bytes);
+});
+
 test("uploadImageFile removes the R2 object when the atomic D1 write fails", async () => {
   const db = createMediaDb();
   db.batch = async () => {
@@ -1508,8 +1577,10 @@ class FakeMediaBucket {
     });
   }
   async put(key, body, options) {
-    const bytes = body instanceof Uint8Array ? body : new Uint8Array(await new Response(body).arrayBuffer());
-    this.puts.push({ key, body: bytes, options });
+    const inputWasUint8Array = body instanceof Uint8Array;
+    const knownLength = body?.knownLength ?? null;
+    const bytes = inputWasUint8Array ? body : new Uint8Array(await new Response(body).arrayBuffer());
+    this.puts.push({ key, body: bytes, options, inputWasUint8Array, knownLength });
     this.objects[key] = {
       size: bytes.byteLength,
       contentType: options?.httpMetadata?.contentType,
@@ -1522,6 +1593,17 @@ class FakeMediaBucket {
     if (this.deleteError) throw this.deleteError;
     this.deletedKeys.push(key);
     delete this.objects[key];
+  }
+}
+
+class FakeFixedLengthStream {
+  constructor(length) {
+    const stream = new TransformStream();
+    Object.defineProperty(stream.readable, "knownLength", {
+      value: length,
+      enumerable: false,
+    });
+    return stream;
   }
 }
 

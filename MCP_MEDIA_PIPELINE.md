@@ -162,11 +162,13 @@ senza usarla subito, sia di collegarla in un secondo momento.
    URL libero inserito nel prompt.
 5. Il Worker invoca il `fetch` nativo conservando il receiver Cloudflare,
    richiede HTTPS, blocca host locali e IP, applica timeout, massimo 3 redirect e
-   limite 12 MB, verifica firma/formato e dimensioni reali, quindi scrive lo
-   stream in R2.
-6. D1 registra asset, metadata, ownership, audit e stato `ready` usando lo stesso
+   limite 12 MB, quindi verifica firma/formato e dimensioni reali.
+6. Se il download dichiara `Content-Length`, il Worker ricostruisce la misura per
+   R2 con `FixedLengthStream`; se manca, materializza in memoria soltanto il flusso
+   gia limitato a 12 MB prima del `put`.
+7. D1 registra asset, metadata, ownership, audit e stato `ready` usando lo stesso
    modello corrente; un errore della scrittura atomica D1 elimina l'oggetto R2.
-7. ChatGPT usa `attach_image_to_section` o `replace_image` per il collegamento;
+8. ChatGPT usa `attach_image_to_section` o `replace_image` per il collegamento;
    rollback e `media_usages` restano separati dall'upload del catalogo.
 
 Il Worker pubblico non espone `create_image_upload`, `confirm_image_upload` o
